@@ -8,9 +8,9 @@ Session request packets request the start of an SOE protocol session.
 struct SessionRequest
 {
     uint UnknownValue1; // Unknown, possibly a magic value. Always observed to be 3.
-    uint SessionId; // A randomly generated session idenfiier
-    uint UdpLength; // The maximum length of a UDP packet that the sender can receive
-    string ApplicationProtocol; // A null-terminated descriptor of the application protocol that the sender wishes to transport
+    uint SessionId; // A randomly generated session idenfiier.
+    uint UdpLength; // The maximum length of a UDP packet that the sender can receive.
+    string ApplicationProtocol; // A null-terminated descriptor of the application protocol that the sender wishes to transport.
 }
 ```
 
@@ -21,9 +21,9 @@ Session response packets confirm the creation of a session.
 ```csharp
 struct SessionResponse
 {
-    uint SessionId; // The ID of the requested session that is being confirmed
-    uint CrcSeed; // A randomly generated seed used to calculate the CRC-32 check value on relevant packets
-    byte CrcLength; // The number of bytes that should be used to encode the CRC-32 check value on relevant packets
+    uint SessionId; // The ID of the requested session that is being confirmed.
+    uint CrcSeed; // A randomly generated seed used to calculate the CRC-32 check value on relevant packets.
+    byte CrcLength; // The number of bytes that should be used to encode the CRC-32 check value on relevant packets.
     bool IsCompressionEnabled; // Indicates whether relevant packets may be compressed.
     byte UnknownValue1; // Unknown. Always appears to have a value of 0.
     uint UdpLength; // The maximum length of a UDP packet that the sending can receive.
@@ -38,15 +38,15 @@ middle of data transmission, where a party wants to send a `Data` packet and sim
 data from the other party. Another oft-occurring example is when multiple `OutOfOrder` packets need to be
 sent.
 
-> **Note**: typically, when a `MultiPacket` is carrying multiple of the same sub-packet, compression will be used.
+> **Note**: typically, when a MultiPacket is carrying multiple of the same sub-packet, compression will be used.
 
-A `MultiPacket` contains no data other than its sub-packets, which are placed back-to-back and prefixed by
+A MultiPacket contains no data other than its sub-packets, which are placed back-to-back and prefixed by
 their lengths, encoded using variable-size integers.
 See [Appendix B](./appendix.md#b-reading-and-writing-multipacket-variable-size-integers) for more info.
 Sub-packets may not be compressed and hence should omit the compression flag. Further, sub-packets should not
 include a CRC check value.
 
-To read a multipacket, one should loop until the entire packet has been consumed. Each iteration,
+To read a MultiPacket, one should loop until the entire packet has been consumed. Each iteration,
 a variable-size integer should be read, which indicates the amount of data to read in order to
 extract the next sub-packet from the buffer. E.g.:
 
@@ -91,8 +91,8 @@ enum DisconnectReason : ushort
 
 struct Disconnect
 {
-    uint SessionId; // The ID of the session that is being closed
-    DisconnectReason Reason; // The reason for the closure
+    uint SessionId; // The ID of the session that is being closed.
+    DisconnectReason Reason; // The reason for the closure.
 }
 ```
 
@@ -100,6 +100,12 @@ struct Disconnect
 
 Heartbeat packets are used to keep a session alive. They are only sent by the game client, if
 it has not received a packet from the server in ~25-30 seconds. They carry no data.
+
+```csharp
+struct Heartbeat
+{
+}
+```
 
 ### NetStatusRequest (0x07)
 
@@ -139,4 +145,74 @@ struct NetStatusResponse
 
 ### Data (0x09)
 
+Data packets are used to transfer application data that is small enough to not need fragmenting,
+given the current `UdpLength` of the connection.
 
+```csharp
+struct Data
+{
+    ushort Sequence; // The sequence number within the data stream. This may wrap around.
+    byte[] DataBuffer; // The data being sent.
+}
+```
+
+### DataFragment (0x0D)
+
+DataFragment packets are used to transfer application data that is too large to fit within a single
+`Data` packet, given the current `UdpLength` of the connection.
+
+```csharp
+struct DataFragment
+{
+    ushort Sequence; // The sequence number within the data stream. This may wrap around.
+    uint? CompleteDataLength; // The length of the non-fragmented data buffer. Only included in the first fragment.
+    byte[] DataBuffer; // A fragment of the data being sent.
+}
+```
+
+### OutOfOrder (0x11)
+
+OutOfOrder packets are sent by a party when they receive a mis-ordered data sequence.
+They indicate to the sender that the packets should be re-sent.
+
+```csharp
+struct OutOfOrder
+{
+    ushort Sequence; // The sequence number of the mis-ordered data packet.
+}
+```
+
+### Acknowledge (0x15)
+
+Acknowledge packets are sent by a party to indicate the most recent data sequence they have received.
+
+```csharp
+struct Acknowledge
+{
+    ushort Sequence; // The sequence number of the data packet that is being acknowledged.
+}
+```
+
+### FatalError (0x1D)
+
+FatalError packets are sent by a party when an unrecoverable error occurs, requiring them to terminate
+the current session. They carry no data.
+
+```csharp
+struct FatalError
+{
+}
+```
+
+### FatalErrorResponse (0x1E)
+
+FatalErrorResponse packets are presumably sent upon receiving a `FatalError` packet, although the author
+has never observed this in practice.
+
+```csharp
+struct FatalErrorResponse
+{
+    uint SessionId; // The ID of the session that is being terminated in response to the fatal error.
+    uint UnknownValue1; // Possibly a status code.
+}
+```
