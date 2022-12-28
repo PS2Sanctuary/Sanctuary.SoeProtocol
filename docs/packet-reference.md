@@ -53,7 +53,7 @@ while (offset < packetData.Length)
 ```
 
 MultiPackets use a dedicated algorithm for reading and writing variable-size integers.
-See [Appendix A](#a-reading-and-writing-multipacket-variable-size-integers).
+See [Appendix B](./appendix.md#b-reading-and-writing-multipacket-variable-size-integers).
 
 ### Disconnect (0x05)
 
@@ -132,60 +132,3 @@ struct NetStatusResponse
 ### Data (0x09)
 
 
-
-# Appendix
-
-## A. Reading and Writing MultiPacket Variable-Size Integers
-
-```csharp
-static uint ReadVariableLength(byte* data, int* offset)
-{
-    uint value;
-
-    if (data[offset] <= 0xFF && data[offset + 1] == 0)
-    {
-        // The implied 0x00 in front of all core OP codes given big endian,
-        // allows us to use that as an indicator for a length value of 0xFF
-        value = data[offset++];
-    }
-    else if (data[offset + 1] == 0xFF && data[offset + 2] == 0xFF)
-    {
-        offset += 3;
-        value = ReadUInt32BigEndian(data + offset);
-        offset += sizeof(uint);
-    }
-    else
-    {
-        offset += 1;
-        value = ReadUInt16BigEndian(data + offset);
-        offset += sizeof(ushort);
-    }
-
-    return value;
-}
-
-static void WriteVariableLength(byte* buffer, uint length, int* offset)
-{
-    if (length <= 0xFF)
-    {
-        // We rely on the sub-packet OP codes all starting with 0x00
-        // (given big endian) to signal that a length of 0xFF is not
-        // ushort varint.
-        buffer[offset++] = (byte)length;
-    }
-    else if (length < ushort.MaxValue)
-    {
-        buffer[offset++] = 0xFF;
-        WriteUInt16BigEndian(buffer + offset, (ushort)length);
-        offset += sizeof(ushort);
-    }
-    else
-    {
-        buffer[offset++] = 0xFF;
-        buffer[offset++] = 0xFF;
-        buffer[offset++] = 0xFF;
-        WriteUInt32BigEndian(buffer + offset, length);
-        offset += sizeof(uint);
-    }
-}
-```

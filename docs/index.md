@@ -93,6 +93,7 @@ before being wrapped. The highest level of compression is used. // TODO: Re-chec
 The length of the `Crc` field is dictated by the `SessionResponse#CrcLength` field. It is calculated
 using the entirety of the packet buffer; starting from the OP code and ending immediately before the
 CRC bytes. The algorithm is a variant of CRC-32 which performs a more lengthy initialization step.
+See [Appendix A](./appendix.md#a-soe-crc-32-algorithm) for more info.
 
 ## Session Control
 // TODO: Describe packet flow and session setup
