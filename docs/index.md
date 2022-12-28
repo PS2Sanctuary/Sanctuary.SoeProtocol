@@ -1,0 +1,103 @@
+# About the SOE Protocol
+
+The SOE protocol is a transport layer for the networking traffic of many games developed by Sony
+Online Entertainment, such as Free Realms, H1Z1, Landmark and PlanetSide 2.
+
+The protocol can be thought of, in essence, as a stripped-back version of TCP. It offers basic
+sessioning, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
+transmission of data, with optional encryption (RC4).
+
+> **Warning:**
+> This documentation is entirely reverse engineered. As such, it may be incomplete and/or incorrect.
+> While it is likely applicable to many games that use the SOE protocol, it has been written using
+> 2022 versions of PlanetSide 2 as a reference.
+
+## Structural Overview
+
+All packets of the SOE Protocol use **big endian** and are prefixed by a **two-byte OP code**.
+Packets have a maximum length, which is dictated by both parties using the `SessionRequest` and
+`SessionResponse` packets. This length is usually 512.
+
+The names and OP codes of the protocol packets are:
+
+```
+SessionRequest = 0x01,
+SessionResponse = 0x02,
+MultiPacket = 0x03,
+Disconnect = 0x05,
+Heartbeat = 0x06,
+NetStatusRequest = 0x07,
+NetStatusResponse = 0x08,
+Data = 0x09,
+DataFragment = 0x0D,
+OutOfOrder = 0x11,
+Acknowledge = 0x15,
+FatalError = 0x1D,
+FatalErrorResponse = 0x1E
+```
+
+> **Note**:
+> 'Data packets' (Data/DataFragment/OutOfOrder/Acknowledge) are actually
+> duplicated four times each, using consecutive OP codes. This allows data to be sent on multiple
+> 'channels'. However, only the first channel has been used in any games utilising the SOE protocol
+> thus far.
+
+---
+
+The SOE protocol utilises two sets of packets. The first are concerned with creating, sustaining
+and failing sessions. As such, having no context, they are not verified and cannot be compressed.
+
+The second set, used within the context of a session, are largely concerned with the transfer of
+application data. These packets may be pre/suffixed with additional data to facilitate verification and compression.
+
+> **Note**:
+> Before continuing, please consult the [Packet Reference](./packet-reference.md).
+
+### Session Control Packets
+
+Those packets involved with negotiating a session are:
+- SessionRequest
+- SessionResponse
+- NetStatusRequest
+- NetStatusResponse
+- FatalError
+- FatalErrorResponse
+
+### Session-context Packets
+
+Those packets requiring a session to be utilised are:
+- MultiPacket
+- Disconnect
+- Heartbeat
+- Data
+- DataFragment
+- OutOfOrder
+- Acknowledge
+
+All SOE packets are prefixed with an OP code. However, those packets which are sent within the
+context of a session can also include additional data, *except* for when they are bundled within a `MultiPacket`.
+
+For a non-sub-packet, the overall structure is as follows:
+
+```csharp
+struct PacketWrapper
+{
+    ushort OpCode;
+    bool? IsCompressed;
+    <packet_fields>;
+    byte[] Crc; 
+}
+```
+
+The `IsCompressed` field is optional, and will only be included if the server indicates that
+compression should be enabled, via `SessionResponse#IsCompressionEnabled`. Should this flag
+be set, the entirety of the wrapped packet's data (`<packet_fields>`) is compressed using ZLIB
+before being wrapped. The highest level of compression is used. // TODO: Re-check comp level
+
+The length of the `Crc` field is dictated by the `SessionResponse#CrcLength` field. It is calculated
+using the entirety of the packet buffer; starting from the OP code and ending immediately before the
+CRC bytes. The algorithm is a variant of CRC-32 which performs a more lengthy initialization step.
+
+// TODO: Describe packet flow and session setup
+
+// TODO: Simple CRC-32 alg appendix
