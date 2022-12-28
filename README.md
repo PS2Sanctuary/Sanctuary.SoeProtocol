@@ -4,7 +4,7 @@ This repository contains reversed engineered documentation, and soon an implemen
 'SOE Protocol'. It was developed by Sony Online Entertainment as a transport layer for the networking
 traffic of various games, including Free Realms, H1Z1, Landmark and PlanetSide 2.
 
-> **Warning:**
+> **Warning**:
 > The contents of this repository are entirely reverse engineered. As such, it may be incomplete 
 > and/or incorrect. While it is likely applicable to many games that use the SOE protocol, it has
 > been written using 2022 versions of PlanetSide 2 as a reference.

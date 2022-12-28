@@ -7,7 +7,7 @@ The protocol can be thought of, in essence, as a stripped-back version of TCP. I
 sessioning, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
 transmission of data, with optional encryption (RC4).
 
-> **Warning:**
+> **Warning**:
 > This documentation is entirely reverse engineered. As such, it may be incomplete and/or incorrect.
 > While it is likely applicable to many games that use the SOE protocol, it has been written using
 > 2022 versions of PlanetSide 2 as a reference.
