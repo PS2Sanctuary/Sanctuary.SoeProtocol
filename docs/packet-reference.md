@@ -25,7 +25,7 @@ struct SessionResponse
     uint CrcSeed; // A randomly generated seed used to calculate the CRC-32 check value on relevant packets.
     byte CrcLength; // The number of bytes that should be used to encode the CRC-32 check value on relevant packets.
     bool IsCompressionEnabled; // Indicates whether relevant packets may be compressed.
-    byte UnknownValue1; // Unknown. Always appears to have a value of 0.
+    byte UnknownValue1; // Unknown. Always observed to be 0. Possibly a flag for the initial encryption status of app data.
     uint UdpLength; // The maximum length of a UDP packet that the sending can receive.
     uint UnknownValue2; // Unknown, possibly a magic value. Always observed to be 3.
 }

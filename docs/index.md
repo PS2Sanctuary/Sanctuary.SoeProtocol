@@ -1,7 +1,7 @@
 # About the SOE Protocol
 
-The SOE protocol is a transport layer for the networking traffic of many games developed by Sony
-Online Entertainment, such as Free Realms, H1Z1, Landmark and PlanetSide 2.
+The SOE protocol is a UDP transport layer for the networking traffic of many games developed by
+Sony Online Entertainment, such as Free Realms, H1Z1, Landmark and PlanetSide 2.
 
 The protocol can be thought of, in essence, as a stripped-back version of TCP. It offers basic
 sessioning, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
@@ -104,7 +104,7 @@ See [Appendix A](./appendix.md#a-soe-crc-32-algorithm) for more info.
     - The `SessionId` must be a randomly generated number.
     - The `UdpLength` field is typically 512 (bytes).
     - The `Protocol` field describes the application protocol that the client wishes to proxy over this session.
-      Using PlanetSide 2 as an example, this might be `LoginUdp_x` or `ExternalGatewayApi_X`.
+      Using PlanetSide 2 as an example, this might be `LoginUdp_X` or `ExternalGatewayApi_X`.
 
 2. If the server decides to accept the session, it must respond with a `SessionResponse` packet.
 
@@ -127,3 +127,8 @@ the client should decide how to proceed.
 In the case that a party encounters a fatal error and cannot continue the session, it should send a `FatalError` packet.
 Upon the other party receiving this, it is assumed that it may return a `FatalErrorResponse`. However, the author has
 never observed this in practice.
+
+## Data Transmission
+
+The main purpose of the SOE protocol is to provide reliable and ordered transmission of data from a higher level
+protocol. This is documented [here](./data-transmission.md).

@@ -84,23 +84,23 @@ uint ReadVariableLength(byte* data, int* offset)
 {
     uint value;
 
-    if (data[offset] <= 0xFF && data[offset + 1] == 0)
+    if (data[*offset] <= 0xFF && data[*offset + 1] == 0)
     {
         // The implied 0x00 in front of all core OP codes given big endian,
         // allows us to use that as an indicator for a length value of 0xFF
-        value = data[offset++];
+        value = data[(*offset)++];
     }
-    else if (data[offset + 1] == 0xFF && data[offset + 2] == 0xFF)
+    else if (data[*offset + 1] == 0xFF && data[*offset + 2] == 0xFF)
     {
-        offset += 3;
-        value = ReadUInt32BigEndian(data + offset);
-        offset += sizeof(uint);
+        *offset += 3;
+        value = ReadUInt32BigEndian(data + *offset);
+        *offset += sizeof(uint);
     }
     else
     {
-        offset += 1;
-        value = ReadUInt16BigEndian(data + offset);
-        offset += sizeof(ushort);
+        *offset += 1;
+        value = ReadUInt16BigEndian(data + *offset);
+        *offset += sizeof(ushort);
     }
 
     return value;
@@ -113,21 +113,71 @@ void WriteVariableLength(byte* buffer, uint length, int* offset)
         // We rely on the sub-packet OP codes all starting with 0x00
         // (given big endian) to signal that a length of 0xFF is not
         // ushort varint.
-        buffer[offset++] = (byte)length;
+        buffer[(*offset)++] = (byte)length;
     }
-    else if (length < ushort.MaxValue)
+    else if (length < 0xFFFF)
     {
-        buffer[offset++] = 0xFF;
-        WriteUInt16BigEndian(buffer + offset, (ushort)length);
-        offset += sizeof(ushort);
+        buffer[(*offset)++] = 0xFF;
+        WriteUInt16BigEndian(buffer + *offset, (ushort)length);
+        *offset += sizeof(ushort);
     }
     else
     {
-        buffer[offset++] = 0xFF;
-        buffer[offset++] = 0xFF;
-        buffer[offset++] = 0xFF;
-        WriteUInt32BigEndian(buffer + offset, length);
-        offset += sizeof(uint);
+        buffer[(*offset)++] = 0xFF;
+        buffer[(*offset)++] = 0xFF;
+        buffer[(*offset)++] = 0xFF;
+        WriteUInt32BigEndian(buffer + *offset, length);
+        *offset += sizeof(uint);
+    }
+}
+```
+
+## C. Reading and Writing Data Bundle Variable-Size Integers
+
+```csharp
+uint ReadVariableLength(byte* buffer, int* offset)
+{
+    uint value;
+
+    if (buffer[*offset] < 0xFF)
+    {
+        value = buffer[(*offset)++];
+    }
+    else if (buffer[*offset + 1] == 0xFF && buffer[*offset + 2] == 0xFF)
+    {
+        *offset += 3;
+        value = ReadUInt32BigEndian(buffer + *offset);
+        *offset += sizeof(uint);
+    }
+    else
+    {
+        *offset += 1;
+        value = ReadUInt16BigEndian(buffer + *offset);
+        *offset += sizeof(ushort);
+    }
+
+    return value;
+}
+
+void WriteVariableLength(byte* buffer, uint length, int* offset)
+{
+    if (length < 0xFF)
+    {
+        buffer[(*offset)++] = (byte)length;
+    }
+    else if (length < 0xFFFF)
+    {
+        buffer[(*offset)++] = 0xFF;
+        WriteUInt16BigEndian(buffer + *offset, (ushort)length);
+        *offset += sizeof(ushort);
+    }
+    else
+    {
+        buffer[(*offset)++] = 0xFF;
+        buffer[(*offset)++] = 0xFF;
+        buffer[(*offset)++] = 0xFF;
+        WriteUInt32BigEndian(buffer + *offset, length);
+        *offset += sizeof(uint);
     }
 }
 ```
