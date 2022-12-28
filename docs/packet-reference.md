@@ -33,11 +33,22 @@ struct SessionResponse
 
 ### MultiPacket (0x03)
 
-MultiPackets wrap multiple packets. Sub-packets may not be compressed and do not carry a CRC check value. Each sub-packet is prefixed by its length, encoded with a variable-size integer.
+MultiPackets are used to wrap many smaller SOE packets before they are sent. This is often utilised in the
+middle of data transmission, where a party wants to send a `Data` packet and simultaneously `Acknowledge`
+data from the other party. Another oft-occurring example is when multiple `OutOfOrder` packets need to be
+sent.
+
+> **Note**: typically, when a `MultiPacket` is carrying multiple of the same sub-packet, compression will be used.
+
+A `MultiPacket` contains no data other than its sub-packets, which are placed back-to-back and prefixed by
+their lengths, encoded using variable-size integers.
+See [Appendix B](./appendix.md#b-reading-and-writing-multipacket-variable-size-integers) for more info.
+Sub-packets may not be compressed and hence should omit the compression flag. Further, sub-packets should not
+include a CRC check value.
 
 To read a multipacket, one should loop until the entire packet has been consumed. Each iteration,
 a variable-size integer should be read, which indicates the amount of data to read in order to
-extract the next sub-packet in the buffer. E.g.:
+extract the next sub-packet from the buffer. E.g.:
 
 ```csharp
 byte* packetData = ...;
@@ -51,9 +62,6 @@ while (offset < packetData.Length)
     offset += (int)length;
 }
 ```
-
-MultiPackets use a dedicated algorithm for reading and writing variable-size integers.
-See [Appendix B](./appendix.md#b-reading-and-writing-multipacket-variable-size-integers).
 
 ### Disconnect (0x05)
 
