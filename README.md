@@ -16,7 +16,7 @@ I have documented the SOE protocol to the extent that I understand it. This can 
 ## Other References
 
 There are various other reverse engineered protocol/game server emulation projects containing
-implementations of the SOE Protocol.
+implementations of the SOE protocol.
 
 - [bacta/soe-archive](https://github.com/bacta/soe-archive) (Java)
 - [h1emu/h1z1-server](https://github.com/H1emu/h1z1-server) (JavaScript)

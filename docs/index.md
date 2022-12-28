@@ -7,14 +7,13 @@ The protocol can be thought of, in essence, as a stripped-back version of TCP. I
 sessioning, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
 transmission of data, with optional encryption (RC4).
 
-> **Warning**:
-> This documentation is entirely reverse engineered. As such, it may be incomplete and/or incorrect.
-> While it is likely applicable to many games that use the SOE protocol, it has been written using
-> 2022 versions of PlanetSide 2 as a reference.
+> **Warning**: this documentation is entirely reverse engineered. As such, it may be incomplete
+> and/or incorrect. While it is likely applicable to many games that use the SOE protocol, it
+> has been written using 2022 versions of PlanetSide 2 as a reference.
 
 ## Structural Overview
 
-All packets of the SOE Protocol use **big endian** and are prefixed by a **two-byte OP code**.
+All packets of the SOE protocol use **big endian** and are prefixed by a **two-byte OP code**.
 Packets have a maximum length, which is dictated by both parties using the `SessionRequest` and
 `SessionResponse` packets. This length is usually 512.
 
@@ -36,11 +35,9 @@ FatalError = 0x1D,
 FatalErrorResponse = 0x1E
 ```
 
-> **Note**:
-> 'Data packets' (Data/DataFragment/OutOfOrder/Acknowledge) are actually
-> duplicated four times each, using consecutive OP codes. This allows data to be sent on multiple
-> 'channels'. However, only the first channel has been used in any games utilising the SOE protocol
-> thus far.
+> **Note**: 'data packets' (Data/DataFragment/OutOfOrder/Acknowledge) are actually duplicated
+> four times each, using consecutive OP codes. This allows data to be sent on multiple 'channels'.
+> However, only the first channel has been used in any games utilising the SOE protocol thus far.
 
 ---
 
@@ -50,8 +47,7 @@ and failing sessions. As such, having no context, they are not verified and cann
 The second set, used within the context of a session, are largely concerned with the transfer of
 application data. These packets may be pre/suffixed with additional data to facilitate verification and compression.
 
-> **Note**:
-> Before continuing, please consult the [Packet Reference](./packet-reference.md).
+> **Note**: before continuing, please consult the [Packet Reference](./packet-reference.md).
 
 ### Session Control Packets
 
@@ -98,6 +94,7 @@ The length of the `Crc` field is dictated by the `SessionResponse#CrcLength` fie
 using the entirety of the packet buffer; starting from the OP code and ending immediately before the
 CRC bytes. The algorithm is a variant of CRC-32 which performs a more lengthy initialization step.
 
+## Session Control
 // TODO: Describe packet flow and session setup
 
 // TODO: Simple CRC-32 alg appendix
