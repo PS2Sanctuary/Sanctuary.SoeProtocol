@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sanctuary.SoeProtocol", "Sanctuary.SoeProtocol\Sanctuary.SoeProtocol.csproj", "{880607AD-A76E-4CD2-91DE-4B684F0BBBBC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sanctuary.SoeProtocol.Tests", "Sanctuary.SoeProtocol.Tests\Sanctuary.SoeProtocol.Tests.csproj", "{893DE011-E404-49F2-8F01-FB98A6E98D25}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{880607AD-A76E-4CD2-91DE-4B684F0BBBBC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{880607AD-A76E-4CD2-91DE-4B684F0BBBBC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{880607AD-A76E-4CD2-91DE-4B684F0BBBBC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{880607AD-A76E-4CD2-91DE-4B684F0BBBBC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{893DE011-E404-49F2-8F01-FB98A6E98D25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{893DE011-E404-49F2-8F01-FB98A6E98D25}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{893DE011-E404-49F2-8F01-FB98A6E98D25}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{893DE011-E404-49F2-8F01-FB98A6E98D25}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
