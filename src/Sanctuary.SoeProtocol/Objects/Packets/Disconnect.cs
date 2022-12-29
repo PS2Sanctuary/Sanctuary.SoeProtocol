@@ -96,7 +96,8 @@ public enum DisconnectReason : ushort
     CorruptPacket = 15,
 
     /// <summary>
-    /// Indicates that the requested application protocol is invalid.
+    /// Indicates that the requested SOE protocol version or
+    /// application protocol is invalid.
     /// </summary>
     ProtocolMismatch = 16
 }

@@ -63,14 +63,12 @@ Those packets involved with negotiating a session are:
 
 Those packets requiring a session to be utilised are:
 - MultiPacket
-- Disconnect*
+- Disconnect
 - Heartbeat
 - ReliableData
 - ReliableDataFragment
 - OutOfOrder
 - Acknowledge
-
-*\*Disconnect packets are abnormal, [see below](#disconnects).*
 
 All SOE packets are prefixed with an OP code. However, those packets which are sent within the
 context of a session can also include additional data, *except* for when they are bundled within a `MultiPacket`.
@@ -97,13 +95,6 @@ using the entirety of the packet buffer; starting from the OP code and ending im
 CRC bytes. The algorithm is a variant of CRC-32 which performs a more lengthy initialization step.
 See [Appendix A](./appendix.md#a-soe-crc-32-algorithm) for more info.
 
-#### Disconnects
-
-`Disconnect` packets use the same structure as other packets which require a session context
-(i.e. they can have the compression flag and CRC check value). However, they can actually be sent
-before a session has been established.
-TODO: finish!
-
 ## Session Control
 
 > **Note**: before continuing, please consult the [Packet Reference](./packet-reference.md).
@@ -128,10 +119,9 @@ TODO: finish!
 
 ### Ending a Session
 
-At any point, either party may send a `Disconnect` packet to terminate the session. It is assumed (by the author)
-that if the `ConnectionRefused` or `ConnectingToSelf` reasons are provided, the client *should not* attempt to
-reconnect. If the `NewConnectionAttempt` reason is provided the client *should* attempt to reconnect. In other cases,
-the client should decide how to proceed.
+At any point, either party may send a `Disconnect` packet to terminate the session. If the `ConnectionRefused`
+or `ConnectingToSelf` reasons are provided, the client *should not* attempt to reconnect. In other cases, the
+client may decide how to proceed.
 
 ### Fatal Errors
 
