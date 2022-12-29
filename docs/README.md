@@ -7,9 +7,11 @@ The protocol can be thought of, in essence, as a stripped-back version of TCP. I
 sessioning, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
 transmission of data, with optional encryption (RC4).
 
-> **Warning**: this documentation is entirely reverse engineered. As such, it may be incomplete
-> and/or incorrect. While it is likely applicable to many games that use the SOE protocol, it
-> has been written using 2022 versions of PlanetSide 2 as a reference.
+This documentation covers version **3** of the SOE protocol, using 2022 versions of PlanetSide 2
+as a reference.
+
+> **Warning**: this documentation is reverse engineered. As such, it may be incomplete and/or
+> incorrect, and is not necessarily applicable to other games that use the SOE protocol.
 
 ## Structural Overview
 
@@ -112,7 +114,7 @@ TODO: finish!
 
     - The `SessionId` must be a randomly generated number.
     - The `UdpLength` field is typically 512 (bytes).
-    - The `Protocol` field describes the application protocol that the client wishes to proxy over this session.
+    - The `ApplicationProtocol` field describes the application protocol that the client wishes to proxy over this session.
       Using PlanetSide 2 as an example, this might be `LoginUdp_X` or `ExternalGatewayApi_X`.
 
 2. If the server decides to accept the session, it must respond with a `SessionResponse` packet.
