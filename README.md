@@ -23,4 +23,5 @@ implementations of the SOE protocol.
 - [kirmmin/LandmarkEmu](https://github.com/kirmmin/LandmarkEmu) (C#)
 - [misterupkeep/soe-dissector](https://github.com/misterupkeep/soe-dissector) (WireShark dissector, Lua)
 - [psemu/soe-network](https://github.com/psemu/soe-network/) (JavaScript)
+- [swg-ostrich/src](https://github.com/swg-ostrich/src/tree/master/external/3rd/library/soePlatform/ChatAPI/utils/UdpLibrary) (C++)
 - [thoop/swg](https://github.com/thoop/swg) (JavaScript)

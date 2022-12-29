@@ -7,7 +7,7 @@ Session request packets request the start of an SOE protocol session.
 ```csharp
 struct SessionRequest
 {
-    uint UnknownValue1; // Unknown, possibly a magic value. Always observed to be 3.
+    uint SoeProtocolVersion; // The version of the SOE protocol that is in use. Version 3 is documented here.
     uint SessionId; // A randomly generated session idenfiier.
     uint UdpLength; // The maximum length of a UDP packet that the sender can receive.
     string ApplicationProtocol; // A null-terminated descriptor of the application protocol that the sender wishes to transport.
@@ -26,8 +26,8 @@ struct SessionResponse
     byte CrcLength; // The number of bytes that should be used to encode the CRC-32 check value on relevant packets.
     bool IsCompressionEnabled; // Indicates whether relevant packets may be compressed.
     byte UnknownValue1; // Unknown. Always observed to be 0. Possibly a flag for the initial encryption status of app data.
-    uint UdpLength; // The maximum length of a UDP packet that the sending can receive.
-    uint UnknownValue2; // Unknown, possibly a magic value. Always observed to be 3.
+    uint UdpLength; // The maximum length of a UDP packet that the sender can receive.
+    uint SoeProtocolVersion; // The version of the SOE protocol that is in use. Version 3 is documented here.
 }
 ```
 
@@ -70,23 +70,23 @@ Disconnect packets are used to indicate that a party is closing the connection.
 ```csharp
 enum DisconnectReason : ushort
 {
-    None = 0,
-    IcmpError = 1,
-    Timeout = 2,
-    OtherSideTerminated = 3,
-    ManagerDeleted = 4,
-    ConnectFail = 5,
-    Application = 6,
-    UnreachableConnection = 7,
-    UnacknowledgedTimeout = 8,
-    NewConnectionAttempt = 9,
-    ConnectionRefused = 10,
-    ConnectError = 11,
-    ConnectingToSelf = 12,
-    ReliableOverflow = 13,
-    ApplicationReleased = 14,
-    CorruptPacket = 15,
-    ProtocolMismatch = 16
+    None = 0, // No reason can be given for the disconnect.
+    IcmpError = 1, // An ICMP error occured, forcing the disconnect.
+    Timeout = 2, // The other party has let the session become inactive.
+    OtherSideTerminated = 3, // An internal use code, used to indicate that the other party has sent a disconnect.
+    ManagerDeleted = 4, // Indicates that the session manager has been disposed of. Generally occurs when the server/client is shutting down.
+    ConnectFail = 5, // Indicates that a connection attempt has failed internally.
+    Application = 6, // The application is terminating the session.
+    UnreachableConnection = 7, // An internal use code, indicating that the session must disconnect as the other party is unreachable.
+    UnacknowledgedTimeout = 8, // Indicates that the session has been closed because a data sequence was not acknowledged quickly enough.
+    NewConnectionAttempt = 9, // Indicates that a session request has failed (often due to the connecting party attempting a reconnection too quickly), and a new attempt should be made after a short delay.
+    ConnectionRefused = 10, // Indicates that the application did not accept a session request.
+    ConnectError = 11, // Indicates that the proper session negotiation flow has not been observed.
+    ConnectingToSelf = 12, // Indicates that a session request has probably been looped back to the sender, and it should not continue with the connection attempt.
+    ReliableOverflow = 13, // Indicates that reliable data is being sent too fast to be processed.
+    ApplicationReleased = 14, // Indicates that the session manager has been orphaned by the application.
+    CorruptPacket = 15, // Indicates that a corrupt packet was received.
+    ProtocolMismatch = 16 // Indicates that the requested application protocol is invalid. TODO: Or the SOE protocol version?
 }
 
 struct Disconnect
