@@ -33,6 +33,11 @@ public unsafe struct Rc4KeyState : IDisposable
     /// </summary>
     public int Index2;
 
+    public Rc4KeyState()
+    {
+        throw new InvalidOperationException("Use of Rc4KeyState's default constructor is invalid");
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="Rc4KeyState"/> class.
     /// </summary>
