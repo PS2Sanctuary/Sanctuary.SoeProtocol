@@ -36,7 +36,7 @@ public enum DisconnectReason : ushort
     ManagerDeleted = 4,
 
     /// <summary>
-    /// Indicates that a connection attempt has failed internally.
+    /// An internal use code, indicating a session request attempt has failed.
     /// </summary>
     ConnectFail = 5,
 

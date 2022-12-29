@@ -75,7 +75,7 @@ enum DisconnectReason : ushort
     Timeout = 2, // The other party has let the session become inactive.
     OtherSideTerminated = 3, // An internal use code, used to indicate that the other party has sent a disconnect.
     ManagerDeleted = 4, // Indicates that the session manager has been disposed of. Generally occurs when the server/client is shutting down.
-    ConnectFail = 5, // Indicates that a connection attempt has failed internally.
+    ConnectFail = 5, // An internal use code, indicating a session request attempt has failed.
     Application = 6, // The application is terminating the session.
     UnreachableConnection = 7, // An internal use code, indicating that the session must disconnect as the other party is unreachable.
     UnacknowledgedTimeout = 8, // Indicates that the session has been closed because a data sequence was not acknowledged quickly enough.
@@ -86,7 +86,7 @@ enum DisconnectReason : ushort
     ReliableOverflow = 13, // Indicates that reliable data is being sent too fast to be processed.
     ApplicationReleased = 14, // Indicates that the session manager has been orphaned by the application.
     CorruptPacket = 15, // Indicates that a corrupt packet was received.
-    ProtocolMismatch = 16 // Indicates that the requested application protocol is invalid. TODO: Or the SOE protocol version?
+    ProtocolMismatch = 16 // Indicates that the requested SOE protocol version or application protocol is invalid.
 }
 
 struct Disconnect
