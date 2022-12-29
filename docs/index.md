@@ -27,15 +27,15 @@ Disconnect = 0x05,
 Heartbeat = 0x06,
 NetStatusRequest = 0x07,
 NetStatusResponse = 0x08,
-Data = 0x09,
-DataFragment = 0x0D,
+ReliableData = 0x09,
+ReliableDataFragment = 0x0D,
 OutOfOrder = 0x11,
 Acknowledge = 0x15,
 FatalError = 0x1D,
 FatalErrorResponse = 0x1E
 ```
 
-> **Note**: 'data packets' (Data/DataFragment/OutOfOrder/Acknowledge) are actually duplicated
+> **Note**: 'data packets' (ReliableData/ReliableDataFragment/OutOfOrder/Acknowledge) are actually duplicated
 > four times each, using consecutive OP codes. This allows data to be sent on multiple 'channels'.
 > However, only the first channel has been used in any games utilising the SOE protocol thus far.
 
@@ -61,12 +61,14 @@ Those packets involved with negotiating a session are:
 
 Those packets requiring a session to be utilised are:
 - MultiPacket
-- Disconnect
+- Disconnect*
 - Heartbeat
-- Data
-- DataFragment
+- ReliableData
+- ReliableDataFragment
 - OutOfOrder
 - Acknowledge
+
+*\*Disconnect packets are abnormal, [see below](#disconnects).*
 
 All SOE packets are prefixed with an OP code. However, those packets which are sent within the
 context of a session can also include additional data, *except* for when they are bundled within a `MultiPacket`.
@@ -92,6 +94,13 @@ The length of the `Crc` field is dictated by the `SessionResponse#CrcLength` fie
 using the entirety of the packet buffer; starting from the OP code and ending immediately before the
 CRC bytes. The algorithm is a variant of CRC-32 which performs a more lengthy initialization step.
 See [Appendix A](./appendix.md#a-soe-crc-32-algorithm) for more info.
+
+#### Disconnects
+
+`Disconnect` packets use the same structure as other packets which require a session context
+(i.e. they can have the compression flag and CRC check value). However, they can actually be sent
+before a session has been established.
+TODO: finish!
 
 ## Session Control
 

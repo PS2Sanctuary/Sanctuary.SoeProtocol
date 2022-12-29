@@ -33,10 +33,10 @@ struct SessionResponse
 
 ### MultiPacket (0x03)
 
-MultiPackets are used to wrap many smaller SOE packets before they are sent. This is often utilised in the
-middle of data transmission, where a party wants to send a `Data` packet and simultaneously `Acknowledge`
-data from the other party. Another oft-occurring example is when multiple `OutOfOrder` packets need to be
-sent.
+MultiPackets are used to wrap many smaller SOE packets before they are sent. This is often utilised in
+the middle of data transmission, where a party wants to send a `ReliableData` packet and simultaneously
+`Acknowledge` data from the other party. Another oft-occurring example is when multiple `OutOfOrder`
+packets need to be sent.
 
 > **Note**: typically, when a MultiPacket is carrying multiple of the same sub-packet, compression will be used.
 
@@ -143,26 +143,26 @@ struct NetStatusResponse
 }
 ```
 
-### Data (0x09)
+### ReliableData (0x09)
 
-Data packets are used to transfer application data that is small enough to not need fragmenting,
+ReliableData packets are used to transfer application data that is small enough to not need fragmenting,
 given the current `UdpLength` of the connection.
 
 ```csharp
-struct Data
+struct ReliableData
 {
     ushort Sequence; // The sequence number within the data stream. This may wrap around.
     byte[] DataBuffer; // The data being sent.
 }
 ```
 
-### DataFragment (0x0D)
+### ReliableDataFragment (0x0D)
 
-DataFragment packets are used to transfer application data that is too large to fit within a single
-`Data` packet, given the current `UdpLength` of the connection.
+ReliableDataFragment packets are used to transfer application data that is too large to fit within a
+single `ReliableData` packet, given the current `UdpLength` of the connection.
 
 ```csharp
-struct DataFragment
+struct ReliableDataFragment
 {
     ushort Sequence; // The sequence number within the data stream. This may wrap around.
     uint? CompleteDataLength; // The length of the non-fragmented data buffer. Only included in the first fragment.

@@ -49,12 +49,12 @@ public enum SoeOpCode
     /// <summary>
     /// Used to transfer small buffers of application data.
     /// </summary>
-    Data = 0x09,
+    ReliableData = 0x09,
 
     /// <summary>
     /// Used to transfer large buffers of application data in multiple fragments.
     /// </summary>
-    DataFragment = 0x0D,
+    ReliableDataFragment = 0x0D,
 
     /// <summary>
     /// Used to indicate that a data sequence was received out-of-order.
