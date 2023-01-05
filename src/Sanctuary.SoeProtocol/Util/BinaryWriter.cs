@@ -56,6 +56,13 @@ public ref struct BinaryWriter
         Offset += sizeof(short);
     }
 
+    public void WriteUInt24BE(uint value)
+    {
+        WriteByte((byte)(value >>> 16));
+        WriteByte((byte)(value >>> 8));
+        WriteByte((byte)value);
+    }
+
     public void WriteUInt32BE(uint value)
     {
         BinaryPrimitives.WriteUInt32BigEndian(Span[Offset..], value);

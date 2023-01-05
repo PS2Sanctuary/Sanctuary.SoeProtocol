@@ -94,6 +94,15 @@ public ref struct BinaryReader
         return value;
     }
 
+    public uint ReadUInt24BE()
+    {
+        uint value = 0;
+        value |= (uint)ReadByte() << 16;
+        value |= (uint)ReadByte() << 8;
+        value |= ReadByte();
+        return value;
+    }
+
     public ulong ReadUInt64BE()
     {
         ulong value = BinaryPrimitives.ReadUInt64BigEndian(Span[Offset..]);

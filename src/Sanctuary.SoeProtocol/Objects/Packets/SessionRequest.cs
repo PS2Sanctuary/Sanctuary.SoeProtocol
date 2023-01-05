@@ -18,8 +18,15 @@ public readonly record struct SessionRequest
     string ApplicationProtocol
 )
 {
+    public const int MinSize = sizeof(SoeOpCode)
+        + sizeof(uint) // SoeProtocolVersion
+        + sizeof(uint) // SessionId
+        + sizeof(uint) // UdpLength
+        + 1; // ApplicationProtocol terminator
+
     /// <summary>
     /// Deserializes a <see cref="SessionRequest"/> packet from a buffer.
+    /// This method does not expect an OP code in the buffer.
     /// </summary>
     /// <param name="buffer">The buffer.</param>
     /// <returns>The deserialized packet.</returns>
@@ -40,19 +47,22 @@ public readonly record struct SessionRequest
     /// <see cref="SessionRequest"/> packet.
     /// </summary>
     public int GetSize()
-        => sizeof(uint) // SoeProtocolVersion
+        => sizeof(SoeOpCode)
+            + sizeof(uint) // SoeProtocolVersion
             + sizeof(uint) // SessionId
             + sizeof(uint) // UdpLength
             + ApplicationProtocol.Length + 1; // + 1 for null termination
 
     /// <summary>
     /// Serializes this <see cref="SessionRequest"/> packet to a buffer.
+    /// This method writes the OP code to the buffer.
     /// </summary>
     /// <param name="buffer">The buffer.</param>
     public void Serialize(Span<byte> buffer)
     {
         BinaryWriter writer = new(buffer);
 
+        writer.WriteUInt16BE((ushort)SoeOpCode.SessionRequest);
         writer.WriteUInt32BE(SoeProtocolVersion);
         writer.WriteUInt32BE(SessionId);
         writer.WriteUInt32BE(UdpLength);

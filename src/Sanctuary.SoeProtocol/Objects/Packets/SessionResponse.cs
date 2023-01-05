@@ -28,7 +28,8 @@ public readonly record struct SessionResponse
     /// Gets the buffer size required to serialize a
     /// <see cref="SessionResponse"/> packet.
     /// </summary>
-    public const int Size = sizeof(uint) // SessionId
+    public const int Size = sizeof(SoeOpCode)
+        + sizeof(uint) // SessionId
         + sizeof(uint) // CrcSeed
         + sizeof(byte) // CrcLength
         + sizeof(bool) // IsCompressionEnabled
@@ -38,6 +39,7 @@ public readonly record struct SessionResponse
 
     /// <summary>
     /// Deserializes a <see cref="SessionResponse"/> packet from a buffer.
+    /// This method does not expect the OP code in the buffer.
     /// </summary>
     /// <param name="buffer">The buffer.</param>
     /// <returns>The deserialized packet.</returns>
@@ -67,12 +69,14 @@ public readonly record struct SessionResponse
 
     /// <summary>
     /// Serializes this <see cref="SessionResponse"/> packet to a buffer.
+    /// This method writes the OP code to the buffer.
     /// </summary>
     /// <param name="buffer">The buffer.</param>
     public void Serialize(Span<byte> buffer)
     {
         BinaryWriter writer = new(buffer);
 
+        writer.WriteUInt16BE((ushort)SoeOpCode.SessionResponse);
         writer.WriteUInt32BE(SessionId);
         writer.WriteUInt32BE(CrcSeed);
         writer.WriteByte(CrcLength);
