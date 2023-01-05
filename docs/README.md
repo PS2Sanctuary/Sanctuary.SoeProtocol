@@ -4,7 +4,7 @@ The SOE protocol is a UDP transport layer for the networking traffic of many gam
 Sony Online Entertainment, such as Free Realms, H1Z1, Landmark and PlanetSide 2.
 
 The protocol can be thought of, in essence, as a stripped-back version of TCP. It offers basic
-sessioning, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
+sessions, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
 transmission of data, with optional encryption (RC4).
 
 This documentation covers version **3** of the SOE protocol, using 2022 versions of PlanetSide 2
@@ -33,8 +33,8 @@ ReliableData = 0x09,
 ReliableDataFragment = 0x0D,
 OutOfOrder = 0x11,
 Acknowledge = 0x15,
-FatalError = 0x1D,
-FatalErrorResponse = 0x1E
+UnknownSender = 0x1D,
+RemapConnection = 0x1E
 ```
 
 > **Note**: 'data packets' (ReliableData/ReliableDataFragment/OutOfOrder/Acknowledge) are actually duplicated
@@ -56,8 +56,8 @@ Those packets involved with negotiating a session are:
 - SessionResponse
 - NetStatusRequest
 - NetStatusResponse
-- FatalError
-- FatalErrorResponse
+- UnknownSender
+- RemapConnection
 
 ### Session-context Packets
 
@@ -123,11 +123,9 @@ At any point, either party may send a `Disconnect` packet to terminate the sessi
 or `ConnectingToSelf` reasons are provided, the client *should not* attempt to reconnect. In other cases, the
 client may decide how to proceed.
 
-### Fatal Errors
+### Handling UnknownSender and RemapConnection
 
-In the case that a party encounters a fatal error and cannot continue the session, it should send a `FatalError` packet.
-Upon the other party receiving this, it is assumed that it may return a `FatalErrorResponse`. However, the author has
-never observed this in practice.
+// TODO
 
 ## Data Transmission
 

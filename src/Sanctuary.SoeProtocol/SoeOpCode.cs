@@ -67,12 +67,13 @@ public enum SoeOpCode
     Acknowledge = 0x15,
 
     /// <summary>
-    /// Used to indicate that a fatal error has occured, and the session should be closed.
+    /// Used to indicate that the receiving party does not have a session running
+    /// for the sender's address.
     /// </summary>
-    FatalError = 0x1D,
+    UnknownSender = 0x1D,
 
     /// <summary>
-    /// Used to respond to a <see cref="FatalError"/>.
+    /// Used to request that a session be remapped to another port.
     /// </summary>
-    FatalErrorResponse = 0x1E
+    RemapConnection = 0x1E
 }
