@@ -18,6 +18,10 @@ public readonly record struct SessionRequest
     string ApplicationProtocol
 )
 {
+    /// <summary>
+    /// Gets the minimum size of a buffer required to serialize
+    /// a <see cref="SessionRequest"/> packet.
+    /// </summary>
     public const int MinSize = sizeof(SoeOpCode)
         + sizeof(uint) // SoeProtocolVersion
         + sizeof(uint) // SessionId

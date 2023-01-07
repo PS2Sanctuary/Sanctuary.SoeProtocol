@@ -67,8 +67,8 @@ public enum SoeOpCode
     Acknowledge = 0x15,
 
     /// <summary>
-    /// Used to indicate that the receiving party does not have a session running
-    /// for the sender's address.
+    /// Used to indicate that the receiving party does not have a session
+    /// associated with the sender's address.
     /// </summary>
     UnknownSender = 0x1D,
 
