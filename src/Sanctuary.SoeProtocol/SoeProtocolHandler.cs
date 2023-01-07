@@ -3,7 +3,6 @@ using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
-using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -107,16 +106,15 @@ public class SoeProtocolHandler : IDisposable
         if (!_packetQueue.TryDequeue(out NativeSpan packet))
             return false;
 
-        if (packet.Span.Length < sizeof(SoeOpCode))
+        if (ValidatePacket(packet.Span, _sessionParams, out SoeOpCode opCode) is not SoePacketValidationResult.Valid)
         {
             TerminateSession(DisconnectReason.CorruptPacket, true);
             return true;
         }
 
-        SoeOpCode opCode = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packet.Span);
         ReadOnlySpan<byte> packetData = packet.Span[sizeof(SoeOpCode)..];
-
         bool isSessionless = IsSessionlessPacket(opCode);
+
         if (isSessionless)
             HandleSessionlessPacket(opCode, packetData);
         else
@@ -133,18 +131,12 @@ public class SoeProtocolHandler : IDisposable
         {
             case SoeOpCode.SessionRequest:
             {
-                if (packetData.Length + sizeof(SoeOpCode) < SessionRequest.MinSize)
-                    TerminateSession(DisconnectReason.CorruptPacket, true);
-                else
-                    HandleSessionRequest(packetData);
+                HandleSessionRequest(packetData);
                 break;
             }
             case SoeOpCode.SessionResponse:
             {
-                if (packetData.Length + sizeof(SoeOpCode) < SessionResponse.Size)
-                    TerminateSession(DisconnectReason.CorruptPacket, true);
-                else
-                    HandleSessionResponse(packetData);
+                HandleSessionResponse(packetData);
                 break;
             }
             case SoeOpCode.UnknownSender:

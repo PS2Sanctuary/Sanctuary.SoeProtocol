@@ -1,4 +1,9 @@
-﻿namespace Sanctuary.SoeProtocol.Util;
+﻿using Sanctuary.SoeProtocol.Objects;
+using Sanctuary.SoeProtocol.Objects.Packets;
+using System;
+using System.Buffers.Binary;
+
+namespace Sanctuary.SoeProtocol.Util;
 
 /// <summary>
 /// Contains utility methods for working with SOE protocol packets.
@@ -6,8 +11,8 @@
 public static class SoePacketUtils
 {
     /// <summary>
-    /// Gets a value indicating whether the given OP code
-    /// represents a session-less packet.
+    /// Gets a value indicating whether the given OP code represents a
+    /// packet that is used outside the context of a session.
     /// </summary>
     /// <param name="opCode">The OP code.</param>
     /// <returns><c>True</c> if the packet is session-less.</returns>
@@ -16,6 +21,23 @@ public static class SoePacketUtils
             or SoeOpCode.SessionResponse
             or SoeOpCode.UnknownSender
             or SoeOpCode.RemapConnection;
+
+    /// <summary>
+    /// Gets a valid indicating whether the given OP code represents a
+    /// packet that must be used within the context of a session.
+    /// </summary>
+    /// <param name="opCode">The OP code.</param>
+    /// <returns><c>True</c> if the packet requires a session.</returns>
+    public static bool IsSessionContextPacket(SoeOpCode opCode)
+        => opCode is SoeOpCode.MultiPacket
+            or SoeOpCode.Disconnect
+            or SoeOpCode.Heartbeat
+            or SoeOpCode.NetStatusRequest
+            or SoeOpCode.NetStatusResponse
+            or SoeOpCode.ReliableData
+            or SoeOpCode.ReliableDataFragment
+            or SoeOpCode.OutOfOrder
+            or SoeOpCode.Acknowledge;
 
     /// <summary>
     /// Appends a CRC check value to the given <see cref="BinaryWriter"/>.
@@ -46,4 +68,70 @@ public static class SoePacketUtils
                 break;
         }
     }
+
+    /// <summary>
+    /// Validates that a buffer 'most likely' contains an SOE protocol packet.
+    /// </summary>
+    /// <param name="packetData">The buffer to validate.</param>
+    /// <param name="sessionParams">The current session parameters.</param>
+    /// <param name="opCode">The OP code of the packet, if valid.</param>
+    /// <returns>The result of the validation.</returns>
+    public static SoePacketValidationResult ValidatePacket
+    (
+        ReadOnlySpan<byte> packetData,
+        SessionParameters sessionParams,
+        out SoeOpCode opCode
+    )
+    {
+        opCode = SoeOpCode.Invalid;
+
+        if (packetData.Length < sizeof(SoeOpCode))
+            return SoePacketValidationResult.TooShort;
+
+        opCode = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packetData);
+        if (!IsSessionlessPacket(opCode) && !IsSessionContextPacket(opCode))
+            return SoePacketValidationResult.InvalidOpCode;
+
+        if (GetPacketMinimumLength(opCode, sessionParams) < packetData.Length)
+            return SoePacketValidationResult.TooShort;
+
+        if (IsSessionlessPacket(opCode) || sessionParams.CrcLength is 0)
+            return SoePacketValidationResult.Valid;
+
+        uint crc = sessionParams.CrcLength switch
+        {
+            1 => packetData[^1],
+            2 => BinaryPrimitives.ReadUInt16BigEndian(packetData[^2..]),
+            3 => new BinaryReader(packetData[^3..]).ReadUInt24BE(),
+            _ => BinaryPrimitives.ReadUInt32BigEndian(packetData[^4..])
+        };
+
+        return Crc32.Hash(packetData[..^sessionParams.CrcLength], sessionParams.CrcSeed) == crc
+            ? SoePacketValidationResult.Valid
+            : SoePacketValidationResult.CrcMismatch;
+    }
+
+    public static int GetPacketMinimumLength(SoeOpCode opCode, SessionParameters sessionParams)
+        => opCode switch
+        {
+            SoeOpCode.SessionRequest => SessionRequest.MinSize,
+            SoeOpCode.SessionResponse => SessionResponse.Size,
+            SoeOpCode.MultiPacket => GetContextualPacketPadding(sessionParams) + 2, // Data length + first byte of data,
+            SoeOpCode.Disconnect => GetContextualPacketPadding(sessionParams) + Disconnect.Size,
+            SoeOpCode.Heartbeat => GetContextualPacketPadding(sessionParams) + Heartbeat.Size,
+            SoeOpCode.NetStatusRequest => GetContextualPacketPadding(sessionParams),
+            SoeOpCode.NetStatusResponse => GetContextualPacketPadding(sessionParams),
+            SoeOpCode.ReliableData or SoeOpCode.ReliableDataFragment => GetContextualPacketPadding(sessionParams)
+                + sizeof(ushort) + 1, // Sequence + first byte of data,
+            SoeOpCode.OutOfOrder => GetContextualPacketPadding(sessionParams) + OutOfOrder.Size,
+            SoeOpCode.Acknowledge => GetContextualPacketPadding(sessionParams) + Acknowledge.Size,
+            SoeOpCode.UnknownSender => UnknownSender.Size,
+            SoeOpCode.RemapConnection => RemapConnection.Size,
+            _ => throw new ArgumentOutOfRangeException(nameof(opCode), opCode, "Invalid OP code")
+        };
+
+    private static int GetContextualPacketPadding(SessionParameters sessionParams)
+        => sizeof(SoeOpCode)
+            + (sessionParams.IsCompressionEnabled ? 1 : 0)
+            + sessionParams.CrcLength;
 }
