@@ -11,7 +11,7 @@ networking traffic of various games, including Free Realms, H1Z1, Landmark and P
 ## Documentation
 
 I have documented the SOE protocol to the extent that I understand it. This can be found under the
-`docs` folder, starting [here](./docs/index.md).
+`docs` folder, starting [here](./docs/README.md).
 
 ## Other References
 
