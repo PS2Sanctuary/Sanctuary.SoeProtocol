@@ -23,9 +23,14 @@ public static class SoeConstants
     public const uint DefaultUdpLength = 512;
 
     /// <summary>
-    /// Gets the timespan indicating how long a session stay alive without receiving any
-    /// data. Set to <see cref="TimeSpan.Zero"/> to prevent a session from being terminated
-    /// due to inactivity.
+    /// Gets the default timespan after which to send a heartbeat, if no contextual
+    /// packets have been received within the interval.
     /// </summary>
-    public static readonly TimeSpan SessionInactivityTimeout = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan DefaultSessionHeartbeatAfter = TimeSpan.FromSeconds(25);
+
+    /// <summary>
+    /// Gets the default timespan after which to consider a session inactive, if no
+    /// contextual packets have been received within the interval.
+    /// </summary>
+    public static readonly TimeSpan DefaultSessionInactivityTimeout = TimeSpan.FromSeconds(30);
 }

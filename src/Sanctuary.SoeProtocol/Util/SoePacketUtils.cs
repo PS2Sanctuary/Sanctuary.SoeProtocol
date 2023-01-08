@@ -124,7 +124,7 @@ public static class SoePacketUtils
             SoeOpCode.SessionResponse => SessionResponse.Size,
             SoeOpCode.MultiPacket => GetContextualPacketPadding(sessionParams) + 2, // Data length + first byte of data,
             SoeOpCode.Disconnect => GetContextualPacketPadding(sessionParams) + Disconnect.Size,
-            SoeOpCode.Heartbeat => GetContextualPacketPadding(sessionParams) + Heartbeat.Size,
+            SoeOpCode.Heartbeat => GetContextualPacketPadding(sessionParams),
             SoeOpCode.NetStatusRequest => GetContextualPacketPadding(sessionParams),
             SoeOpCode.NetStatusResponse => GetContextualPacketPadding(sessionParams),
             SoeOpCode.ReliableData or SoeOpCode.ReliableDataFragment => GetContextualPacketPadding(sessionParams)

@@ -8,4 +8,16 @@
       <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="2.2.1" />
     </ItemGroup>
     
+    <ItemGroup>
+      <Compile Update="SoeProtocolHandler.DataInput.cs">
+        <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SoeProtocolHandler.Contextless.cs">
+        <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
+      </Compile>
+      <Compile Update="SoeProtocolHandler.Contextual.cs">
+        <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
+      </Compile>
+    </ItemGroup>
+    
 </Project>

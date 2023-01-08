@@ -4,15 +4,13 @@ using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Collections.Concurrent;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
-using BinaryWriter = Sanctuary.SoeProtocol.Util.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol;
 
-public class SoeProtocolHandler : IDisposable
+public partial class SoeProtocolHandler : IDisposable
 {
     private readonly SessionMode _mode;
     private readonly SessionParameters _sessionParams;
@@ -72,6 +70,8 @@ public class SoeProtocolHandler : IDisposable
 
         while (!ct.IsCancellationRequested && _state is not SessionState.Terminated)
         {
+            SendHeartbeatIfRequired();
+
             if (!ProcessOneFromPacketQueue())
                 await Task.Delay(10, ct).ConfigureAwait(false);
         }
@@ -97,7 +97,7 @@ public class SoeProtocolHandler : IDisposable
             Disconnect disconnect = new(_sessionId, reason);
             Span<byte> buffer = stackalloc byte[Disconnect.Size];
             disconnect.Serialize(buffer);
-            SendSessionPacket(SoeOpCode.Disconnect, buffer);
+            SendContextualPacket(SoeOpCode.Disconnect, buffer);
         }
 
         _state = SessionState.Terminated;
@@ -124,167 +124,6 @@ public class SoeProtocolHandler : IDisposable
 
         _spanPool.Return(packet);
         return true;
-    }
-
-    private void HandleContextlessPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
-    {
-        // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
-        switch (opCode)
-        {
-            case SoeOpCode.SessionRequest:
-            {
-                HandleSessionRequest(packetData);
-                break;
-            }
-            case SoeOpCode.SessionResponse:
-            {
-                HandleSessionResponse(packetData);
-                break;
-            }
-            case SoeOpCode.UnknownSender:
-            {
-                // TODO: Implement
-                break;
-            }
-            case SoeOpCode.RemapConnection:
-            {
-                // TODO: Implement
-                break;
-            }
-            default:
-                throw new InvalidOperationException($"{nameof(HandleContextlessPacket)} cannot handle {opCode} packets");
-        }
-    }
-
-    private void HandleContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
-    {
-        MemoryStream? decompressedData = null;
-
-        if (_sessionParams.IsCompressionEnabled)
-        {
-            if (packetData[0] > 0)
-            {
-                decompressedData = Decompress(packetData, _spanPool);
-                packetData = decompressedData.GetBuffer()
-                    .AsSpan(0, (int)decompressedData.Length);
-            }
-            else
-            {
-                packetData = packetData[1..];
-            }
-        }
-
-        HandleContextualPacketInternal(opCode, packetData);
-        decompressedData?.Dispose();
-    }
-
-    private void HandleContextualPacketInternal(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
-    {
-        switch (opCode)
-        {
-            case SoeOpCode.MultiPacket:
-            {
-                break;
-            }
-        }
-    }
-
-    private void SendSessionPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
-    {
-        int extraBytes = sizeof(SoeOpCode)
-            + (_sessionParams.IsCompressionEnabled ? 1 : 0)
-            + _sessionParams.CrcLength;
-
-        if (packetData.Length + extraBytes > _sessionParams.RemoteUdpLength)
-            throw new InvalidOperationException("Cannot send a packet larger than the remote UDP length");
-
-        NativeSpan sendBuffer = _spanPool.Rent();
-        BinaryWriter writer = new(sendBuffer.Span);
-
-        writer.WriteUInt16BE((ushort)opCode);
-        writer.WriteBool(false); // Compression is not implemented at the moment
-        writer.WriteBytes(packetData);
-        AppendCrc(ref writer, _sessionParams.CrcSeed, _sessionParams.CrcLength);
-
-        _networkWriter.Send(sendBuffer.Span);
-        _spanPool.Return(sendBuffer);
-    }
-
-    private void HandleSessionRequest(ReadOnlySpan<byte> packetData)
-    {
-        if (_mode is SessionMode.Client)
-        {
-            TerminateSession(DisconnectReason.ConnectingToSelf, false);
-            return;
-        }
-
-        SessionRequest request = SessionRequest.Deserialize(packetData);
-        _sessionParams.RemoteUdpLength = request.UdpLength;
-        _sessionId = request.SessionId;
-
-        if (_state is not SessionState.Negotiating)
-        {
-            TerminateSession(DisconnectReason.ConnectError, true);
-            return;
-        }
-
-        bool protocolsMatch = request.SoeProtocolVersion == SoeConstants.SoeProtocolVersion
-            && request.ApplicationProtocol == _sessionParams.ApplicationProtocol;
-        if (!protocolsMatch)
-        {
-            TerminateSession(DisconnectReason.ProtocolMismatch, true);
-            return;
-        }
-
-        _sessionParams.CrcLength = SoeConstants.CrcLength;
-        _sessionParams.CrcSeed = (uint)Random.Shared.NextInt64();
-
-        SessionResponse response = new
-        (
-            _sessionId,
-            _sessionParams.CrcSeed,
-            _sessionParams.CrcLength,
-            _sessionParams.IsCompressionEnabled,
-            0,
-            _sessionParams.UdpLength,
-            SoeConstants.SoeProtocolVersion
-        );
-
-        Span<byte> buffer = stackalloc byte[SessionResponse.Size];
-        response.Serialize(buffer);
-        _networkWriter.Send(buffer);
-
-        _state = SessionState.Running;
-    }
-
-    private void HandleSessionResponse(ReadOnlySpan<byte> packetData)
-    {
-        if (_mode is SessionMode.Server)
-        {
-            TerminateSession(DisconnectReason.ConnectingToSelf, false);
-            return;
-        }
-
-        SessionResponse response = SessionResponse.Deserialize(packetData);
-        _sessionParams.RemoteUdpLength = response.UdpLength;
-        _sessionParams.CrcLength = response.CrcLength;
-        _sessionParams.CrcSeed = response.CrcSeed;
-        _sessionParams.IsCompressionEnabled = response.IsCompressionEnabled;
-        _sessionId = response.SessionId;
-
-        if (_state is not SessionState.Negotiating)
-        {
-            TerminateSession(DisconnectReason.ConnectError, true);
-            return;
-        }
-
-        if (response.SoeProtocolVersion is not SoeConstants.SoeProtocolVersion)
-        {
-            TerminateSession(DisconnectReason.ProtocolMismatch, true);
-            return;
-        }
-
-        _state = SessionState.Running;
     }
 
     /// <inheritdoc />

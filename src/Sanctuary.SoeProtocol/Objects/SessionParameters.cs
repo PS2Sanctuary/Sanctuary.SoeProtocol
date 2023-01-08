@@ -1,4 +1,6 @@
-﻿namespace Sanctuary.SoeProtocol.Objects;
+﻿using System;
+
+namespace Sanctuary.SoeProtocol.Objects;
 
 /// <summary>
 /// Contains parameters used to control a session.
@@ -52,6 +54,21 @@ public class SessionParameters
     public int MaxQueuedRawPackets { get; set; }
 
     /// <summary>
+    /// Gets the timespan after which to send a heartbeat, if no contextual
+    /// packets have been received within the interval. Set to <see cref="TimeSpan.Zero"/>
+    /// to disable heart-beating.
+    /// </summary>
+    public TimeSpan HeartbeatAfter { get; set; }
+
+    /// <summary>
+    /// Gets the default timespan after which to consider a session inactive, if no
+    /// contextual packets have been received within the interval. Set to
+    /// <see cref="TimeSpan.Zero"/> to prevent a session from being terminated
+    /// due to inactivity.
+    /// </summary>
+    public TimeSpan InactivityTimeout { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="SessionParameters"/> class.
     /// </summary>
     /// <param name="applicationProtocol">The application protocol to be proxied by the session.</param>
@@ -61,5 +78,7 @@ public class SessionParameters
         CrcLength = SoeConstants.CrcLength;
         UdpLength = SoeConstants.DefaultUdpLength;
         MaxQueuedRawPackets = 256;
+        HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
+        InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
     }
 }
