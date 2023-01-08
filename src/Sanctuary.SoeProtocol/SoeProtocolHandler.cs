@@ -4,9 +4,11 @@ using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
+using BinaryWriter = Sanctuary.SoeProtocol.Util.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol;
 
@@ -113,18 +115,18 @@ public class SoeProtocolHandler : IDisposable
         }
 
         ReadOnlySpan<byte> packetData = packet.Span[sizeof(SoeOpCode)..];
-        bool isSessionless = IsSessionlessPacket(opCode);
+        bool isSessionless = IsContextlessPacket(opCode);
 
         if (isSessionless)
-            HandleSessionlessPacket(opCode, packetData);
+            HandleContextlessPacket(opCode, packetData);
         else
-            HandleSessionPacket(opCode, packetData);
+            HandleContextualPacket(opCode, packetData);
 
         _spanPool.Return(packet);
         return true;
     }
 
-    private void HandleSessionlessPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
+    private void HandleContextlessPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
     {
         // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
         switch (opCode)
@@ -150,13 +152,41 @@ public class SoeProtocolHandler : IDisposable
                 break;
             }
             default:
-                throw new InvalidOperationException($"{nameof(HandleSessionlessPacket)} cannot handle {opCode} packets");
+                throw new InvalidOperationException($"{nameof(HandleContextlessPacket)} cannot handle {opCode} packets");
         }
     }
 
-    private void HandleSessionPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
+    private void HandleContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
     {
-        
+        MemoryStream? decompressedData = null;
+
+        if (_sessionParams.IsCompressionEnabled)
+        {
+            if (packetData[0] > 0)
+            {
+                decompressedData = Decompress(packetData, _spanPool);
+                packetData = decompressedData.GetBuffer()
+                    .AsSpan(0, (int)decompressedData.Length);
+            }
+            else
+            {
+                packetData = packetData[1..];
+            }
+        }
+
+        HandleContextualPacketInternal(opCode, packetData);
+        decompressedData?.Dispose();
+    }
+
+    private void HandleContextualPacketInternal(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
+    {
+        switch (opCode)
+        {
+            case SoeOpCode.MultiPacket:
+            {
+                break;
+            }
+        }
     }
 
     private void SendSessionPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)

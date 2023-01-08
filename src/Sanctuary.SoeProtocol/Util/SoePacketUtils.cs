@@ -1,7 +1,10 @@
-﻿using Sanctuary.SoeProtocol.Objects;
+﻿using Microsoft.IO;
+using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using System;
 using System.Buffers.Binary;
+using System.IO;
+using System.IO.Compression;
 
 namespace Sanctuary.SoeProtocol.Util;
 
@@ -10,13 +13,15 @@ namespace Sanctuary.SoeProtocol.Util;
 /// </summary>
 public static class SoePacketUtils
 {
+    private static readonly RecyclableMemoryStreamManager _msManager = new();
+
     /// <summary>
     /// Gets a value indicating whether the given OP code represents a
     /// packet that is used outside the context of a session.
     /// </summary>
     /// <param name="opCode">The OP code.</param>
     /// <returns><c>True</c> if the packet is session-less.</returns>
-    public static bool IsSessionlessPacket(SoeOpCode opCode)
+    public static bool IsContextlessPacket(SoeOpCode opCode)
         => opCode is SoeOpCode.SessionRequest
             or SoeOpCode.SessionResponse
             or SoeOpCode.UnknownSender
@@ -28,7 +33,7 @@ public static class SoePacketUtils
     /// </summary>
     /// <param name="opCode">The OP code.</param>
     /// <returns><c>True</c> if the packet requires a session.</returns>
-    public static bool IsSessionContextPacket(SoeOpCode opCode)
+    public static bool IsContextualPacket(SoeOpCode opCode)
         => opCode is SoeOpCode.MultiPacket
             or SoeOpCode.Disconnect
             or SoeOpCode.Heartbeat
@@ -89,13 +94,13 @@ public static class SoePacketUtils
             return SoePacketValidationResult.TooShort;
 
         opCode = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packetData);
-        if (!IsSessionlessPacket(opCode) && !IsSessionContextPacket(opCode))
+        if (!IsContextlessPacket(opCode) && !IsContextualPacket(opCode))
             return SoePacketValidationResult.InvalidOpCode;
 
         if (GetPacketMinimumLength(opCode, sessionParams) < packetData.Length)
             return SoePacketValidationResult.TooShort;
 
-        if (IsSessionlessPacket(opCode) || sessionParams.CrcLength is 0)
+        if (IsContextlessPacket(opCode) || sessionParams.CrcLength is 0)
             return SoePacketValidationResult.Valid;
 
         uint crc = sessionParams.CrcLength switch
@@ -129,6 +134,20 @@ public static class SoePacketUtils
             SoeOpCode.RemapConnection => RemapConnection.Size,
             _ => throw new ArgumentOutOfRangeException(nameof(opCode), opCode, "Invalid OP code")
         };
+
+    public static unsafe MemoryStream Decompress(ReadOnlySpan<byte> input, NativeSpanPool pool)
+    {
+        NativeSpan span = pool.Rent();
+        input.CopyTo(span.Span);
+        using UnmanagedMemoryStream ums = new(span._ptr, span.Span.Length, span.Span.Length, FileAccess.Read);
+
+        using ZLibStream zs = new(ums, CompressionMode.Decompress);
+        using MemoryStream output = _msManager.GetStream();
+        zs.CopyTo(output);
+
+        pool.Return(span);
+        return output;
+    }
 
     private static int GetContextualPacketPadding(SessionParameters sessionParams)
         => sizeof(SoeOpCode)
