@@ -6,12 +6,39 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO;
 using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
+using BinaryWriter = Sanctuary.SoeProtocol.Util.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol;
 
 public partial class SoeProtocolHandler
 {
     private long _lastReceivedContextualPacketTick;
+
+    /// <summary>
+    /// Sends a contextual packet.
+    /// </summary>
+    /// <param name="opCode">The OP code of the packet to send.</param>
+    /// <param name="packetData">The packet data, not including the OP code.</param>
+    internal void SendContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
+    {
+        int extraBytes = sizeof(SoeOpCode)
+            + (_sessionParams.IsCompressionEnabled ? 1 : 0)
+            + _sessionParams.CrcLength;
+
+        if (packetData.Length + extraBytes > _sessionParams.RemoteUdpLength)
+            throw new InvalidOperationException("Cannot send a packet larger than the remote UDP length");
+
+        NativeSpan sendBuffer = _spanPool.Rent();
+        BinaryWriter writer = new(sendBuffer.Span);
+
+        writer.WriteUInt16BE((ushort)opCode);
+        writer.WriteBool(false); // Compression is not implemented at the moment
+        writer.WriteBytes(packetData);
+        AppendCrc(ref writer, _sessionParams.CrcSeed, _sessionParams.CrcLength);
+
+        _networkWriter.Send(sendBuffer.Span);
+        _spanPool.Return(sendBuffer);
+    }
 
     private void HandleContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
     {
@@ -73,12 +100,12 @@ public partial class SoeProtocolHandler
             }
             case SoeOpCode.ReliableData:
             {
-                // TODO: Handle in separate class
+                _dataInputChannel.HandleReliableData(packetData);
                 break;
             }
             case SoeOpCode.ReliableDataFragment:
             {
-                // TODO: Handle in separate class
+                _dataInputChannel.HandleReliableDataFragment(packetData);
                 break;
             }
             case SoeOpCode.OutOfOrder:
@@ -92,27 +119,6 @@ public partial class SoeProtocolHandler
                 break;
             }
         }
-    }
-
-    private void SendContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
-    {
-        int extraBytes = sizeof(SoeOpCode)
-            + (_sessionParams.IsCompressionEnabled ? 1 : 0)
-            + _sessionParams.CrcLength;
-
-        if (packetData.Length + extraBytes > _sessionParams.RemoteUdpLength)
-            throw new InvalidOperationException("Cannot send a packet larger than the remote UDP length");
-
-        NativeSpan sendBuffer = _spanPool.Rent();
-        Util.BinaryWriter writer = new(sendBuffer.Span);
-
-        writer.WriteUInt16BE((ushort)opCode);
-        writer.WriteBool(false); // Compression is not implemented at the moment
-        writer.WriteBytes(packetData);
-        AppendCrc(ref writer, _sessionParams.CrcSeed, _sessionParams.CrcLength);
-
-        _networkWriter.Send(sendBuffer.Span);
-        _spanPool.Return(sendBuffer);
     }
 
     private void SendHeartbeatIfRequired()

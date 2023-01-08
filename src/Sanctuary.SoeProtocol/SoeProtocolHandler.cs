@@ -2,6 +2,7 @@
 using Sanctuary.SoeProtocol.Abstractions.Services;
 using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
+using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Collections.Concurrent;
@@ -17,6 +18,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     private readonly NativeSpanPool _spanPool;
     private readonly INetworkWriter _networkWriter;
     private readonly ConcurrentQueue<NativeSpan> _packetQueue;
+    private readonly ReliableDataInputChannel _dataInputChannel;
 
     private bool _isDisposed;
 
@@ -29,10 +31,8 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// <inheritdoc />
     public uint SessionId { get; private set; }
 
-    /// <summary>
-    /// Gets the reason that the protocol handler was terminated.
-    /// </summary>
-    public DisconnectReason DisconnectReason { get; private set; }
+    /// <inheritdoc />
+    public DisconnectReason TerminationReason { get; private set; }
 
     public SoeProtocolHandler
     (
@@ -48,6 +48,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         _networkWriter = networkWriter;
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
+        _dataInputChannel = new ReliableDataInputChannel(this);
 
         State = SessionState.Negotiating;
     }
