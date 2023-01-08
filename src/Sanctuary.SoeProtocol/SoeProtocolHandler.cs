@@ -1,4 +1,5 @@
-﻿using Sanctuary.SoeProtocol.Abstractions.Services;
+﻿using Sanctuary.SoeProtocol.Abstractions;
+using Sanctuary.SoeProtocol.Abstractions.Services;
 using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
@@ -10,17 +11,23 @@ using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
 
 namespace Sanctuary.SoeProtocol;
 
-public partial class SoeProtocolHandler : IDisposable
+public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 {
-    private readonly SessionMode _mode;
     private readonly SessionParameters _sessionParams;
     private readonly NativeSpanPool _spanPool;
     private readonly INetworkWriter _networkWriter;
     private readonly ConcurrentQueue<NativeSpan> _packetQueue;
 
-    private uint _sessionId;
-    private SessionState _state;
     private bool _isDisposed;
+
+    /// <inheritdoc />
+    public SessionMode Mode { get; }
+
+    /// <inheritdoc />
+    public SessionState State { get; private set; }
+
+    /// <inheritdoc />
+    public uint SessionId { get; private set; }
 
     /// <summary>
     /// Gets the reason that the protocol handler was terminated.
@@ -35,13 +42,14 @@ public partial class SoeProtocolHandler : IDisposable
         INetworkWriter networkWriter
     )
     {
-        _mode = mode;
+        Mode = mode;
         _sessionParams = sessionParameters;
         _spanPool = spanPool;
         _networkWriter = networkWriter;
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
-        _state = SessionState.Negotiating;
+
+        State = SessionState.Negotiating;
     }
 
     /// <summary>
@@ -68,7 +76,7 @@ public partial class SoeProtocolHandler : IDisposable
     {
         await Task.Yield();
 
-        while (!ct.IsCancellationRequested && _state is not SessionState.Terminated)
+        while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
         {
             SendHeartbeatIfRequired();
 
@@ -76,17 +84,17 @@ public partial class SoeProtocolHandler : IDisposable
                 await Task.Delay(10, ct).ConfigureAwait(false);
         }
 
-        if (_state is SessionState.Running)
+        if (State is SessionState.Running)
             TerminateSession(DisconnectReason.Application, true);
     }
 
     protected void TerminateSession(DisconnectReason reason, bool notifyRemote)
     {
-        DisconnectReason = reason;
+        TerminationReason = reason;
 
         if (notifyRemote)
         {
-            if (_state is not SessionState.Running)
+            if (State is not SessionState.Running)
             {
                 throw new InvalidOperationException
                 (
@@ -94,13 +102,13 @@ public partial class SoeProtocolHandler : IDisposable
                 );
             }
 
-            Disconnect disconnect = new(_sessionId, reason);
+            Disconnect disconnect = new(SessionId, reason);
             Span<byte> buffer = stackalloc byte[Disconnect.Size];
             disconnect.Serialize(buffer);
             SendContextualPacket(SoeOpCode.Disconnect, buffer);
         }
 
-        _state = SessionState.Terminated;
+        State = SessionState.Terminated;
     }
 
     private bool ProcessOneFromPacketQueue()

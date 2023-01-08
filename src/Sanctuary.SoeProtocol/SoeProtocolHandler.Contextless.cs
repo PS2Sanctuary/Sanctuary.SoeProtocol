@@ -38,7 +38,7 @@ public partial class SoeProtocolHandler
 
     private void HandleSessionRequest(ReadOnlySpan<byte> packetData)
     {
-        if (_mode is SessionMode.Client)
+        if (Mode is SessionMode.Client)
         {
             TerminateSession(DisconnectReason.ConnectingToSelf, false);
             return;
@@ -46,9 +46,9 @@ public partial class SoeProtocolHandler
 
         SessionRequest request = SessionRequest.Deserialize(packetData);
         _sessionParams.RemoteUdpLength = request.UdpLength;
-        _sessionId = request.SessionId;
+        SessionId = request.SessionId;
 
-        if (_state is not SessionState.Negotiating)
+        if (State is not SessionState.Negotiating)
         {
             TerminateSession(DisconnectReason.ConnectError, true);
             return;
@@ -67,7 +67,7 @@ public partial class SoeProtocolHandler
 
         SessionResponse response = new
         (
-            _sessionId,
+            SessionId,
             _sessionParams.CrcSeed,
             _sessionParams.CrcLength,
             _sessionParams.IsCompressionEnabled,
@@ -80,12 +80,12 @@ public partial class SoeProtocolHandler
         response.Serialize(buffer);
         _networkWriter.Send(buffer);
 
-        _state = SessionState.Running;
+        State = SessionState.Running;
     }
 
     private void HandleSessionResponse(ReadOnlySpan<byte> packetData)
     {
-        if (_mode is SessionMode.Server)
+        if (Mode is SessionMode.Server)
         {
             TerminateSession(DisconnectReason.ConnectingToSelf, false);
             return;
@@ -96,9 +96,9 @@ public partial class SoeProtocolHandler
         _sessionParams.CrcLength = response.CrcLength;
         _sessionParams.CrcSeed = response.CrcSeed;
         _sessionParams.IsCompressionEnabled = response.IsCompressionEnabled;
-        _sessionId = response.SessionId;
+        SessionId = response.SessionId;
 
-        if (_state is not SessionState.Negotiating)
+        if (State is not SessionState.Negotiating)
         {
             TerminateSession(DisconnectReason.ConnectError, true);
             return;
@@ -110,6 +110,6 @@ public partial class SoeProtocolHandler
             return;
         }
 
-        _state = SessionState.Running;
+        State = SessionState.Running;
     }
 }

@@ -66,7 +66,7 @@ public partial class SoeProtocolHandler
                 TerminateSession(disconnect.Reason, false);
                 break;
             }
-            case SoeOpCode.Heartbeat when _mode is SessionMode.Server:
+            case SoeOpCode.Heartbeat when Mode is SessionMode.Server:
             {
                 SendContextualPacket(SoeOpCode.Heartbeat, Array.Empty<byte>());
                 break;
@@ -117,8 +117,8 @@ public partial class SoeProtocolHandler
 
     private void SendHeartbeatIfRequired()
     {
-        bool maySendHeartbeat = _mode is SessionMode.Client
-            && _state is SessionState.Running
+        bool maySendHeartbeat = Mode is SessionMode.Client
+            && State is SessionState.Running
             && _sessionParams.HeartbeatAfter != TimeSpan.Zero
             && Stopwatch.GetElapsedTime(_lastReceivedContextualPacketTick) > _sessionParams.HeartbeatAfter;
 
