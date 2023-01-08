@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 
-namespace Sanctuary.SoeProtocol.Util;
+namespace Sanctuary.SoeProtocol.Services;
 
 /// <summary>
 /// Contains functions to calculate CRC-32 hashes.

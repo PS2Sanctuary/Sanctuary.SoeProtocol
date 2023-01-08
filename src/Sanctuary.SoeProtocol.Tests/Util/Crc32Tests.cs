@@ -1,4 +1,5 @@
-﻿using Sanctuary.SoeProtocol.Util;
+﻿using Sanctuary.SoeProtocol.Services;
+using Sanctuary.SoeProtocol.Util;
 
 namespace Sanctuary.SoeProtocol.Tests.Util;
 

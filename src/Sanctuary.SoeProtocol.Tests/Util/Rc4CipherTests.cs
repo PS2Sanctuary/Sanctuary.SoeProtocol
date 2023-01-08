@@ -1,4 +1,5 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
+using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Collections.Generic;

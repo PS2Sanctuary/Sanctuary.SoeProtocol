@@ -2,7 +2,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace Sanctuary.SoeProtocol.Util;
+namespace Sanctuary.SoeProtocol.Services;
 
 /// <summary>
 /// Provides a means for transforming data using the RC4 algorithm.

@@ -1,6 +1,7 @@
 ﻿using Microsoft.IO;
 using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
+using Sanctuary.SoeProtocol.Services;
 using System;
 using System.Buffers.Binary;
 using System.IO;
