@@ -9,9 +9,6 @@
     </ItemGroup>
     
     <ItemGroup>
-      <Compile Update="SoeProtocolHandler.DataInput.cs">
-        <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
-      </Compile>
       <Compile Update="SoeProtocolHandler.Contextless.cs">
         <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
       </Compile>
