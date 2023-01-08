@@ -23,12 +23,13 @@ public partial class SoeProtocolHandler
             }
             case SoeOpCode.UnknownSender:
             {
-                // TODO: Implement
+                // TODO: Request a remap here
+                TerminateSession(DisconnectReason.UnreachableConnection, false);
                 break;
             }
             case SoeOpCode.RemapConnection:
             {
-                // TODO: Implement
+                // TODO: Implement. Not that this can be handled here, anyway
                 break;
             }
             default:
