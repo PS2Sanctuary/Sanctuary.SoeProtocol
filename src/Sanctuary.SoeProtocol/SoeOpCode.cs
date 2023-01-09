@@ -3,7 +3,7 @@
 /// <summary>
 /// Enumerates the packet OP codes used in the SOE protocol.
 /// </summary>
-public enum SoeOpCode
+public enum SoeOpCode : ushort
 {
     /// <summary>
     /// Represents an invalid packet. Note that this is not part of the protocol specification.
