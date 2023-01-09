@@ -3,6 +3,9 @@ using System.Buffers.Binary;
 
 namespace Sanctuary.SoeProtocol.Util;
 
+/// <summary>
+/// Contains utility methods for working with MultiPacket data.
+/// </summary>
 public static class MultiPacketUtils
 {
     /// <summary>
