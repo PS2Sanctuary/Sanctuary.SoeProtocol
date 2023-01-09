@@ -45,7 +45,7 @@ public partial class SoeProtocolHandler
             return;
         }
 
-        SessionRequest request = SessionRequest.Deserialize(packetData);
+        SessionRequest request = SessionRequest.Deserialize(packetData, false);
         _sessionParams.RemoteUdpLength = request.UdpLength;
         SessionId = request.SessionId;
 
@@ -92,7 +92,7 @@ public partial class SoeProtocolHandler
             return;
         }
 
-        SessionResponse response = SessionResponse.Deserialize(packetData);
+        SessionResponse response = SessionResponse.Deserialize(packetData, false);
         _sessionParams.RemoteUdpLength = response.UdpLength;
         _sessionParams.CrcLength = response.CrcLength;
         _sessionParams.CrcSeed = response.CrcSeed;

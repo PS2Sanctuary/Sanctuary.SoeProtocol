@@ -12,7 +12,7 @@ public class SessionResponseTests
         byte[] buffer = new byte[SessionResponse.Size];
         sessionResponse.Serialize(buffer);
 
-        SessionResponse deserialized = SessionResponse.Deserialize(buffer);
+        SessionResponse deserialized = SessionResponse.Deserialize(buffer, true);
         Assert.Equal(sessionResponse, deserialized);
     }
 }

@@ -12,7 +12,7 @@ public class SessionRequestTests
         byte[] buffer = new byte[sessionRequest.GetSize()];
         sessionRequest.Serialize(buffer);
 
-        SessionRequest deserialized = SessionRequest.Deserialize(buffer);
+        SessionRequest deserialized = SessionRequest.Deserialize(buffer, true);
         Assert.Equal(sessionRequest, deserialized);
     }
 }
