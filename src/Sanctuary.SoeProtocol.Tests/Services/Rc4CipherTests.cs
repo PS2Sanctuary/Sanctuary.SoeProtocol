@@ -1,11 +1,10 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Services;
-using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Sanctuary.SoeProtocol.Tests.Util;
+namespace Sanctuary.SoeProtocol.Tests.Services;
 
 public class Rc4CipherTests
 {
