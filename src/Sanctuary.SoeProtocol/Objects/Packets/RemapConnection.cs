@@ -23,10 +23,14 @@ public readonly record struct RemapConnection(uint SessionId, uint CrcSeed)
     /// This method does not expect the OP code in the buffer.
     /// </summary>
     /// <param name="buffer">The buffer.</param>
+    /// <param name="hasOpCode">Indicates whether the buffer contains an OP code.</param>
     /// <returns>The deserialized packet.</returns>
-    public static RemapConnection Deserialize(ReadOnlySpan<byte> buffer)
+    public static RemapConnection Deserialize(ReadOnlySpan<byte> buffer, bool hasOpCode)
     {
         BinaryReader reader = new(buffer);
+
+        if (hasOpCode)
+            reader.Advance(sizeof(SoeOpCode));
 
         uint sessionId = reader.ReadUInt32BE();
         uint crcSeed = reader.ReadUInt32BE();
