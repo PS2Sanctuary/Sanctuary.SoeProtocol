@@ -29,18 +29,26 @@ public sealed unsafe class NativeSpan : IDisposable
     /// Gets a span around the underlying native memory.
     /// </summary>
     public Span<byte> FullSpan
-        => IsDisposed
-            ? throw new ObjectDisposedException(nameof(NativeSpan))
-            : new Span<byte>(_ptr, _len);
+    {
+        get
+        {
+            DisposedCheck();
+            return new Span<byte>(_ptr, _len);
+        }
+    }
 
     /// <summary>
     /// Gets a span around the underlying native memory that
     /// is actually being used.
     /// </summary>
     public Span<byte> UsedSpan
-        => IsDisposed
-            ? throw new ObjectDisposedException(nameof(NativeSpan))
-            : new Span<byte>(_ptr, UsedLength);
+    {
+        get
+        {
+            DisposedCheck();
+            return new Span<byte>(_ptr, UsedLength);
+        }
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NativeSpan"/> class
@@ -60,6 +68,9 @@ public sealed unsafe class NativeSpan : IDisposable
     /// <param name="length">The length in bytes of the underlying native memory.</param>
     public NativeSpan(byte* pointer, int length)
     {
+        if (pointer is null)
+            throw new ArgumentException("Cannot create a NativeSpan around a null pointer", nameof(pointer));
+
         _ptr = pointer;
         _len = length;
         IsDisposed = false;
@@ -76,6 +87,7 @@ public sealed unsafe class NativeSpan : IDisposable
     /// </exception>
     public void CopyDataInto(ReadOnlySpan<byte> data)
     {
+        DisposedCheck();
         if (data.Length > _len)
             throw new InvalidOperationException("The provided data is too long to fit in the underlying native memory");
 
@@ -89,7 +101,17 @@ public sealed unsafe class NativeSpan : IDisposable
     /// </summary>
     /// <returns>An <see cref="UnmanagedMemoryStream"/> instance.</returns>
     public UnmanagedMemoryStream ToStream()
-        => new(_ptr, UsedLength, _len, FileAccess.ReadWrite);
+    {
+        DisposedCheck();
+        return new UnmanagedMemoryStream(_ptr, UsedLength, _len, FileAccess.ReadWrite);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void DisposedCheck()
+    {
+        if (IsDisposed)
+            throw new ObjectDisposedException(nameof(NativeSpan));
+    }
 
     /// <inheritdoc />
     public void Dispose()
@@ -99,5 +121,9 @@ public sealed unsafe class NativeSpan : IDisposable
 
         NativeMemory.Free(_ptr);
         IsDisposed = true;
+        GC.SuppressFinalize(this);
     }
+
+    ~NativeSpan()
+        => Dispose();
 }
