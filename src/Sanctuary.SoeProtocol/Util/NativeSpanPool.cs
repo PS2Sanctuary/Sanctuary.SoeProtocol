@@ -54,7 +54,7 @@ public sealed class NativeSpanPool : IDisposable
     /// </exception>
     public void Return(NativeSpan span)
     {
-        if (span.WriteSpan.Length != _memorySize)
+        if (span.FullSpan.Length != _memorySize)
             throw new InvalidOperationException($"The {nameof(NativeSpan)} was not rented from this pool");
 
         if (span.IsDisposed)

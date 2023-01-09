@@ -123,7 +123,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             return true;
         }
 
-        ReadOnlySpan<byte> packetData = packet.WriteSpan[sizeof(SoeOpCode)..];
+        Span<byte> packetData = packet.FullSpan[sizeof(SoeOpCode)..];
         bool isSessionless = IsContextlessPacket(opCode);
 
         if (isSessionless)

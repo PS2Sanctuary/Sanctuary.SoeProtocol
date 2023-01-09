@@ -21,14 +21,14 @@ public sealed unsafe class NativeSpan : IDisposable
     public bool IsDisposed { get; private set; }
 
     /// <summary>
-    /// Gets the length of the <see cref="WriteSpan"/> that is currently in use.
+    /// Gets or sets the length of the <see cref="FullSpan"/> that is currently in use.
     /// </summary>
     public int UsedLength { get; set; }
 
     /// <summary>
     /// Gets a span around the underlying native memory.
     /// </summary>
-    public Span<byte> WriteSpan
+    public Span<byte> FullSpan
         => IsDisposed
             ? throw new ObjectDisposedException(nameof(NativeSpan))
             : new Span<byte>(_ptr, _len);
@@ -37,7 +37,7 @@ public sealed unsafe class NativeSpan : IDisposable
     /// Gets a span around the underlying native memory that
     /// is actually being used.
     /// </summary>
-    public ReadOnlySpan<byte> ReadSpan
+    public Span<byte> UsedSpan
         => IsDisposed
             ? throw new ObjectDisposedException(nameof(NativeSpan))
             : new Span<byte>(_ptr, UsedLength);
@@ -79,7 +79,7 @@ public sealed unsafe class NativeSpan : IDisposable
         if (data.Length > _len)
             throw new InvalidOperationException("The provided data is too long to fit in the underlying native memory");
 
-        data.CopyTo(WriteSpan);
+        data.CopyTo(FullSpan);
         UsedLength = data.Length;
     }
 
