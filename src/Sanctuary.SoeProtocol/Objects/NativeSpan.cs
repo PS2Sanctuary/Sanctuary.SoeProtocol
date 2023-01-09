@@ -31,7 +31,7 @@ public sealed unsafe class NativeSpan : IDisposable
     /// Gets a span around the underlying native memory that
     /// is actually being used.
     /// </summary>
-    public Span<byte> ReadSpan
+    public ReadOnlySpan<byte> ReadSpan
         => IsDisposed
             ? throw new ObjectDisposedException(nameof(NativeSpan))
             : new Span<byte>(_ptr, UsedLength);
@@ -69,7 +69,7 @@ public sealed unsafe class NativeSpan : IDisposable
     public void CopyDataInto(ReadOnlySpan<byte> data)
     {
         if (data.Length > _len)
-            throw new InvalidOperationException("Too long");
+            throw new InvalidOperationException("The provided data is too long to fit in the underlying native memory");
 
         data.CopyTo(WriteSpan);
         UsedLength = data.Length;
