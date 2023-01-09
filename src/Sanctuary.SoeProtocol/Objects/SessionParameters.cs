@@ -16,7 +16,7 @@ public class SessionParameters
     /// Gets the maximum length of a UDP packet that this party
     /// can send or receive.
     /// </summary>
-    public required uint UdpLength { get; init; }
+    public uint UdpLength { get; init; }
 
     /// <summary>
     /// Gets or sets the maximum length of a UDP packet that the other
