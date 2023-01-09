@@ -14,13 +14,17 @@ namespace Sanctuary.SoeProtocol;
 
 public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 {
-    private readonly SessionParameters _sessionParams;
     private readonly NativeSpanPool _spanPool;
     private readonly INetworkWriter _networkWriter;
     private readonly ConcurrentQueue<NativeSpan> _packetQueue;
     private readonly ReliableDataInputChannel _dataInputChannel;
 
     private bool _isDisposed;
+
+    /// <summary>
+    /// Gets the session parameters in use by the session.
+    /// </summary>
+    internal SessionParameters SessionParams { get; }
 
     /// <inheritdoc />
     public SessionMode Mode { get; }
@@ -39,16 +43,17 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         SessionMode mode,
         SessionParameters sessionParameters,
         NativeSpanPool spanPool,
-        INetworkWriter networkWriter
+        INetworkWriter networkWriter,
+        Rc4KeyState cipherState
     )
     {
         Mode = mode;
-        _sessionParams = sessionParameters;
+        SessionParams = sessionParameters;
         _spanPool = spanPool;
         _networkWriter = networkWriter;
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
-        _dataInputChannel = new ReliableDataInputChannel(this);
+        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, cipherState);
 
         State = SessionState.Negotiating;
     }
@@ -61,7 +66,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// <returns><c>True</c> if the packet was successfully enqueued, otherwise <c>false</c>.</returns>
     public bool EnqueuePacket(NativeSpan packetData)
     {
-        if (_packetQueue.Count >= _sessionParams.MaxQueuedRawPackets)
+        if (_packetQueue.Count >= SessionParams.MaxQueuedRawPackets)
             return false;
 
         _packetQueue.Enqueue(packetData);
@@ -114,10 +119,10 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
     private bool ProcessOneFromPacketQueue()
     {
-        if (!_packetQueue.TryDequeue(out NativeSpan packet))
+        if (!_packetQueue.TryDequeue(out NativeSpan? packet))
             return false;
 
-        if (ValidatePacket(packet.WriteSpan, _sessionParams, out SoeOpCode opCode) is not SoePacketValidationResult.Valid)
+        if (ValidatePacket(packet.FullSpan, SessionParams, out SoeOpCode opCode) is not SoePacketValidationResult.Valid)
         {
             TerminateSession(DisconnectReason.CorruptPacket, true);
             return true;
@@ -153,7 +158,9 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
         if (disposeManaged)
         {
-            while (_packetQueue.TryDequeue(out NativeSpan packet))
+            _dataInputChannel.Dispose();
+
+            while (_packetQueue.TryDequeue(out NativeSpan? packet))
                 _spanPool.Return(packet);
         }
 

@@ -46,7 +46,7 @@ public partial class SoeProtocolHandler
         }
 
         SessionRequest request = SessionRequest.Deserialize(packetData, false);
-        _sessionParams.RemoteUdpLength = request.UdpLength;
+        SessionParams.RemoteUdpLength = request.UdpLength;
         SessionId = request.SessionId;
 
         if (State is not SessionState.Negotiating)
@@ -56,24 +56,24 @@ public partial class SoeProtocolHandler
         }
 
         bool protocolsMatch = request.SoeProtocolVersion == SoeConstants.SoeProtocolVersion
-            && request.ApplicationProtocol == _sessionParams.ApplicationProtocol;
+            && request.ApplicationProtocol == SessionParams.ApplicationProtocol;
         if (!protocolsMatch)
         {
             TerminateSession(DisconnectReason.ProtocolMismatch, true);
             return;
         }
 
-        _sessionParams.CrcLength = SoeConstants.CrcLength;
-        _sessionParams.CrcSeed = (uint)Random.Shared.NextInt64();
+        SessionParams.CrcLength = SoeConstants.CrcLength;
+        SessionParams.CrcSeed = (uint)Random.Shared.NextInt64();
 
         SessionResponse response = new
         (
             SessionId,
-            _sessionParams.CrcSeed,
-            _sessionParams.CrcLength,
-            _sessionParams.IsCompressionEnabled,
+            SessionParams.CrcSeed,
+            SessionParams.CrcLength,
+            SessionParams.IsCompressionEnabled,
             0,
-            _sessionParams.UdpLength,
+            SessionParams.UdpLength,
             SoeConstants.SoeProtocolVersion
         );
 
@@ -93,10 +93,10 @@ public partial class SoeProtocolHandler
         }
 
         SessionResponse response = SessionResponse.Deserialize(packetData, false);
-        _sessionParams.RemoteUdpLength = response.UdpLength;
-        _sessionParams.CrcLength = response.CrcLength;
-        _sessionParams.CrcSeed = response.CrcSeed;
-        _sessionParams.IsCompressionEnabled = response.IsCompressionEnabled;
+        SessionParams.RemoteUdpLength = response.UdpLength;
+        SessionParams.CrcLength = response.CrcLength;
+        SessionParams.CrcSeed = response.CrcSeed;
+        SessionParams.IsCompressionEnabled = response.IsCompressionEnabled;
         SessionId = response.SessionId;
 
         if (State is not SessionState.Negotiating)

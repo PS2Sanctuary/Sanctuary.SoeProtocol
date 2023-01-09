@@ -22,10 +22,10 @@ public partial class SoeProtocolHandler
     internal void SendContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
     {
         int extraBytes = sizeof(SoeOpCode)
-            + (_sessionParams.IsCompressionEnabled ? 1 : 0)
-            + _sessionParams.CrcLength;
+            + (SessionParams.IsCompressionEnabled ? 1 : 0)
+            + SessionParams.CrcLength;
 
-        if (packetData.Length + extraBytes > _sessionParams.RemoteUdpLength)
+        if (packetData.Length + extraBytes > SessionParams.RemoteUdpLength)
             throw new InvalidOperationException("Cannot send a packet larger than the remote UDP length");
 
         NativeSpan sendBuffer = _spanPool.Rent();
@@ -34,18 +34,18 @@ public partial class SoeProtocolHandler
         writer.WriteUInt16BE((ushort)opCode);
         writer.WriteBool(false); // Compression is not implemented at the moment
         writer.WriteBytes(packetData);
-        AppendCrc(ref writer, _sessionParams.CrcSeed, _sessionParams.CrcLength);
+        AppendCrc(ref writer, SessionParams.CrcSeed, SessionParams.CrcLength);
 
         _networkWriter.Send(sendBuffer.FullSpan);
         _spanPool.Return(sendBuffer);
     }
 
-    private void HandleContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
+    private void HandleContextualPacket(SoeOpCode opCode, Span<byte> packetData)
     {
         _lastReceivedContextualPacketTick = Stopwatch.GetTimestamp();
         MemoryStream? decompressedData = null;
 
-        if (_sessionParams.IsCompressionEnabled)
+        if (SessionParams.IsCompressionEnabled)
         {
             if (packetData[0] > 0)
             {
@@ -63,7 +63,7 @@ public partial class SoeProtocolHandler
         decompressedData?.Dispose();
     }
 
-    private void HandleContextualPacketInternal(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
+    private void HandleContextualPacketInternal(SoeOpCode opCode, Span<byte> packetData)
     {
         // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
         switch (opCode)
@@ -125,8 +125,8 @@ public partial class SoeProtocolHandler
     {
         bool maySendHeartbeat = Mode is SessionMode.Client
             && State is SessionState.Running
-            && _sessionParams.HeartbeatAfter != TimeSpan.Zero
-            && Stopwatch.GetElapsedTime(_lastReceivedContextualPacketTick) > _sessionParams.HeartbeatAfter;
+            && SessionParams.HeartbeatAfter != TimeSpan.Zero
+            && Stopwatch.GetElapsedTime(_lastReceivedContextualPacketTick) > SessionParams.HeartbeatAfter;
 
         if (maySendHeartbeat)
             SendContextualPacket(SoeOpCode.Heartbeat, Array.Empty<byte>());
