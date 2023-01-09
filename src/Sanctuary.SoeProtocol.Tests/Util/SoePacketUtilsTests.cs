@@ -4,6 +4,9 @@ using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Buffers.Binary;
+using System.IO;
+using System.IO.Compression;
+using BinaryWriter = Sanctuary.SoeProtocol.Util.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol.Tests.Util;
 
@@ -97,6 +100,25 @@ public class SoePacketUtilsTests
 
         SoePacketValidationResult result = SoePacketUtils.ValidatePacket(packet, sessionParams, out _);
         Assert.Equal(SoePacketValidationResult.CrcMismatch, result);
+    }
+
+    [Fact]
+    public void Decompress_Succeeds()
+    {
+        byte[] data = { 5, 5, 5, 5, 5, 10, 10, 10, 10, 10 };
+
+        using MemoryStream compressed = new();
+        using ZLibStream zs = new(compressed, CompressionMode.Compress);
+        zs.Write(data);
+        zs.Flush();
+
+        using MemoryStream output = SoePacketUtils.Decompress
+        (
+            compressed.GetBuffer().AsSpan(0, (int)compressed.Length),
+            new NativeSpanPool(512, 512)
+        );
+
+        Assert.Equal(data, output.ToArray());
     }
 
     private static SessionParameters GetSessionParams(byte crcLength = 0)

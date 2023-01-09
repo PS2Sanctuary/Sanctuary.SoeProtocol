@@ -117,13 +117,13 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         if (!_packetQueue.TryDequeue(out NativeSpan packet))
             return false;
 
-        if (ValidatePacket(packet.Span, _sessionParams, out SoeOpCode opCode) is not SoePacketValidationResult.Valid)
+        if (ValidatePacket(packet.WriteSpan, _sessionParams, out SoeOpCode opCode) is not SoePacketValidationResult.Valid)
         {
             TerminateSession(DisconnectReason.CorruptPacket, true);
             return true;
         }
 
-        ReadOnlySpan<byte> packetData = packet.Span[sizeof(SoeOpCode)..];
+        ReadOnlySpan<byte> packetData = packet.WriteSpan[sizeof(SoeOpCode)..];
         bool isSessionless = IsContextlessPacket(opCode);
 
         if (isSessionless)

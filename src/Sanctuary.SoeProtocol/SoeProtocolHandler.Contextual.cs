@@ -29,14 +29,14 @@ public partial class SoeProtocolHandler
             throw new InvalidOperationException("Cannot send a packet larger than the remote UDP length");
 
         NativeSpan sendBuffer = _spanPool.Rent();
-        BinaryWriter writer = new(sendBuffer.Span);
+        BinaryWriter writer = new(sendBuffer.WriteSpan);
 
         writer.WriteUInt16BE((ushort)opCode);
         writer.WriteBool(false); // Compression is not implemented at the moment
         writer.WriteBytes(packetData);
         AppendCrc(ref writer, _sessionParams.CrcSeed, _sessionParams.CrcLength);
 
-        _networkWriter.Send(sendBuffer.Span);
+        _networkWriter.Send(sendBuffer.WriteSpan);
         _spanPool.Return(sendBuffer);
     }
 

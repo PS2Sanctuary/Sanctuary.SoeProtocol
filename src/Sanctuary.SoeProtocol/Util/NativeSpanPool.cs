@@ -1,7 +1,6 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
 using System;
 using System.Collections.Concurrent;
-using System.Runtime.InteropServices;
 
 namespace Sanctuary.SoeProtocol.Util;
 
@@ -12,7 +11,7 @@ public sealed class NativeSpanPool : IDisposable
 {
     private readonly int _memorySize;
     private readonly int _poolSize;
-    private readonly ConcurrentStack<nuint> _pool;
+    private readonly ConcurrentStack<NativeSpan> _pool;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NativeSpanPool"/> class.
@@ -27,7 +26,7 @@ public sealed class NativeSpanPool : IDisposable
     {
         _memorySize = memorySize;
         _poolSize = poolSize;
-        _pool = new ConcurrentStack<nuint>();
+        _pool = new ConcurrentStack<NativeSpan>();
     }
 
     /// <summary>
@@ -38,14 +37,10 @@ public sealed class NativeSpanPool : IDisposable
     /// This method will allocate a new <see cref="NativeSpan"/> object if the pool is empty.
     /// </remarks>
     /// <returns>The rented object.</returns>
-    public unsafe NativeSpan Rent()
-    {
-        if (_pool.TryPop(out nuint memoryPointer))
-            return new NativeSpan((byte*)memoryPointer, _memorySize);
-
-        byte* ptr = (byte*)NativeMemory.Alloc((nuint)_memorySize);
-        return new NativeSpan(ptr, _memorySize);
-    }
+    public NativeSpan Rent()
+        => _pool.TryPop(out NativeSpan? span)
+            ? span
+            : new NativeSpan(_memorySize);
 
     /// <summary>
     /// Returns a rented <see cref="NativeSpan"/> object to the pool.
@@ -57,24 +52,27 @@ public sealed class NativeSpanPool : IDisposable
     /// <exception cref="InvalidOperationException">
     /// Thrown if the given <see cref="NativeSpan"/> is a different length to the memory size of the pool.
     /// </exception>
-    public unsafe void Return(NativeSpan span)
+    public void Return(NativeSpan span)
     {
-        if (span.Span.Length != _memorySize)
+        if (span.WriteSpan.Length != _memorySize)
             throw new InvalidOperationException($"The {nameof(NativeSpan)} was not rented from this pool");
+
+        if (span.IsDisposed)
+            return;
 
         if (_pool.Count >= _poolSize)
         {
-            NativeMemory.Free(span._ptr);
+            span.Dispose();
             return;
         }
 
-        _pool.Push((nuint)span._ptr);
+        _pool.Push(span);
     }
 
     /// <inheritdoc />
-    public unsafe void Dispose()
+    public void Dispose()
     {
-        while (_pool.TryPop(out nuint nativePtr))
-            NativeMemory.Free((byte*)nativePtr);
+        while (_pool.TryPop(out NativeSpan? span))
+            span.Dispose();
     }
 }

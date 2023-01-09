@@ -159,14 +159,14 @@ public static class SoePacketUtils
             _ => throw new ArgumentOutOfRangeException(nameof(opCode), opCode, "Invalid OP code")
         };
 
-    public static unsafe MemoryStream Decompress(ReadOnlySpan<byte> input, NativeSpanPool pool)
+    public static MemoryStream Decompress(ReadOnlySpan<byte> input, NativeSpanPool pool)
     {
         NativeSpan span = pool.Rent();
-        input.CopyTo(span.Span);
-        using UnmanagedMemoryStream ums = new(span._ptr, span.Span.Length, span.Span.Length, FileAccess.Read);
+        span.CopyDataInto(input);
+        using UnmanagedMemoryStream ums = span.ToStream();
 
         using ZLibStream zs = new(ums, CompressionMode.Decompress);
-        using MemoryStream output = _msManager.GetStream();
+        MemoryStream output = _msManager.GetStream();
         zs.CopyTo(output);
 
         pool.Return(span);
