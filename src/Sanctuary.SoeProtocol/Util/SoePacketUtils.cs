@@ -104,15 +104,38 @@ public static class SoePacketUtils
         if (IsContextlessPacket(opCode) || sessionParams.CrcLength is 0)
             return SoePacketValidationResult.Valid;
 
-        uint crc = sessionParams.CrcLength switch
-        {
-            1 => packetData[^1],
-            2 => BinaryPrimitives.ReadUInt16BigEndian(packetData[^2..]),
-            3 => new BinaryReader(packetData[^3..]).ReadUInt24BE(),
-            _ => BinaryPrimitives.ReadUInt32BigEndian(packetData[^4..])
-        };
+        uint actualCrc = Crc32.Hash(packetData[..^sessionParams.CrcLength], sessionParams.CrcSeed);
+        bool crcMatch = false;
 
-        return Crc32.Hash(packetData[..^sessionParams.CrcLength], sessionParams.CrcSeed) == crc
+        switch (sessionParams.CrcLength)
+        {
+            case 1:
+            {
+                byte crc = packetData[^1];
+                crcMatch = (byte)actualCrc == crc;
+                break;
+            }
+            case 2:
+            {
+                ushort crc = BinaryPrimitives.ReadUInt16BigEndian(packetData[^2..]);
+                crcMatch = (ushort)actualCrc == crc;
+                break;
+            }
+            case 3:
+            {
+                uint crc = new BinaryReader(packetData[^3..]).ReadUInt24BE();
+                crcMatch = (actualCrc & 0x00FFFFFF) == crc;
+                break;
+            }
+            case 4:
+            {
+                uint crc = BinaryPrimitives.ReadUInt32BigEndian(packetData[^4..]);
+                crcMatch = actualCrc == crc;
+                break;
+            }
+        }
+
+        return crcMatch
             ? SoePacketValidationResult.Valid
             : SoePacketValidationResult.CrcMismatch;
     }
