@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Sanctuary.SoeProtocol.Objects;
@@ -7,11 +8,16 @@ namespace Sanctuary.SoeProtocol.Objects;
 /// <summary>
 /// Represents a wrapper around native memory.
 /// </summary>
+[SkipLocalsInit]
 public sealed unsafe class NativeSpan : IDisposable
 {
     private readonly int _len;
     private readonly byte* _ptr;
 
+    /// <summary>
+    /// Gets a value indicating whether or not this <see cref="NativeSpan"/>
+    /// instance has been disposed.
+    /// </summary>
     public bool IsDisposed { get; private set; }
 
     /// <summary>
@@ -56,6 +62,8 @@ public sealed unsafe class NativeSpan : IDisposable
     {
         _ptr = pointer;
         _len = length;
+        IsDisposed = false;
+        UsedLength = 0;
     }
 
     /// <summary>
