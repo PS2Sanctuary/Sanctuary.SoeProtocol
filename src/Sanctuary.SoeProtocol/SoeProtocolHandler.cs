@@ -16,6 +16,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 {
     private readonly NativeSpanPool _spanPool;
     private readonly INetworkWriter _networkWriter;
+    private readonly IApplicationProtocolHandler _application;
     private readonly ConcurrentQueue<NativeSpan> _packetQueue;
     private readonly ReliableDataInputChannel _dataInputChannel;
 
@@ -44,6 +45,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         SessionParameters sessionParameters,
         NativeSpanPool spanPool,
         INetworkWriter networkWriter,
+        IApplicationProtocolHandler application,
         Rc4KeyState cipherState
     )
     {
@@ -51,9 +53,11 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         SessionParams = sessionParameters;
         _spanPool = spanPool;
         _networkWriter = networkWriter;
+        _application = application;
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
-        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, cipherState);
+        _contextualSendBuffer = GC.AllocateArray<byte>((int)sessionParameters.UdpLength, true);
+        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, cipherState, _application.HandleAppData);
 
         State = SessionState.Negotiating;
     }
@@ -96,6 +100,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
     protected void TerminateSession(DisconnectReason reason, bool notifyRemote)
     {
+        _application.OnSessionClosed(reason);
         TerminationReason = reason;
 
         if (notifyRemote)

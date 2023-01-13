@@ -12,6 +12,7 @@ namespace Sanctuary.SoeProtocol;
 
 public partial class SoeProtocolHandler
 {
+    private readonly byte[] _contextualSendBuffer;
     private long _lastReceivedContextualPacketTick;
 
     /// <summary>
@@ -28,16 +29,14 @@ public partial class SoeProtocolHandler
         if (packetData.Length + extraBytes > SessionParams.RemoteUdpLength)
             throw new InvalidOperationException("Cannot send a packet larger than the remote UDP length");
 
-        NativeSpan sendBuffer = _spanPool.Rent();
-        BinaryWriter writer = new(sendBuffer.FullSpan);
+        BinaryWriter writer = new(_contextualSendBuffer);
 
         writer.WriteUInt16BE((ushort)opCode);
         writer.WriteBool(false); // Compression is not implemented at the moment
         writer.WriteBytes(packetData);
         AppendCrc(ref writer, SessionParams.CrcSeed, SessionParams.CrcLength);
 
-        _networkWriter.Send(sendBuffer.FullSpan);
-        _spanPool.Return(sendBuffer);
+        _networkWriter.Send(writer.Consumed);
     }
 
     private void HandleContextualPacket(SoeOpCode opCode, Span<byte> packetData)

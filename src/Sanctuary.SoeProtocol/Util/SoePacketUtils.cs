@@ -57,7 +57,7 @@ public static class SoePacketUtils
         if (crcLength is 0)
             return;
 
-        uint crcValue = Crc32.Hash(writer.Span[..writer.Offset], crcSeed);
+        uint crcValue = Crc32.Hash(writer.Consumed, crcSeed);
         switch (crcLength)
         {
             case 1:
