@@ -14,161 +14,131 @@ public class ReliableDataInputChannelTests
 {
     private const int DATA_LENGTH = 8;
 
-    private static readonly NativeSpanPool SpanPool = new(512, 8);
+    private static readonly NativeSpanPool SpanPool = new(DATA_LENGTH + 6, 8); // + 6, space for sequence + CompleteDataLength
 
-    // [Fact]
-    // public void TestSequentialFragmentInsert()
-    // {
-    //     using DataSequencer sequencer = CreateChannel(state);
-    //
-    //     byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, false, true, out byte[] data0);
-    //     byte[] fragment1 = GetDataFragment(1, null, false, true, out byte[] data1);
-    //     byte[] fragment2 = GetDataFragment(2, null, false, true, out byte[] data2);
-    //
-    //     sequencer.InsertDataFragment(fragment0, false, true);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment1, false, true);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment2, false, true);
-    //     Assert.True(sequencer.TryGetCompletedSequence(out IMemoryOwner<byte>? sequence));
-    //     Assert.NotNull(sequence);
-    //
-    //     int offset = 0;
-    //     Assert.Equal(data0, sequence.Memory[offset..(offset += DATA_LENGTH)].ToArray());
-    //     Assert.Equal(data1, sequence.Memory[offset..(offset += DATA_LENGTH)].ToArray());
-    //     Assert.Equal(data2, sequence.Memory[offset..].ToArray());
-    //
-    //     sequence.Dispose();
-    // }
-    //
-    // [Fact]
-    // public void TestNonSequentialFragmentInsert()
-    // {
-    //     using DataFragmentSequenceState state = GetState();
-    //     using DataSequencer sequencer = CreateChannel(state);
-    //
-    //     byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, false, true, out byte[] data0);
-    //     byte[] fragment1 = GetDataFragment(1, null, false, true, out byte[] data1);
-    //     byte[] fragment2 = GetDataFragment(2, null, false, true, out byte[] data2);
-    //
-    //     sequencer.InsertDataFragment(fragment2, false, true);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment0, false, true);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment1, false, true);
-    //     Assert.True(sequencer.TryGetCompletedSequence(out IMemoryOwner<byte>? sequence));
-    //     Assert.NotNull(sequence);
-    //
-    //     int offset = 0;
-    //     Assert.Equal(data0, sequence.Memory[offset..(offset += DATA_LENGTH)].ToArray());
-    //     Assert.Equal(data1, sequence.Memory[offset..(offset += DATA_LENGTH)].ToArray());
-    //     Assert.Equal(data2, sequence.Memory[offset..].ToArray());
-    //
-    //     sequence.Dispose();
-    // }
-    //
-    // [Fact]
-    // public void TestDataInsert()
-    // {
-    //     using DataFragmentSequenceState state = GetState();
-    //     using DataSequencer sequencer = CreateChannel(state);
-    //
-    //     byte[] packet0 = GetDataFragment(0, null, false, true, out _);
-    //     byte[] packet1 = GetDataFragment(1, null, false, true, out _);
-    //     byte[] packet2 = GetDataFragment(2, null, false, true, out byte[] data2);
-    //
-    //     Assert.True(sequencer.InsertData(packet0, false, true));
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     Assert.Equal(1, state.FragmentStartSequence);
-    //     Assert.Equal(1, state.WindowStartSequence);
-    //     Assert.Equal(1, state.TotalSequenceCount);
-    //
-    //     Assert.False(sequencer.InsertData(packet2, false, true));
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     Assert.Equal(1, state.FragmentStartSequence);
-    //     Assert.Equal(1, state.WindowStartSequence);
-    //     Assert.Equal(2, state.TotalSequenceCount);
-    //
-    //     Assert.True(sequencer.InsertData(packet1, false, true));
-    //     Assert.True(sequencer.TryGetCompletedSequence(out IMemoryOwner<byte>? sequence));
-    //     Assert.NotNull(sequence);
-    //
-    //     Assert.Equal(3, state.FragmentStartSequence);
-    //     Assert.Equal(3, state.WindowStartSequence);
-    //     Assert.Equal(3, state.TotalSequenceCount);
-    //
-    //     Assert.Equal(data2, sequence.Memory.ToArray());
-    //     sequence.Dispose();
-    // }
-    //
-    // [Fact]
-    // public void TestMultiSequenceInsert()
-    // {
-    //     using DataFragmentSequenceState state = GetState();
-    //     using DataSequencer sequencer = CreateChannel(state);
-    //
-    //     byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 2, false, true, out _);
-    //     byte[] fragment1 = GetDataFragment(1, null, false, true, out _);
-    //     byte[] fragment2 = GetDataFragment(2, DATA_LENGTH * 2, false, true, out byte[] data2);
-    //     byte[] fragment3 = GetDataFragment(3, null, false, true, out byte[] data3);
-    //
-    //     sequencer.InsertDataFragment(fragment0, false, true);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment1, false, true);
-    //     Assert.True(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment3, false, true);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment2, false, true);
-    //     Assert.True(sequencer.TryGetCompletedSequence(out IMemoryOwner<byte>? sequence));
-    //     Assert.NotNull(sequence);
-    //
-    //     int offset = 0;
-    //     Assert.Equal(data2, sequence.Memory[offset..(offset += DATA_LENGTH)].ToArray());
-    //     Assert.Equal(data3, sequence.Memory[offset..].ToArray());
-    //
-    //     sequence.Dispose();
-    // }
-    //
-    // [Fact]
-    // public void TestSequentialFragmentInsertWithMixedParameters()
-    // {
-    //     using DataFragmentSequenceState state = GetState();
-    //     using DataSequencer sequencer = CreateChannel(state);
-    //
-    //     byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, true, false, out byte[] data0);
-    //     byte[] fragment1 = GetDataFragment(1, null, false, false, out byte[] data1);
-    //     byte[] fragment2 = GetDataFragment(2, null, false, true, out byte[] data2);
-    //
-    //     sequencer.InsertDataFragment(fragment0, true, false);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment1, false, false);
-    //     Assert.False(sequencer.TryGetCompletedSequence(out _));
-    //
-    //     sequencer.InsertDataFragment(fragment2, false, true);
-    //     Assert.True(sequencer.TryGetCompletedSequence(out IMemoryOwner<byte>? sequence));
-    //     Assert.NotNull(sequence);
-    //
-    //     int offset = 0;
-    //     Assert.Equal(data0, sequence.Memory[offset..(offset += DATA_LENGTH)].ToArray());
-    //     Assert.Equal(data1, sequence.Memory[offset..(offset += DATA_LENGTH)].ToArray());
-    //     Assert.Equal(data2, sequence.Memory[offset..].ToArray());
-    //
-    //     Assert.Equal(3, state.FragmentStartSequence);
-    //     Assert.Equal(3, state.WindowStartSequence);
-    //     Assert.Equal(3, state.TotalSequenceCount);
-    //
-    //     sequence.Dispose();
-    // }
+    [Fact]
+    public void TestSequentialFragmentInsert()
+    {
+        Queue<byte[]> dataOutputQueue = new();
+        using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface networkInterface);
+
+        byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, out byte[] data0);
+        byte[] fragment1 = GetDataFragment(1, null, out byte[] data1);
+        byte[] fragment2 = GetDataFragment(2, null, out byte[] data2);
+
+        channel.HandleReliableDataFragment(fragment0);
+        Assert.Empty(dataOutputQueue);
+        Assert.Single(networkInterface.SentData);
+
+        channel.HandleReliableDataFragment(fragment1);
+        Assert.Empty(dataOutputQueue);
+        Assert.Equal(2, networkInterface.SentData.Count);
+
+        channel.HandleReliableDataFragment(fragment2);
+        Assert.Single(dataOutputQueue);
+        Assert.Equal(3, networkInterface.SentData.Count);
+
+        int offset = 0;
+        byte[] stitchedData = dataOutputQueue.Dequeue();
+
+        Assert.Equal(data0, stitchedData[offset..(offset += DATA_LENGTH)]);
+        Assert.Equal(data1, stitchedData[offset..(offset += DATA_LENGTH)]);
+        Assert.Equal(data2, stitchedData[offset..]);
+    }
+
+    [Fact]
+    public void TestNonSequentialFragmentInsert()
+    {
+        Queue<byte[]> dataOutputQueue = new();
+        using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface networkInterface);
+
+        byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, out byte[] data0);
+        byte[] fragment1 = GetDataFragment(1, null, out byte[] data1);
+        byte[] fragment2 = GetDataFragment(2, null, out byte[] data2);
+
+        channel.HandleReliableDataFragment(fragment2);
+        Assert.Empty(dataOutputQueue);
+        Assert.Empty(networkInterface.SentData);
+
+        channel.HandleReliableDataFragment(fragment0);
+        Assert.Empty(dataOutputQueue);
+        Assert.Single(networkInterface.SentData);
+
+        channel.HandleReliableDataFragment(fragment1);
+        Assert.Single(dataOutputQueue);
+        Assert.Equal(2, networkInterface.SentData.Count);
+
+        int offset = 0;
+        byte[] stitchedData = dataOutputQueue.Dequeue();
+
+        Assert.Equal(data0, stitchedData[offset..(offset += DATA_LENGTH)]);
+        Assert.Equal(data1, stitchedData[offset..(offset += DATA_LENGTH)]);
+        Assert.Equal(data2, stitchedData[offset..]);
+    }
+
+    [Fact]
+    public void TestDataInsert()
+    {
+        Queue<byte[]> dataOutputQueue = new();
+        using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface networkInterface);
+
+        byte[] packet0 = GetDataFragment(0, null, out _);
+        byte[] packet1 = GetDataFragment(1, null, out _);
+        byte[] packet2 = GetDataFragment(2, null, out byte[] data2);
+
+        channel.HandleReliableData(packet0);
+        Assert.Single(dataOutputQueue);
+        Assert.Single(networkInterface.SentData);
+
+        dataOutputQueue.Clear();
+        networkInterface.SentData.Clear();
+
+        channel.HandleReliableData(packet2);
+        Assert.Empty(dataOutputQueue);
+        Assert.Empty(networkInterface.SentData);
+
+        channel.HandleReliableData(packet1);
+        Assert.Equal(2, dataOutputQueue.Count);
+        Assert.Single(networkInterface.SentData);
+
+        dataOutputQueue.Dequeue();
+        Assert.Equal(data2, dataOutputQueue.Dequeue());
+    }
+
+    [Fact]
+    public void TestMultiSequenceInsert()
+    {
+        Queue<byte[]> dataOutputQueue = new();
+        using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface networkInterface);
+
+        byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 2, out _);
+        byte[] fragment1 = GetDataFragment(1, null, out _);
+        byte[] fragment2 = GetDataFragment(2, DATA_LENGTH * 2, out byte[] data2);
+        byte[] fragment3 = GetDataFragment(3, null, out byte[] data3);
+
+        channel.HandleReliableDataFragment(fragment0);
+        Assert.Empty(dataOutputQueue);
+        Assert.Single(networkInterface.SentData);
+
+        channel.HandleReliableDataFragment(fragment1);
+        Assert.Single(dataOutputQueue);
+        Assert.Equal(2, networkInterface.SentData.Count);
+
+        dataOutputQueue.Clear();
+        networkInterface.SentData.Clear();
+
+        channel.HandleReliableDataFragment(fragment3);
+        Assert.Empty(dataOutputQueue);
+        Assert.Empty(networkInterface.SentData);
+
+        channel.HandleReliableDataFragment(fragment2);
+        Assert.Single(dataOutputQueue);
+        Assert.Single(networkInterface.SentData);
+
+        byte[] actualData = dataOutputQueue.Dequeue();
+        Assert.Equal(data2, actualData[..DATA_LENGTH]);
+        Assert.Equal(data3, actualData[DATA_LENGTH..]);
+    }
 
     [Fact]
     public void TestSequenceWaitingOnData()
