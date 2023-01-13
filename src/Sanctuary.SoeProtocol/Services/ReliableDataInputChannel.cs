@@ -44,6 +44,9 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         _cipherState = cipherState;
         _windowStartSequence = 0;
+
+        for (int i = 0; i < _dataBacklog.Length; i++)
+            _dataBacklog[i] = new StashedData();
     }
 
     public void HandleReliableData(Span<byte> data)
@@ -57,7 +60,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         {
             NativeSpan span = _spanPool.Rent();
             span.CopyDataInto(data);
-            _dataBacklog[sequence - _windowStartSequence] = new StashedData(sequence, false, span);
+            _dataBacklog[sequence - _windowStartSequence].Init(sequence, false, span);
 
             return;
         }
@@ -79,7 +82,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         {
             NativeSpan span = _spanPool.Rent();
             span.CopyDataInto(data);
-            _dataBacklog[sequence - _windowStartSequence] = new StashedData(sequence, true, span);
+            _dataBacklog[sequence - _windowStartSequence].Init(sequence, true, span);
 
             return;
         }
@@ -97,7 +100,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     {
         sequence = BinaryPrimitives.ReadUInt16BigEndian(data);
 
-        if (IsSequenceGreater(sequence))
+        if (IsSequenceGreater(sequence) || sequence == _windowStartSequence)
             return true;
 
         SendAck((ushort)(_windowStartSequence - 1));
@@ -142,14 +145,17 @@ public sealed class ReliableDataInputChannel : IDisposable
         // Copy over any stashed fragments that can be written
         // directly to the buffer; i.e they equal the current
         // window start sequence and we have space left
-        while (IsSequenceSmaller(_dataBacklog.Current.Sequence) || _dataBacklog.Current.Sequence == _windowStartSequence)
+        while (_dataBacklog.Current.IsActive)
         {
             StashedData curr = _dataBacklog.Current;
 
             // We should never reach a state where we have skipped
             // past stashed fragments
-            if (IsSequenceSmaller(curr.Sequence))
-                throw new Exception("Invalid state: a stashed fragment was skipped");
+            if (curr.Sequence != _windowStartSequence)
+                throw new Exception("Invalid state: stashed fragment had mismatching sequence");
+
+            if (curr.Span is null)
+                throw new Exception("Invalid state: attempting to use a decommissioned stashed fragment");
 
             if (!_dataBacklog.Current.IsFragment)
             {
@@ -161,7 +167,8 @@ public sealed class ReliableDataInputChannel : IDisposable
                 TryProcessCurrentBuffer();
             }
 
-            _spanPool.Return(curr.Span);
+            curr.Clear(_spanPool);
+
             IncrementWindow();
         }
     }
@@ -251,7 +258,10 @@ public sealed class ReliableDataInputChannel : IDisposable
         _cipherState.Dispose();
 
         for (int i = 0; i < _dataBacklog.Length; i++)
-            _spanPool.Return(_dataBacklog[i].Span);
+        {
+            if (_dataBacklog[i].IsActive)
+                _dataBacklog[i].Clear(_spanPool);
+        }
 
         if (_currentBuffer is not null)
         {
@@ -260,5 +270,27 @@ public sealed class ReliableDataInputChannel : IDisposable
         }
     }
 
-    private readonly record struct StashedData(ushort Sequence, bool IsFragment, NativeSpan Span);
+    private class StashedData
+    {
+        [MemberNotNullWhen(true, nameof(Span))]
+        public bool IsActive { get; private set; }
+        public NativeSpan? Span { get; private set; }
+        public ushort Sequence { get; private set; }
+        public bool IsFragment { get; private set; }
+
+        public void Init(ushort sequence, bool isFragment, NativeSpan span)
+        {
+            Sequence = sequence;
+            IsFragment = isFragment;
+            Span = span;
+            IsActive = true;
+        }
+
+        public void Clear(NativeSpanPool spanPool)
+        {
+            IsActive = false;
+            spanPool.Return(Span!);
+            Span = null;
+        }
+    }
 }
