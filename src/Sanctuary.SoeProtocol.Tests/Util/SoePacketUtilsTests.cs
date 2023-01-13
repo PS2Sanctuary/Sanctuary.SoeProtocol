@@ -122,8 +122,9 @@ public class SoePacketUtilsTests
     }
 
     private static SessionParameters GetSessionParams(byte crcLength = 0)
-        => new("TestProtocol")
+        => new()
         {
+            ApplicationProtocol = "TestProtocol",
             IsCompressionEnabled = false,
             CrcSeed = 5,
             CrcLength = crcLength

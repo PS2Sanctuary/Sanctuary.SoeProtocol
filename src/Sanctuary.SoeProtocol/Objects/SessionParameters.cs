@@ -10,7 +10,7 @@ public class SessionParameters
     /// <summary>
     /// Gets the application protocol being proxied by this session.
     /// </summary>
-    public string ApplicationProtocol { get; }
+    public required string ApplicationProtocol { get; init; }
 
     /// <summary>
     /// Gets the maximum length of a UDP packet that this party
@@ -51,14 +51,14 @@ public class SessionParameters
     /// Gets or sets the maximum number of raw packets that may queued
     /// for either processing or sending.
     /// </summary>
-    public int MaxQueuedRawPackets { get; set; }
+    public int MaxQueuedRawPackets { get; init; }
 
     /// <summary>
     /// Gets the timespan after which to send a heartbeat, if no contextual
     /// packets have been received within the interval. Set to <see cref="TimeSpan.Zero"/>
     /// to disable heart-beating.
     /// </summary>
-    public TimeSpan HeartbeatAfter { get; set; }
+    public TimeSpan HeartbeatAfter { get; init; }
 
     /// <summary>
     /// Gets the default timespan after which to consider a session inactive, if no
@@ -66,19 +66,20 @@ public class SessionParameters
     /// <see cref="TimeSpan.Zero"/> to prevent a session from being terminated
     /// due to inactivity.
     /// </summary>
-    public TimeSpan InactivityTimeout { get; set; }
+    public TimeSpan InactivityTimeout { get; init; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SessionParameters"/> class.
     /// </summary>
-    /// <param name="applicationProtocol">The application protocol to be proxied by the session.</param>
-    public SessionParameters(string applicationProtocol)
+    public SessionParameters()
     {
-        ApplicationProtocol = applicationProtocol;
         CrcLength = SoeConstants.CrcLength;
         UdpLength = SoeConstants.DefaultUdpLength;
         MaxQueuedRawPackets = 256;
         HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
         InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
     }
+
+    public SessionParameters Clone()
+        => (SessionParameters)this.MemberwiseClone();
 }
