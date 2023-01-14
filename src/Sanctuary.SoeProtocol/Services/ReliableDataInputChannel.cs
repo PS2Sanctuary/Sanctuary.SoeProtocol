@@ -27,6 +27,13 @@ public sealed class ReliableDataInputChannel : IDisposable
     private int _runningDataLength;
     private byte[]? _currentBuffer;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReliableDataInputChannel"/>.
+    /// </summary>
+    /// <param name="handler">The protocol handler that owns this channel.</param>
+    /// <param name="spanPool">A pool that may be used to stash out-of-order fragments.</param>
+    /// <param name="cipherState">The initial RC4 state to use for decryption.</param>
+    /// <param name="dataHandler">The handler for processed data.</param>
     public ReliableDataInputChannel
     (
         SoeProtocolHandler handler,
@@ -39,7 +46,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         _spanPool = spanPool;
         _dataHandler = dataHandler;
 
-        _dataBacklog = new SlidingWindowArray<StashedData>(_handler.SessionParams.MaxQueuedRawPackets);
+        _dataBacklog = new SlidingWindowArray<StashedData>(_handler.SessionParams.MaxQueuedReliableDataPackets);
         _ackBuffer = GC.AllocateArray<byte>(Acknowledge.Size, true);
 
         _cipherState = cipherState;
@@ -49,6 +56,10 @@ public sealed class ReliableDataInputChannel : IDisposable
             _dataBacklog[i] = new StashedData();
     }
 
+    /// <summary>
+    /// Handles a <see cref="SoeOpCode.ReliableData"/> packet.
+    /// </summary>
+    /// <param name="data">The reliable data.</param>
     public void HandleReliableData(Span<byte> data)
     {
         if (!CheckSequence(data, out ushort sequence))
@@ -71,6 +82,10 @@ public sealed class ReliableDataInputChannel : IDisposable
         SendAck((ushort)(_windowStartSequence - 1)); // TODO: Acks not necessarily on every data block
     }
 
+    /// <summary>
+    /// Handles a <see cref="SoeOpCode.ReliableDataFragment"/> packet.
+    /// </summary>
+    /// <param name="data">The reliable data fragment.</param>
     public void HandleReliableDataFragment(ReadOnlySpan<byte> data)
     {
         if (!CheckSequence(data, out ushort sequence))

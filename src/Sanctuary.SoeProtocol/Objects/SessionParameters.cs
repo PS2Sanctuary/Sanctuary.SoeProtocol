@@ -54,6 +54,12 @@ public class SessionParameters
     public int MaxQueuedRawPackets { get; init; }
 
     /// <summary>
+    /// Gets or sets the maximum number of data fragments that may be
+    /// queued for either stitching or dispatch.
+    /// </summary>
+    public int MaxQueuedReliableDataPackets { get; init; }
+
+    /// <summary>
     /// Gets the timespan after which to send a heartbeat, if no contextual
     /// packets have been received within the interval. Set to <see cref="TimeSpan.Zero"/>
     /// to disable heart-beating.
@@ -76,6 +82,7 @@ public class SessionParameters
         CrcLength = SoeConstants.CrcLength;
         UdpLength = SoeConstants.DefaultUdpLength;
         MaxQueuedRawPackets = 256;
+        MaxQueuedReliableDataPackets = 128;
         HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
         InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
     }
