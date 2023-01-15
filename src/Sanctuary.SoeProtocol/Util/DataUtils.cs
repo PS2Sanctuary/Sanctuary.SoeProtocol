@@ -1,20 +1,61 @@
 ﻿using System;
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 
 namespace Sanctuary.SoeProtocol.Util;
 
 /// <summary>
 /// Contains utility methods for working with reliable multi-data.
 /// </summary>
-public static class MultiDataUtils
+public static class DataUtils
 {
     public static readonly ReadOnlyMemory<byte> MULTI_DATA_INDICATOR = new byte[] { 0x00, 0x19 };
+
+    /// <summary>
+    /// Gets the true sequence from an incoming packet sequence.
+    /// </summary>
+    /// <param name="packetSequence">The packet sequence.</param>
+    /// <param name="currentSequence">The last known (general, expected window) sequence.</param>
+    /// <param name="maxQueuedReliableDataPackets">
+    /// The maximum number of reliable data packets that may be queued for dispatch/receive.
+    /// </param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static long GetTrueIncomingSequence
+    (
+        ushort packetSequence,
+        long currentSequence,
+        short maxQueuedReliableDataPackets
+    )
+    {
+        // Note; this method makes the assumption that the amount of queued reliable data
+        // can never be more than slightly less than the max value of a ushort
+
+        // Zero-out the lower two bytes of our last known sequence and
+        // and insert the packet sequence in that space
+        long sequence = packetSequence | (currentSequence & (long.MaxValue ^ ushort.MaxValue));
+
+        // If the sequence we obtain is larger than our possible window, we must have wrapped back
+        // to the last 'packet sequence' 'block' (ushort), and hence need to decrement the true
+        // sequence by an entire block
+        if (sequence > currentSequence + maxQueuedReliableDataPackets)
+            sequence -= ushort.MaxValue + 1;
+
+        // If the sequence we obtain is smaller than our possible window, we must have wrapped
+        // forward to the next 'packet sequence' block, and hence need to increment the true
+        // sequence by an entire block
+        if (sequence < currentSequence - maxQueuedReliableDataPackets)
+            sequence += ushort.MaxValue + 1;
+
+        return sequence;
+    }
 
     /// <summary>
     /// Checks whether a buffer starts with the <see cref="MULTI_DATA_INDICATOR"/>.
     /// </summary>
     /// <param name="buffer">The buffer to check.</param>
     /// <returns><c>True</c> if the buffer contains multi-data.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool CheckForMultiData(ReadOnlySpan<byte> buffer)
         => buffer.Length > 2
             && buffer[0] == MULTI_DATA_INDICATOR.Span[0]
@@ -25,6 +66,7 @@ public static class MultiDataUtils
     /// </summary>
     /// <param name="buffer">The buffer.</param>
     /// <param name="offset">The offset into the buffer at which to write the multi-data indicator.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteMultiDataIndicator(Span<byte> buffer, ref int offset)
     {
         buffer[offset] = MULTI_DATA_INDICATOR.Span[0];
@@ -71,6 +113,7 @@ public static class MultiDataUtils
     /// </summary>
     /// <param name="length">The length value.</param>
     /// <returns>The required buffer size.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetVariableLengthSize(int length)
         => length switch
         {
