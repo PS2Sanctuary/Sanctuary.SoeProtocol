@@ -57,7 +57,7 @@ public class SessionParameters
     /// Gets or sets the maximum number of data fragments that may be
     /// queued for either stitching or dispatch.
     /// </summary>
-    public int MaxQueuedReliableDataPackets { get; init; }
+    public short MaxQueuedReliableDataPackets { get; init; }
 
     /// <summary>
     /// Gets the timespan after which to send a heartbeat, if no contextual

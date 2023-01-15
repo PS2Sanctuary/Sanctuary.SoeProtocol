@@ -20,7 +20,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     private readonly byte[] _ackBuffer;
 
     private Rc4KeyState _cipherState;
-    private ushort _windowStartSequence;
+    private long _windowStartSequence;
 
     // Fragment stitching variables
     private int _expectedDataLength;
@@ -62,7 +62,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <param name="data">The reliable data.</param>
     public void HandleReliableData(Span<byte> data)
     {
-        if (!CheckSequence(data, out ushort sequence))
+        if (!CheckSequence(data, out long sequence))
             return;
 
         data = data[sizeof(ushort)..];
@@ -88,7 +88,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <param name="data">The reliable data fragment.</param>
     public void HandleReliableDataFragment(ReadOnlySpan<byte> data)
     {
-        if (!CheckSequence(data, out ushort sequence))
+        if (!CheckSequence(data, out long sequence))
             return;
 
         data = data[sizeof(ushort)..];
@@ -111,11 +111,12 @@ public sealed class ReliableDataInputChannel : IDisposable
         SendAck((ushort)(_windowStartSequence - 1)); // TODO: Acks not necessarily on every data block
     }
 
-    private bool CheckSequence(ReadOnlySpan<byte> data, out ushort sequence)
+    private bool CheckSequence(ReadOnlySpan<byte> data, out long sequence)
     {
-        sequence = BinaryPrimitives.ReadUInt16BigEndian(data);
+        ushort packetSequence = BinaryPrimitives.ReadUInt16BigEndian(data);
+        sequence = GetTrueIncomingSequence(packetSequence);
 
-        if (IsSequenceGreater(sequence) || sequence == _windowStartSequence)
+        if (sequence >= _windowStartSequence)
             return true;
 
         SendAck((ushort)(_windowStartSequence - 1));
@@ -202,12 +203,12 @@ public sealed class ReliableDataInputChannel : IDisposable
 
     private void ProcessData(Span<byte> data)
     {
-        if (MultiDataUtils.CheckForMultiData(data))
+        if (DataUtils.CheckForMultiData(data))
         {
             int offset = 2;
             while (offset < data.Length)
             {
-                int length = (int)MultiDataUtils.ReadVariableLength(data, ref offset);
+                int length = (int)DataUtils.ReadVariableLength(data, ref offset);
 
                 Span<byte> dataSlice = data.Slice(offset, length);
                 DecryptAndCallDataHandler(dataSlice);
@@ -247,25 +248,13 @@ public sealed class ReliableDataInputChannel : IDisposable
         _dataBacklog.Slide();
     }
 
-    /// <summary>
-    /// Determines if a wrap-around sequence number is greater
-    /// than the current window start sequence.
-    /// </summary>
-    /// <param name="incomingSequence">The incoming sequence number.</param>
-    /// <returns><c>True</c> if the incoming sequence is greater than the window start.</returns>
-    private bool IsSequenceGreater(ushort incomingSequence)
-        => incomingSequence > _windowStartSequence
-            || _windowStartSequence - incomingSequence > 10000;
-
-    /// <summary>
-    /// Determines if a wrap-around sequence number is smaller
-    /// than the current window start sequence.
-    /// </summary>
-    /// <param name="incomingSequence">The incoming sequence number.</param>
-    /// <returns><c>True</c> if the incoming sequence is smaller than the window start.</returns>
-    private bool IsSequenceSmaller(ushort incomingSequence)
-        => incomingSequence < _windowStartSequence
-            || incomingSequence - _windowStartSequence > 10000;
+    private long GetTrueIncomingSequence(ushort packetSequence)
+        => DataUtils.GetTrueIncomingSequence
+        (
+            packetSequence,
+            _windowStartSequence,
+            _handler.SessionParams.MaxQueuedReliableDataPackets
+        );
 
     /// <inheritdoc />
     public void Dispose()
@@ -290,10 +279,10 @@ public sealed class ReliableDataInputChannel : IDisposable
         [MemberNotNullWhen(true, nameof(Span))]
         public bool IsActive { get; private set; }
         public NativeSpan? Span { get; private set; }
-        public ushort Sequence { get; private set; }
+        public long Sequence { get; private set; }
         public bool IsFragment { get; private set; }
 
-        public void Init(ushort sequence, bool isFragment, NativeSpan span)
+        public void Init(long sequence, bool isFragment, NativeSpan span)
         {
             Sequence = sequence;
             IsFragment = isFragment;
