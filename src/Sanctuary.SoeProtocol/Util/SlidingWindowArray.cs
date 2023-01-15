@@ -15,7 +15,7 @@ public class SlidingWindowArray<T>
     /// <summary>
     /// Gets the index into the <see cref="_array"/> at which the current window starts.
     /// </summary>
-    private int _windowStart;
+    private long _windowStart;
 
     /// <summary>
     /// Gets an item at the given index.
@@ -23,6 +23,12 @@ public class SlidingWindowArray<T>
     /// <param name="index">The index, relative to the current window.</param>
     /// <returns>The element at the given index.</returns>
     public T this[int index]
+    {
+        get => _array[TranslateWindowOffsetToArrayIndex(index)];
+        set => _array[TranslateWindowOffsetToArrayIndex(index)] = value;
+    }
+
+    public T this[long index]
     {
         get => _array[TranslateWindowOffsetToArrayIndex(index)];
         set => _array[TranslateWindowOffsetToArrayIndex(index)] = value;
@@ -68,7 +74,7 @@ public class SlidingWindowArray<T>
     /// </summary>
     /// <param name="currentWindowStartIndex">The index within the array at which the current window starts.</param>
     /// <returns>The underlying array.</returns>
-    public T[] GetUnderlyingArray(out int currentWindowStartIndex)
+    public T[] GetUnderlyingArray(out long currentWindowStartIndex)
     {
         currentWindowStartIndex = _windowStart;
         return _array;
@@ -80,9 +86,9 @@ public class SlidingWindowArray<T>
     /// </summary>
     /// <param name="offset">The offset from the current window position.</param>
     /// <returns>The representative index in the underlying array.</returns>
-    private int TranslateWindowOffsetToArrayIndex(int offset)
+    private long TranslateWindowOffsetToArrayIndex(long offset)
     {
-        int index = _windowStart + offset;
+        long index = _windowStart + offset;
 
         if (index < 0)
             return Length + index % Length;
