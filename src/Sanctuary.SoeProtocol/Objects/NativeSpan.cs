@@ -21,6 +21,11 @@ public sealed unsafe class NativeSpan : IDisposable
     public bool IsDisposed { get; private set; }
 
     /// <summary>
+    /// Gets or sets the index into the <see cref="FullSpan"/> at which data begins.
+    /// </summary>
+    public int StartOffset { get; set; }
+
+    /// <summary>
     /// Gets or sets the length of the <see cref="FullSpan"/> that is currently in use.
     /// </summary>
     public int UsedLength { get; set; }
@@ -46,7 +51,7 @@ public sealed unsafe class NativeSpan : IDisposable
         get
         {
             DisposedCheck();
-            return new Span<byte>(_ptr, UsedLength);
+            return new Span<byte>(_ptr + StartOffset, UsedLength);
         }
     }
 
@@ -74,6 +79,7 @@ public sealed unsafe class NativeSpan : IDisposable
         _ptr = pointer;
         _len = length;
         IsDisposed = false;
+        StartOffset = 0;
         UsedLength = 0;
     }
 
