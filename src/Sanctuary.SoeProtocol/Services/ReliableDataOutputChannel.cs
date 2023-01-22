@@ -52,6 +52,10 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _windowStartSequence = 0;
     }
 
+    /// <summary>
+    /// Enqueues data to be sent on the reliable channel.
+    /// </summary>
+    /// <param name="data">The data.</param>
     public void EnqueueData(ReadOnlySpan<byte> data)
         => EnqueueDataInternal(data, true);
 
@@ -65,10 +69,12 @@ public sealed class ReliableDataOutputChannel : IDisposable
     }
 
     /// <summary>
-    /// This method should not be used after the data has been
-    /// enqueued on the channel.
+    /// Sets the maximum length of data that may be output in a single packet.
     /// </summary>
-    /// <param name="maxDataLength">The maximum length of data that may be output in a single packet.</param>
+    /// <remarks>
+    /// This method should not be used after any data has been enqueued on the channel.
+    /// </remarks>
+    /// <param name="maxDataLength">The maximum data length.</param>
     /// <exception cref="InvalidOperationException">
     /// Thrown if this method is called after data has been enqueued.
     /// </exception>
@@ -111,13 +117,36 @@ public sealed class ReliableDataOutputChannel : IDisposable
             }
             else
             {
-                // TODO: Break into fragments
+                StashFragment(ref data, true);
+                while (data.Length > 0)
+                    StashFragment(ref data, false);
             }
         }
 
         if (encryptedSpan is not null)
             ArrayPool<byte>.Shared.Return(encryptedSpan);
         _dataQueueLock.Release();
+    }
+
+    private void StashFragment(ref ReadOnlySpan<byte> data, bool isMaster)
+    {
+        NativeSpan span = _spanPool.Rent();
+        BinaryWriter writer = new(span.FullSpan);
+
+        writer.WriteUInt16BE((ushort)_currentSequence);
+        int amountToTake = Math.Min(data.Length, _maxDataLength - sizeof(ushort));
+
+        if (isMaster)
+        {
+            writer.WriteUInt32BE((uint)data.Length);
+            amountToTake -= sizeof(uint);
+        }
+
+        writer.WriteBytes(data[..amountToTake]);
+
+        _packetOutputStash[_currentSequence % _maxQueuedData] = _multiBuffer;
+        _currentSequence++;
+        data = data[amountToTake..];
     }
 
     private void EnqueueMultiBuffer()
