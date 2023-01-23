@@ -32,7 +32,8 @@ public partial class SoeProtocolHandler
         BinaryWriter writer = new(_contextualSendBuffer);
 
         writer.WriteUInt16BE((ushort)opCode);
-        writer.WriteBool(false); // Compression is not implemented at the moment
+        if (SessionParams.IsCompressionEnabled)
+            writer.WriteBool(false); // Compression is not implemented at the moment
         writer.WriteBytes(packetData);
         AppendCrc(ref writer, SessionParams.CrcSeed, SessionParams.CrcLength);
 
@@ -109,12 +110,14 @@ public partial class SoeProtocolHandler
             }
             case SoeOpCode.OutOfOrder:
             {
-                // TODO: Handle in separate class
+                OutOfOrder ooo = OutOfOrder.Deserialize(packetData);
+                _dataOutputChannel.NotifyOfOutOfOrder(ooo);
                 break;
             }
             case SoeOpCode.Acknowledge:
             {
-                // TODO: Handle in separate class
+                Acknowledge ack = Acknowledge.Deserialize(packetData);
+                _dataOutputChannel.NotifyOfAcknowledge(ack);
                 break;
             }
         }

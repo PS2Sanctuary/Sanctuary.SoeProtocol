@@ -19,6 +19,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     private readonly IApplicationProtocolHandler _application;
     private readonly ConcurrentQueue<NativeSpan> _packetQueue;
     private readonly ReliableDataInputChannel _dataInputChannel;
+    private readonly ReliableDataOutputChannel _dataOutputChannel;
 
     private bool _isDisposed;
 
@@ -57,7 +58,12 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
         _contextualSendBuffer = GC.AllocateArray<byte>((int)sessionParameters.UdpLength, true);
-        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, cipherState, _application.HandleAppData);
+        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, cipherState.Copy(), _application.HandleAppData);
+
+        int maxOutputDataLength = (int)sessionParameters.UdpLength - sizeof(SoeOpCode)
+            - (sessionParameters.IsCompressionEnabled ? 1 : 0)
+            - sessionParameters.CrcLength;
+        _dataOutputChannel = new ReliableDataOutputChannel(this, _spanPool, cipherState, maxOutputDataLength);
 
         State = SessionState.Negotiating;
     }

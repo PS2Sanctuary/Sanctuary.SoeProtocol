@@ -1,8 +1,11 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
+using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 
@@ -10,19 +13,27 @@ namespace Sanctuary.SoeProtocol.Services;
 
 public sealed class ReliableDataOutputChannel : IDisposable
 {
+    /// <summary>
+    /// Gets the maximum amount of time to wait for an acknowledgement
+    /// </summary>
+    public const int ACK_WAIT_MILLISECONDS = 500;
+
     private readonly SoeProtocolHandler _handler;
     private readonly NativeSpanPool _spanPool;
-    private readonly SlidingWindowArray<NativeSpan?> _packetOutputStash;
-    private readonly int _maxQueuedData;
-    private readonly SemaphoreSlim _dataQueueLock;
+    private readonly List<StashedOutputPacket> _dispatchStash;
+    private readonly SemaphoreSlim _packetOutputQueueLock;
 
     // Data-related
     private Rc4KeyState _cipherState;
     private int _maxDataLength;
 
-    // Sequences
+    // Sequencing
     private long _windowStartSequence;
     private long _currentSequence;
+    private long _totalSequence;
+    private long _lastAcknowledged;
+    private long _newAcknowledgement;
+    private long _lastAckAt;
 
     // MultiBuffer related
     private NativeSpan _multiBuffer;
@@ -40,16 +51,17 @@ public sealed class ReliableDataOutputChannel : IDisposable
     {
         _handler = handler;
         _spanPool = spanPool;
-        _maxQueuedData = handler.SessionParams.MaxQueuedReliableDataPackets;
 
-        _packetOutputStash = new SlidingWindowArray<NativeSpan?>(_maxQueuedData);
-        _dataQueueLock = new SemaphoreSlim(1);
+        _dispatchStash = new List<StashedOutputPacket>();
+        _packetOutputQueueLock = new SemaphoreSlim(1);
 
         _cipherState = cipherState;
         SetMaxDataLength(maxDataLength);
         SetupNewMultiBuffer();
 
         _windowStartSequence = 0;
+        _currentSequence = 0;
+        _totalSequence = 0;
     }
 
     /// <summary>
@@ -59,13 +71,74 @@ public sealed class ReliableDataOutputChannel : IDisposable
     public void EnqueueData(ReadOnlySpan<byte> data)
         => EnqueueDataInternal(data, true);
 
-    public void RunTick()
+    public void RunTick(CancellationToken ct)
     {
-        _dataQueueLock.Wait();
+        _packetOutputQueueLock.Wait(ct);
 
+        int slide = (int)(_newAcknowledgement - _lastAcknowledged);
+        if (slide > 0)
+        {
+            for (int i = 0; i < slide; i++)
+                _spanPool.Return(_dispatchStash[i].DataSpan);
+            _dispatchStash.RemoveRange(0, slide);
+
+            _lastAcknowledged = _newAcknowledgement;
+            _windowStartSequence = _newAcknowledgement + 1;
+
+            // Just in case we've received a late ack, after reverting to repeat
+            if (_currentSequence < _windowStartSequence)
+                _currentSequence = _windowStartSequence;
+        }
+
+        // Pull anything from the multi-buffer
         EnqueueMultiBuffer();
+        _packetOutputQueueLock.Release();
 
-        _dataQueueLock.Release();
+        // Ensure we're not expecting an ack when we've only
+        // just started sending a block of data
+        if (_windowStartSequence == _currentSequence)
+            _lastAckAt = Stopwatch.GetTimestamp();
+
+        // Been a while since we received an ack? Send again from the start of the window
+        if (Stopwatch.GetElapsedTime(_lastAckAt).Milliseconds >= ACK_WAIT_MILLISECONDS)
+            _currentSequence = _windowStartSequence;
+
+        // Send everything we haven't sent from the current window
+        long lastSequenceToSend = Math.Min(_totalSequence, _currentSequence + _handler.SessionParams.MaxQueuedReliableDataPackets);
+
+        while (_currentSequence < lastSequenceToSend)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            int index = (int)(_currentSequence - _windowStartSequence);
+            StashedOutputPacket stashedPacket = _dispatchStash[index];
+
+            SoeOpCode opCode = stashedPacket.IsFragment ? SoeOpCode.ReliableDataFragment : SoeOpCode.ReliableData;
+            _handler.SendContextualPacket(opCode, stashedPacket.DataSpan.UsedSpan);
+            _currentSequence++;
+        }
+    }
+
+    /// <summary>
+    /// Notifies the channel of an acknowledgement packet.
+    /// </summary>
+    /// <param name="ack">The acknowledgement.</param>
+    public void NotifyOfAcknowledge(Acknowledge ack)
+    {
+        if (GetTrueIncomingSequence(ack.Sequence) <= _lastAcknowledged)
+            return;
+
+        _newAcknowledgement = ack.Sequence;
+        _lastAckAt = Stopwatch.GetTimestamp();
+    }
+
+    /// <summary>
+    /// Notifies the channel of an out-of-order packet.
+    /// </summary>
+    /// <param name="outOfOrder">The out-of-order packet.</param>
+    public void NotifyOfOutOfOrder(OutOfOrder outOfOrder)
+    {
+        // TODO: We don't know how to handle this yet
     }
 
     /// <summary>
@@ -83,19 +156,19 @@ public sealed class ReliableDataOutputChannel : IDisposable
         if (_currentSequence > 0)
             throw new InvalidOperationException("The maximum length may not be changed after data has been enqueued");
 
-        _maxDataLength = maxDataLength - sizeof(ushort); // Space for sequence
+        _maxDataLength = maxDataLength;
     }
 
     private void EnqueueDataInternal(ReadOnlySpan<byte> data, bool needsEncryption)
     {
         byte[]? encryptedSpan = null;
-        _dataQueueLock.Wait();
+        _packetOutputQueueLock.Wait();
 
-        if (needsEncryption)
+        if (needsEncryption && _handler.SessionParams.IsEncryptionEnabled)
             encryptedSpan = Encrypt(data, out data);
 
         int multiLength = DataUtils.GetVariableLengthSize(data.Length) + data.Length;
-        if (_maxDataLength - _multiBufferOffset < multiLength) // We can fit in the current multi-buffer
+        if (_maxDataLength - _multiBufferOffset >= multiLength) // We can fit in the current multi-buffer
         {
             DataUtils.WriteVariableLength(_multiBuffer.FullSpan, (uint)data.Length, ref _multiBufferOffset);
             data.CopyTo(_multiBuffer.FullSpan[_multiBufferOffset..]);
@@ -111,7 +184,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
             EnqueueMultiBuffer();
 
             // Now that we've cleared the multi-buffer, can we fit?
-            if (_maxDataLength - _multiBufferOffset < multiLength)
+            if (_maxDataLength - _multiBufferOffset >= multiLength)
             {
                 EnqueueDataInternal(data, false);
             }
@@ -125,7 +198,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
 
         if (encryptedSpan is not null)
             ArrayPool<byte>.Shared.Return(encryptedSpan);
-        _dataQueueLock.Release();
+        _packetOutputQueueLock.Release();
     }
 
     private void StashFragment(ref ReadOnlySpan<byte> data, bool isMaster)
@@ -133,7 +206,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         NativeSpan span = _spanPool.Rent();
         BinaryWriter writer = new(span.FullSpan);
 
-        writer.WriteUInt16BE((ushort)_currentSequence);
+        writer.WriteUInt16BE((ushort)_totalSequence);
         int amountToTake = Math.Min(data.Length, _maxDataLength - sizeof(ushort));
 
         if (isMaster)
@@ -143,9 +216,10 @@ public sealed class ReliableDataOutputChannel : IDisposable
         }
 
         writer.WriteBytes(data[..amountToTake]);
+        span.UsedLength = writer.Offset;
 
-        _packetOutputStash[_currentSequence % _maxQueuedData] = _multiBuffer;
-        _currentSequence++;
+        _dispatchStash.Add(new StashedOutputPacket(true, span));
+        _totalSequence++;
         data = data[amountToTake..];
     }
 
@@ -161,21 +235,21 @@ public sealed class ReliableDataOutputChannel : IDisposable
                 BinaryPrimitives.WriteUInt16BigEndian
                 (
                     _multiBuffer.UsedSpan,
-                    (ushort)_currentSequence
+                    (ushort)_totalSequence
                 );
                 break;
             default:
                 BinaryPrimitives.WriteUInt16BigEndian
                 (
                     _multiBuffer.FullSpan,
-                    (ushort)_currentSequence
+                    (ushort)_totalSequence
                 );
                 _multiBuffer.UsedLength = _multiBufferOffset;
                 break;
         }
 
-        _packetOutputStash[_currentSequence % _maxQueuedData] = _multiBuffer;
-        _currentSequence++;
+        _dispatchStash.Add(new StashedOutputPacket(false, _multiBuffer));
+        _totalSequence++;
 
         SetupNewMultiBuffer();
     }
@@ -203,13 +277,21 @@ public sealed class ReliableDataOutputChannel : IDisposable
         return storage;
     }
 
+    private long GetTrueIncomingSequence(ushort packetSequence)
+        => DataUtils.GetTrueIncomingSequence
+        (
+            packetSequence,
+            _windowStartSequence,
+            _handler.SessionParams.MaxQueuedReliableDataPackets
+        );
+
     /// <inheritdoc />
     public void Dispose()
     {
-        for (int i = 0; i < _packetOutputStash.Length; i++)
-        {
-            if (_packetOutputStash[i] is { } span)
-                _spanPool.Return(span);
-        }
+        foreach (StashedOutputPacket element in _dispatchStash)
+            _spanPool.Return(element.DataSpan);
+        _dispatchStash.Clear();
     }
+
+    private readonly record struct StashedOutputPacket(bool IsFragment, NativeSpan DataSpan);
 }
