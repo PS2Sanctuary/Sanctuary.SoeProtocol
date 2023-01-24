@@ -92,13 +92,14 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     public async Task RunAsync(CancellationToken ct)
     {
         await Task.Yield();
+        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(10));
 
         while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
         {
             SendHeartbeatIfRequired();
 
             if (!ProcessOneFromPacketQueue())
-                await Task.Delay(10, ct).ConfigureAwait(false);
+                await timer.WaitForNextTickAsync(ct);
         }
 
         if (State is SessionState.Running)
