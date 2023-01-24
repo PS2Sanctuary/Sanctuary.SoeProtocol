@@ -1,5 +1,6 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
+using System;
 
 namespace Sanctuary.SoeProtocol.Abstractions;
 
@@ -30,4 +31,15 @@ public interface ISessionHandler
     /// has not yet been terminated.
     /// </summary>
     public DisconnectReason TerminationReason { get; }
+
+    /// <summary>
+    /// Enqueues data to be sent to the other party.
+    /// </summary>
+    /// <param name="data">The data.</param>
+    public void EnqueueData(ReadOnlySpan<byte> data);
+
+    /// <summary>
+    /// Terminates the session handler.
+    /// </summary>
+    public void TerminateSession();
 }

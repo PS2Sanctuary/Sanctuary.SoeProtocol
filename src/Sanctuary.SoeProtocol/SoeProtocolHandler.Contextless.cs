@@ -82,6 +82,7 @@ public partial class SoeProtocolHandler
         _networkWriter.Send(buffer);
 
         State = SessionState.Running;
+        _openSessionOnNextClientPacket = true;
     }
 
     private void HandleSessionResponse(ReadOnlySpan<byte> packetData)
@@ -112,5 +113,6 @@ public partial class SoeProtocolHandler
         }
 
         State = SessionState.Running;
+        _application.OnSessionOpened();
     }
 }

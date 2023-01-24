@@ -22,6 +22,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     private readonly ReliableDataOutputChannel _dataOutputChannel;
 
     private bool _isDisposed;
+    private bool _openSessionOnNextClientPacket;
 
     /// <summary>
     /// Gets the session parameters in use by the session.
@@ -104,6 +105,19 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             TerminateSession(DisconnectReason.Application, true);
     }
 
+    /// <inheritdoc />
+    public void EnqueueData(ReadOnlySpan<byte> data)
+    {
+        if (State is not SessionState.Running)
+            throw new InvalidOperationException("Data can only be sent while the session is running");
+
+        _dataOutputChannel.EnqueueData(data);
+    }
+
+    /// <inheritdoc />
+    public void TerminateSession()
+        => TerminateSession(DisconnectReason.Application, true);
+
     protected void TerminateSession(DisconnectReason reason, bool notifyRemote)
     {
         _application.OnSessionClosed(reason);
@@ -138,6 +152,9 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             TerminateSession(DisconnectReason.CorruptPacket, true);
             return true;
         }
+
+        if (_openSessionOnNextClientPacket)
+            _application.OnSessionOpened();
 
         Span<byte> packetData = packet.FullSpan[sizeof(SoeOpCode)..];
         bool isSessionless = IsContextlessPacket(opCode);
