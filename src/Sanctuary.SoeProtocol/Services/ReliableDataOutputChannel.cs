@@ -69,7 +69,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// </summary>
     /// <param name="data">The data.</param>
     public void EnqueueData(ReadOnlySpan<byte> data)
-        => EnqueueDataInternal(data, true);
+        => EnqueueDataInternal(data, false);
 
     public void RunTick(CancellationToken ct)
     {
@@ -159,12 +159,13 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _maxDataLength = maxDataLength;
     }
 
-    private void EnqueueDataInternal(ReadOnlySpan<byte> data, bool needsEncryption)
+    private void EnqueueDataInternal(ReadOnlySpan<byte> data, bool isRecursing)
     {
         byte[]? encryptedSpan = null;
-        _packetOutputQueueLock.Wait();
+        if (!isRecursing)
+            _packetOutputQueueLock.Wait();
 
-        if (needsEncryption && _handler.SessionParams.IsEncryptionEnabled)
+        if (!isRecursing && _handler.SessionParams.IsEncryptionEnabled)
             encryptedSpan = Encrypt(data, out data);
 
         int multiLength = DataUtils.GetVariableLengthSize(data.Length) + data.Length;
@@ -186,7 +187,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
             // Now that we've cleared the multi-buffer, can we fit?
             if (_maxDataLength - _multiBufferOffset >= multiLength)
             {
-                EnqueueDataInternal(data, false);
+                EnqueueDataInternal(data, true);
             }
             else
             {
@@ -198,7 +199,9 @@ public sealed class ReliableDataOutputChannel : IDisposable
 
         if (encryptedSpan is not null)
             ArrayPool<byte>.Shared.Return(encryptedSpan);
-        _packetOutputQueueLock.Release();
+
+        if (!isRecursing)
+            _packetOutputQueueLock.Release();
     }
 
     private void StashFragment(ref ReadOnlySpan<byte> data, bool isMaster)
