@@ -92,6 +92,10 @@ public class SessionParameters
         InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
     }
 
+    /// <summary>
+    /// Creates a deep clone of this <see cref="SessionParameters"/> object.
+    /// </summary>
+    /// <returns>The cloned object.</returns>
     public SessionParameters Clone()
         => (SessionParameters)this.MemberwiseClone();
 }

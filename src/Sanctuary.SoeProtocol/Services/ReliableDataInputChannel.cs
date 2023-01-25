@@ -8,8 +8,14 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Sanctuary.SoeProtocol.Services;
 
+/// <summary>
+/// Contains logic to handle reliable data packets and extract the proxied application data.
+/// </summary>
 public sealed class ReliableDataInputChannel : IDisposable
 {
+    /// <summary>
+    /// A delegate that will be called when application data is received.
+    /// </summary>
     public delegate void DataHandler(ReadOnlySpan<byte> data);
 
     private readonly SoeProtocolHandler _handler;

@@ -130,6 +130,9 @@ public sealed unsafe class NativeSpan : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Disposes of the <see cref="NativeSpan"/> upon destruction.
+    /// </summary>
     ~NativeSpan()
         => Dispose();
 }

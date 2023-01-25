@@ -11,6 +11,9 @@ using System.Threading;
 
 namespace Sanctuary.SoeProtocol.Services;
 
+/// <summary>
+/// Contains logic to convert application data into reliable data packets.
+/// </summary>
 public sealed class ReliableDataOutputChannel : IDisposable
 {
     /// <summary>
@@ -41,6 +44,13 @@ public sealed class ReliableDataOutputChannel : IDisposable
     private int _multiBufferItemCount;
     private int _multiBufferFirstItemOffset;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReliableDataOutputChannel"/> class.
+    /// </summary>
+    /// <param name="handler">The parent handler.</param>
+    /// <param name="spanPool">The native span pool to use.</param>
+    /// <param name="cipherState">The initial RC4 cipher state to use.</param>
+    /// <param name="maxDataLength">The maximum length of data that may be sent by the output channel.</param>
     public ReliableDataOutputChannel
     (
         SoeProtocolHandler handler,
@@ -71,6 +81,10 @@ public sealed class ReliableDataOutputChannel : IDisposable
     public void EnqueueData(ReadOnlySpan<byte> data)
         => EnqueueDataInternal(data, false);
 
+    /// <summary>
+    /// Runs a tick of the output channel, which will send queued data.
+    /// </summary>
+    /// <param name="ct">A <see cref="CancellationToken"/> that can be used to stop the operation.</param>
     public void RunTick(CancellationToken ct)
     {
         _packetOutputQueueLock.Wait(ct);
@@ -156,6 +170,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         if (_currentSequence > 0)
             throw new InvalidOperationException("The maximum length may not be changed after data has been enqueued");
 
+        // TODO: We've got to call this from the protocol handler
         _maxDataLength = maxDataLength;
     }
 

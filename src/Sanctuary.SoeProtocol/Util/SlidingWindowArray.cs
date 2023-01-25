@@ -28,6 +28,11 @@ public class SlidingWindowArray<T>
         set => _array[TranslateWindowOffsetToArrayIndex(index)] = value;
     }
 
+    /// <summary>
+    /// Gets an item at the given index.
+    /// </summary>
+    /// <param name="index">The index, relative to the current window.</param>
+    /// <returns>The element at the given index.</returns>
     public T this[long index]
     {
         get => _array[TranslateWindowOffsetToArrayIndex(index)];
@@ -48,6 +53,10 @@ public class SlidingWindowArray<T>
         set => this[0] = value;
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SlidingWindowArray{T}"/> class.
+    /// </summary>
+    /// <param name="windowLength">The length of the underlying array to use.</param>
     public SlidingWindowArray(int windowLength)
         : this(new T[windowLength])
     {

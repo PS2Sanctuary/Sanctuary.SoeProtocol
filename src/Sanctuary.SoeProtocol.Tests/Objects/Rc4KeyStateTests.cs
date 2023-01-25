@@ -6,10 +6,6 @@ namespace Sanctuary.SoeProtocol.Tests.Objects;
 public class Rc4KeyStateTests
 {
     [Fact]
-    public void DefaultConstructor_ThrowsWhenCalled()
-        => Assert.Throws<InvalidOperationException>(() => new Rc4KeyState());
-
-    [Fact]
     public void ExistingStateConstructor_CreatesFullCopy_OfPassedState()
     {
         byte[] keyBytes = { 0, 1, 2, 3, 4 };

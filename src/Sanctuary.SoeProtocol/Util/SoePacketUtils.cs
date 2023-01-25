@@ -140,6 +140,13 @@ public static class SoePacketUtils
             : SoePacketValidationResult.CrcMismatch;
     }
 
+    /// <summary>
+    /// Gets the minimum length that a packet may be, given its OP code.
+    /// </summary>
+    /// <param name="opCode">The OP code.</param>
+    /// <param name="sessionParams">The current session parameters.</param>
+    /// <returns>The minimum length.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">An unknown OP code was provided.</exception>
     public static int GetPacketMinimumLength(SoeOpCode opCode, SessionParameters sessionParams)
         => opCode switch
         {
@@ -159,6 +166,12 @@ public static class SoePacketUtils
             _ => throw new ArgumentOutOfRangeException(nameof(opCode), opCode, "Invalid OP code")
         };
 
+    /// <summary>
+    /// Decompresses a ZLIB-compressed buffer.
+    /// </summary>
+    /// <param name="input"></param>
+    /// <param name="pool"></param>
+    /// <returns></returns>
     public static MemoryStream Decompress(ReadOnlySpan<byte> input, NativeSpanPool pool)
     {
         NativeSpan span = pool.Rent();

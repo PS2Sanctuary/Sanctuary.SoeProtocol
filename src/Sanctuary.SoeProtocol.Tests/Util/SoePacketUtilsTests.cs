@@ -127,6 +127,7 @@ public class SoePacketUtilsTests
             ApplicationProtocol = "TestProtocol",
             IsCompressionEnabled = false,
             CrcSeed = 5,
-            CrcLength = crcLength
+            CrcLength = crcLength,
+            EncryptionKeyState = new Rc4KeyState(new byte[] { 0 })
         };
 }

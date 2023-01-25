@@ -11,6 +11,9 @@ using System.Threading.Tasks;
 
 namespace Sanctuary.SoeProtocol.Managers;
 
+/// <summary>
+/// Represents a full client implementation for an application session.
+/// </summary>
 public sealed class SoeClientManager : IDisposable
 {
     private readonly ILogger<SoeClientManager> _logger;
@@ -21,6 +24,12 @@ public sealed class SoeClientManager : IDisposable
     private SoeProtocolHandler? _protocolHandler;
     private bool _isDisposed;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SoeClientManager"/> class.
+    /// </summary>
+    /// <param name="logger">The logging interface to use.</param>
+    /// <param name="application">The application protocol handler.</param>
+    /// <param name="connectTo">The endpoint to connect to.</param>
     public SoeClientManager
     (
         ILogger<SoeClientManager> logger,
@@ -36,6 +45,11 @@ public sealed class SoeClientManager : IDisposable
         _spanPool = new NativeSpanPool(bufferSize, _application.SessionParams.MaxQueuedRawPackets);
     }
 
+    /// <summary>
+    /// Runs the client. This method will not return until cancelled.
+    /// </summary>
+    /// <param name="ct">A <see cref="CancellationToken"/> that can be used to stop the operation.</param>
+    /// <exception cref="ObjectDisposedException">Thrown if the client has been disposed.</exception>
     public async Task RunAsync(CancellationToken ct)
     {
         if (_isDisposed)
@@ -57,6 +71,7 @@ public sealed class SoeClientManager : IDisposable
 
         Task receiveTask = RunReceiveLoopAsync(networkInterface, ct);
         Task handlerTask = _protocolHandler.RunAsync(ct);
+        // TODO: We have to connect the session handler
 
         try
         {

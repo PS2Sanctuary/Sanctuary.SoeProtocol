@@ -12,6 +12,9 @@ using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
 
 namespace Sanctuary.SoeProtocol;
 
+/// <summary>
+/// Represents a generic handler for the SOE protocol.
+/// </summary>
 public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 {
     private readonly NativeSpanPool _spanPool;
@@ -41,6 +44,14 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// <inheritdoc />
     public DisconnectReason TerminationReason { get; private set; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SoeProtocolHandler"/> class.
+    /// </summary>
+    /// <param name="mode">The mode that the handler should operate in.</param>
+    /// <param name="sessionParameters">The session parameters to conform to.</param>
+    /// <param name="spanPool">The native span pool to use.</param>
+    /// <param name="networkWriter">The network writer to send packets on.</param>
+    /// <param name="application">The proxied application.</param>
     public SoeProtocolHandler
     (
         SessionMode mode,
@@ -131,6 +142,13 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     public void TerminateSession()
         => TerminateSession(DisconnectReason.Application, true);
 
+    /// <summary>
+    /// Terminates the session. This may be called whenever the session needs to close,
+    /// e.g. when the other party has disconnected, or an internal error has occurred.
+    /// </summary>
+    /// <param name="reason">The termination reason.</param>
+    /// <param name="notifyRemote">Whether to notify the remote party.</param>
+    /// <exception cref="InvalidOperationException"></exception>
     protected void TerminateSession(DisconnectReason reason, bool notifyRemote)
     {
         if (State is SessionState.Terminated)

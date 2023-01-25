@@ -9,6 +9,9 @@ namespace Sanctuary.SoeProtocol.Util;
 /// </summary>
 public static class DataUtils
 {
+    /// <summary>
+    /// Gets the byte sequence that indicates a reliable data packet is carrying multi-data.
+    /// </summary>
     public static readonly ReadOnlyMemory<byte> MULTI_DATA_INDICATOR = new byte[] { 0x00, 0x19 };
 
     /// <summary>
