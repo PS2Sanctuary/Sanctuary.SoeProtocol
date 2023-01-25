@@ -142,12 +142,12 @@ public class ReliableDataOutputChannelTests
                 IsCompressionEnabled = false,
                 IsEncryptionEnabled = false,
                 CrcLength = SoeConstants.CrcLength,
-                MaxQueuedReliableDataPackets = FRAGMENT_WINDOW_SIZE
+                MaxQueuedReliableDataPackets = FRAGMENT_WINDOW_SIZE,
+                EncryptionKeyState = keyState
             },
             SpanPool,
             networkInterface,
-            Mock.Of<IApplicationProtocolHandler>(),
-            keyState
+            Mock.Of<IApplicationProtocolHandler>()
         );
 
         return new ReliableDataOutputChannel(handler, SpanPool, keyState, MAX_DATA_LENGTH + sizeof(ushort));

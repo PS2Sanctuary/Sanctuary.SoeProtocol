@@ -9,7 +9,7 @@ namespace Sanctuary.SoeProtocol.Objects;
 /// Contains a state that can be used with the <see cref="Rc4Cipher"/> class.
 /// </summary>
 [SkipLocalsInit]
-public unsafe struct Rc4KeyState : IDisposable
+public sealed unsafe class Rc4KeyState : IDisposable
 {
     /// <summary>
     /// Gets the number of bytes to use for the RC4 key state.

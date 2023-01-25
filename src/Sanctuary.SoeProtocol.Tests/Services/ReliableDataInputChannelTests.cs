@@ -200,12 +200,12 @@ public class ReliableDataInputChannelTests
             new SessionParameters
             {
                 ApplicationProtocol = "TestProtocol",
-                RemoteUdpLength = 512
+                RemoteUdpLength = 512,
+                EncryptionKeyState = keyState
             },
             SpanPool,
             networkInterface,
-            Mock.Of<IApplicationProtocolHandler>(),
-            keyState
+            Mock.Of<IApplicationProtocolHandler>()
         );
 
         return new ReliableDataInputChannel

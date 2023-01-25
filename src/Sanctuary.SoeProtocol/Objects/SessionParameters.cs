@@ -75,6 +75,11 @@ public class SessionParameters
     public TimeSpan InactivityTimeout { get; init; }
 
     /// <summary>
+    /// Gets the encryption key state to use with this session.
+    /// </summary>
+    public required Rc4KeyState EncryptionKeyState { get; init; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="SessionParameters"/> class.
     /// </summary>
     public SessionParameters()

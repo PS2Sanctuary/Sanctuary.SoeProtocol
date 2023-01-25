@@ -47,8 +47,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         SessionParameters sessionParameters,
         NativeSpanPool spanPool,
         INetworkWriter networkWriter,
-        IApplicationProtocolHandler application,
-        Rc4KeyState cipherState
+        IApplicationProtocolHandler application
     )
     {
         Mode = mode;
@@ -59,12 +58,25 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
         _contextualSendBuffer = GC.AllocateArray<byte>((int)sessionParameters.UdpLength, true);
-        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, cipherState.Copy(), _application.HandleAppData);
+
+        _dataInputChannel = new ReliableDataInputChannel
+        (
+            this,
+            _spanPool,
+            sessionParameters.EncryptionKeyState.Copy(),
+            _application.HandleAppData
+        );
 
         int maxOutputDataLength = (int)sessionParameters.UdpLength - sizeof(SoeOpCode)
             - (sessionParameters.IsCompressionEnabled ? 1 : 0)
             - sessionParameters.CrcLength;
-        _dataOutputChannel = new ReliableDataOutputChannel(this, _spanPool, cipherState, maxOutputDataLength);
+        _dataOutputChannel = new ReliableDataOutputChannel
+        (
+            this,
+            _spanPool,
+            sessionParameters.EncryptionKeyState,
+            maxOutputDataLength
+        );
 
         State = SessionState.Negotiating;
     }
@@ -103,7 +115,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         }
 
         if (State is SessionState.Running)
-            TerminateSession(DisconnectReason.Application, true);
+            TerminateSession();
     }
 
     /// <inheritdoc />
@@ -121,7 +133,9 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
     protected void TerminateSession(DisconnectReason reason, bool notifyRemote)
     {
-        _application.OnSessionClosed(reason);
+        if (State is SessionState.Terminated)
+            return;
+
         TerminationReason = reason;
 
         if (notifyRemote)
