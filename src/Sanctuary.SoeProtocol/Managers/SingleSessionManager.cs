@@ -62,7 +62,11 @@ public sealed class SingleSessionManager : IDisposable
         await Task.Yield();
 
         using CancellationTokenSource internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        using UdpSocketNetworkInterface networkInterface = new((int)_application.SessionParams.UdpLength);
+        using UdpSocketNetworkInterface networkInterface = new
+        (
+            (int)_application.SessionParams.UdpLength,
+            _mode == SessionMode.Server
+        );
 
         switch (_mode)
         {
@@ -117,6 +121,8 @@ public sealed class SingleSessionManager : IDisposable
 
         receiveTask.Dispose();
         handlerTask.Dispose();
+
+        _logger.LogDebug("{Mode} Session closed: {ID}", _mode, _protocolHandler?.SessionId);
     }
 
     private async Task RunReceiveLoopAsync(INetworkReader networkReader, CancellationToken ct)
