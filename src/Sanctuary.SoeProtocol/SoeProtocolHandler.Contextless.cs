@@ -31,7 +31,8 @@ public partial class SoeProtocolHandler
         );
 
         int packetSize = request.GetSize();
-        if (packetSize > SessionParams.RemoteUdpLength)
+        // Unfortunately we can only guarantee our UDP length here, and not the remote's
+        if (packetSize > SessionParams.UdpLength)
             throw new InvalidOperationException("The ApplicationProtocol string is too long");
 
         byte[] buffer = new byte[packetSize];
