@@ -68,6 +68,9 @@ public sealed unsafe class Rc4KeyState : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        if (_state is null)
+            return;
+
         NativeMemory.Free(_state);
         _state = null;
     }

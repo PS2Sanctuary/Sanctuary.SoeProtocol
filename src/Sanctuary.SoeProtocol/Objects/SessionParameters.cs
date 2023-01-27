@@ -5,8 +5,10 @@ namespace Sanctuary.SoeProtocol.Objects;
 /// <summary>
 /// Contains parameters used to control a session.
 /// </summary>
-public class SessionParameters
+public class SessionParameters : IDisposable
 {
+    private bool _isDisposed;
+
     /// <summary>
     /// Gets the application protocol being proxied by this session.
     /// </summary>
@@ -98,4 +100,26 @@ public class SessionParameters
     /// <returns>The cloned object.</returns>
     public SessionParameters Clone()
         => (SessionParameters)this.MemberwiseClone();
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Disposes of managed and unmanaged resources.
+    /// </summary>
+    /// <param name="disposeManaged">Whether to dispose of managed resources.</param>
+    protected virtual void Dispose(bool disposeManaged)
+    {
+        if (_isDisposed)
+            return;
+
+        if (disposeManaged)
+            EncryptionKeyState.Dispose();
+
+        _isDisposed = true;
+    }
 }

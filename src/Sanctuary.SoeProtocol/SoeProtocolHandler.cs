@@ -48,7 +48,9 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// Initializes a new instance of the <see cref="SoeProtocolHandler"/> class.
     /// </summary>
     /// <param name="mode">The mode that the handler should operate in.</param>
-    /// <param name="sessionParameters">The session parameters to conform to.</param>
+    /// <param name="sessionParameters">
+    /// The session parameters to conform to. This object will be disposed with the handler.
+    /// </param>
     /// <param name="spanPool">The native span pool to use.</param>
     /// <param name="networkWriter">The network writer to send packets on.</param>
     /// <param name="application">The proxied application.</param>
@@ -220,6 +222,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         if (disposeManaged)
         {
             _dataInputChannel.Dispose();
+            SessionParams.Dispose();
 
             while (_packetQueue.TryDequeue(out NativeSpan? packet))
                 _spanPool.Return(packet);

@@ -49,7 +49,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// </summary>
     /// <param name="handler">The parent handler.</param>
     /// <param name="spanPool">The native span pool to use.</param>
-    /// <param name="cipherState">The initial RC4 cipher state to use.</param>
+    /// <param name="cipherState">The initial RC4 cipher state to use. This will be disposed with the channel.</param>
     /// <param name="maxDataLength">The maximum length of data that may be sent by the output channel.</param>
     public ReliableDataOutputChannel
     (
@@ -309,6 +309,8 @@ public sealed class ReliableDataOutputChannel : IDisposable
         foreach (StashedOutputPacket element in _dispatchStash)
             _spanPool.Return(element.DataSpan);
         _dispatchStash.Clear();
+
+        _cipherState.Dispose();
     }
 
     private readonly record struct StashedOutputPacket(bool IsFragment, NativeSpan DataSpan);

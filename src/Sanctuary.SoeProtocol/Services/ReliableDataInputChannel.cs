@@ -38,7 +38,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// </summary>
     /// <param name="handler">The protocol handler that owns this channel.</param>
     /// <param name="spanPool">A pool that may be used to stash out-of-order fragments.</param>
-    /// <param name="cipherState">The initial RC4 state to use for decryption.</param>
+    /// <param name="cipherState">The initial RC4 state to use. This will be disposed with the channel.</param>
     /// <param name="dataHandler">The handler for processed data.</param>
     public ReliableDataInputChannel
     (
