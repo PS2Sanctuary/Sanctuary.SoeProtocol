@@ -29,8 +29,7 @@ public partial class SoeProtocolHandler
             }
             case SoeOpCode.RemapConnection:
             {
-                // TODO: Implement. Not that this can be handled here, anyway
-                break;
+                throw new InvalidOperationException("Remap requests must be handled by the connection manager");
             }
             default:
                 throw new InvalidOperationException($"{nameof(HandleContextlessPacket)} cannot handle {opCode} packets");
