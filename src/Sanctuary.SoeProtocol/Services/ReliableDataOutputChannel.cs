@@ -72,6 +72,8 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _windowStartSequence = 0;
         _currentSequence = 0;
         _totalSequence = 0;
+        _lastAcknowledged = -1;
+        _newAcknowledgement = -1;
     }
 
     /// <summary>
