@@ -152,14 +152,15 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// <param name="outOfOrder">The out-of-order packet.</param>
     public void NotifyOfOutOfOrder(OutOfOrder outOfOrder)
     {
-        // TODO: We don't know how to handle this yet
+        // TODO: We should immediately resend the mis-ordered packet
     }
 
     /// <summary>
     /// Sets the maximum length of data that may be output in a single packet.
     /// </summary>
     /// <remarks>
-    /// This method should not be used after any data has been enqueued on the channel.
+    /// This method should not be used after any data has been enqueued on the channel, to ensure that previously
+    /// queued packets do not exceed the new limit.
     /// </remarks>
     /// <param name="maxDataLength">The maximum data length.</param>
     /// <exception cref="InvalidOperationException">
@@ -170,7 +171,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
         if (_currentSequence > 0)
             throw new InvalidOperationException("The maximum length may not be changed after data has been enqueued");
 
-        // TODO: We've got to call this from the protocol handler
         _maxDataLength = maxDataLength;
     }
 

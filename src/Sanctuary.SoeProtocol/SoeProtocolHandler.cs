@@ -80,15 +80,12 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             _application.HandleAppData
         );
 
-        int maxOutputDataLength = (int)sessionParameters.UdpLength - sizeof(SoeOpCode)
-            - (sessionParameters.IsCompressionEnabled ? 1 : 0)
-            - sessionParameters.CrcLength;
         _dataOutputChannel = new ReliableDataOutputChannel
         (
             this,
             _spanPool,
             sessionParameters.EncryptionKeyState,
-            maxOutputDataLength
+            CalculateMaxDataLength()
         );
 
         State = SessionState.Negotiating;
@@ -202,6 +199,11 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         _spanPool.Return(packet);
         return true;
     }
+
+    private int CalculateMaxDataLength()
+        => (int)SessionParams.UdpLength - sizeof(SoeOpCode)
+            - (SessionParams.IsCompressionEnabled ? 1 : 0)
+            - SessionParams.CrcLength;
 
     /// <inheritdoc />
     public void Dispose()

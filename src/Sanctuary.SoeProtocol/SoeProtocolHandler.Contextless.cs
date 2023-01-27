@@ -97,6 +97,7 @@ public partial class SoeProtocolHandler
 
         SessionParams.CrcLength = SoeConstants.CrcLength;
         SessionParams.CrcSeed = (uint)Random.Shared.NextInt64();
+        _dataOutputChannel.SetMaxDataLength(CalculateMaxDataLength());
 
         SessionResponse response = new
         (
@@ -131,6 +132,7 @@ public partial class SoeProtocolHandler
         SessionParams.CrcSeed = response.CrcSeed;
         SessionParams.IsCompressionEnabled = response.IsCompressionEnabled;
         SessionId = response.SessionId;
+        _dataOutputChannel.SetMaxDataLength(CalculateMaxDataLength());
 
         if (State is not SessionState.Negotiating)
         {
