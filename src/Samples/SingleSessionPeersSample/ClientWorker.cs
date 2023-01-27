@@ -1,0 +1,51 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Sanctuary.SoeProtocol.Managers;
+using Sanctuary.SoeProtocol.Objects;
+using System;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace SingleSessionPeersSample;
+
+/// <summary>
+/// A background worker for the client session manager.
+/// </summary>
+public class ClientWorker : BackgroundService
+{
+    private readonly ILogger<ClientWorker> _logger;
+    private readonly IServiceProvider _services;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ClientWorker"/> class.
+    /// </summary>
+    /// <param name="logger">The logging interface to use.</param>
+    /// <param name="services">The service provider.</param>
+    public ClientWorker
+    (
+        ILogger<ClientWorker> logger,
+        IServiceProvider services
+    )
+    {
+        _logger = logger;
+        _services = services;
+    }
+
+    /// <inheritdoc />
+    protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        SingleSessionManager manager = new
+        (
+            _services.GetRequiredService<ILogger<SingleSessionManager>>(),
+            _services.GetRequiredService<PingApplication>(),
+            new IPEndPoint(IPAddress.Loopback, 12345),
+            SessionMode.Client
+        );
+
+        // Give the server manager some time to spool up
+        await Task.Delay(500, ct);
+        await manager.RunAsync(ct);
+    }
+}
