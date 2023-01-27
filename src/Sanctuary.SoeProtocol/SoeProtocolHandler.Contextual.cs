@@ -73,10 +73,14 @@ public partial class SoeProtocolHandler
                 int offset = 0;
                 while (offset < packetData.Length)
                 {
-                    // TODO: We need to actually perform some length validation here (min/max)
                     int subPacketLength = (int)MultiPacketUtils.ReadVariableLength(packetData, ref offset);
-                    SoeOpCode subPacketOpCode = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packetData[offset..]);
+                    if (subPacketLength < 1 || subPacketLength > packetData.Length - offset)
+                    {
+                        TerminateSession(DisconnectReason.CorruptPacket, true);
+                        return;
+                    }
 
+                    SoeOpCode subPacketOpCode = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packetData[offset..]);
                     HandleContextualPacketInternal
                     (
                         subPacketOpCode,
