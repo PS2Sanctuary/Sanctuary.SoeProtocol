@@ -193,26 +193,28 @@ struct Acknowledge
 }
 ```
 
-### FatalError (0x1D)
+### UnknownSender (0x1D)
 
-FatalError packets are sent by a party when an unrecoverable error occurs, requiring them to terminate
-the current session. They carry no data.
+UnknownSender packets are used to indicate that an SOE protocol packet has been received from a remote
+end point for which the receiver does not currently have a running session. The remote party, upon
+receiving this packet, may either request a remap, start a new session, or terminate.
 
 ```csharp
-struct FatalError
+struct UnknownSender
 {
 }
 ```
 
-### FatalErrorResponse (0x1E)
+### RemapConnection (0x1E)
 
-FatalErrorResponse packets are presumably sent upon receiving a `FatalError` packet, although the author
-has never observed this in practice.
+RemapConnection packets are used to request that a session which the sender believes should currently exist,
+be remapped to the sender's new port (and perhaps IP address, although this is unsafe). This may be required,
+for example, in cases where the sender (usually a client) is behind a NAT service, and their external port is changed.
 
 ```csharp
-struct FatalErrorResponse
+struct RemapConnection
 {
-    uint SessionId; // The ID of the session that is being terminated in response to the fatal error.
-    uint UnknownValue1; // Possibly a status code.
+    uint SessionId; // The ID of the session to remap
+    uint CrcSeed; // The CRC seed of the session to remap.
 }
 ```

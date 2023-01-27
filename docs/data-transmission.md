@@ -32,9 +32,10 @@ If multiple small data buffers are present, they may be bundled together, as lon
 bundle will not exceed the maximum amount of data that can be stored in a single `ReliableData` packet.
 
 To indicate that a bundle has been formed, it must be prefixed with the two bytes `0x00, 0x19`. Then, in the
-same way as in a `MultiPacket`, data buffers are placed back-to-back and prefixed by their lengths, encoded
-using variable-size integers. However, the length encoding uses a slightly different algorithm, as less assumptions
-can be made. See [Appendix C](./appendix.md#c-reading-and-writing-data-bundle-variable-size-integers) for more info.
+same way as in a [MultiPacket](./packet-reference.md#multipacket-0x03), data buffers are placed back-to-back
+and prefixed by their lengths, encoded using variable-size integers. However, the length encoding uses a slightly
+different algorithm, as less assumptions can be made. See
+[Appendix C](./appendix.md#c-reading-and-writing-data-bundle-variable-size-integers) for more info.
 
 ## Sending Data
 
@@ -44,8 +45,9 @@ within a single `ReliableData` packet, it can be sent directly. Else, it will ha
 be calculated as such:
 
 ```csharp
-// Note: we do not have to factor in being a sub-packet (of a MultiPacket) as data which would have fit, if it
-// were to be a sub-packet and hence drop the requisite fields, will be too long for a MultiPacket anyway.
+// Note: we do not have to factor in being a sub-packet (of a MultiPacket) as data which *would* have fit
+// into a single ReliableData, if it were to be a sub-packet and hence drop the requisite fields, will be
+// too long for a MultiPacket anyway.
 
 int length = sizeof(SoeOpCode) // 2 bytes
     + (isSessionCompressionEnabled ? 1 : 0) // Compression flag, present if compression is enabled

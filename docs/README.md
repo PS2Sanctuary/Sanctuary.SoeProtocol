@@ -1,7 +1,7 @@
 # About the SOE Protocol
 
 The SOE protocol is a UDP transport layer for the networking traffic of many games developed by
-Sony Online Entertainment, such as Free Realms, H1Z1, Landmark and PlanetSide 2.
+Sony Online Entertainment, newer examples of which include Free Realms, H1Z1, Landmark and PlanetSide 2.
 
 The protocol can be thought of, in essence, as a stripped-back version of TCP. It offers basic
 sessions, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
