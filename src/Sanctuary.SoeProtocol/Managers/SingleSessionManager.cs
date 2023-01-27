@@ -12,34 +12,38 @@ using System.Threading.Tasks;
 namespace Sanctuary.SoeProtocol.Managers;
 
 /// <summary>
-/// Represents a full client implementation for an application session.
+/// A manager for a single-remote SOE protocol session.
 /// </summary>
-public sealed class SoeClientManager : IDisposable
+public sealed class SingleSessionManager : IDisposable
 {
-    private readonly ILogger<SoeClientManager> _logger;
+    private readonly ILogger<SingleSessionManager> _logger;
     private readonly IApplicationProtocolHandler _application;
     private readonly IPEndPoint _remoteEndPoint;
     private readonly NativeSpanPool _spanPool;
+    private readonly SessionMode _mode;
 
     private SoeProtocolHandler? _protocolHandler;
     private bool _isDisposed;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SoeClientManager"/> class.
+    /// Initializes a new instance of the <see cref="SingleSessionManager"/> class.
     /// </summary>
     /// <param name="logger">The logging interface to use.</param>
     /// <param name="application">The application protocol handler.</param>
     /// <param name="connectTo">The endpoint to connect to.</param>
-    public SoeClientManager
+    /// <param name="mode">The operation mode of the </param>
+    public SingleSessionManager
     (
-        ILogger<SoeClientManager> logger,
+        ILogger<SingleSessionManager> logger,
         IApplicationProtocolHandler application,
-        IPEndPoint connectTo
+        IPEndPoint connectTo,
+        SessionMode mode
     )
     {
         _logger = logger;
         _application = application;
         _remoteEndPoint = connectTo;
+        _mode = mode;
 
         int bufferSize = (int)Math.Max(_application.SessionParams.UdpLength, _application.SessionParams.RemoteUdpLength);
         _spanPool = new NativeSpanPool(bufferSize, _application.SessionParams.MaxQueuedRawPackets);
@@ -53,38 +57,63 @@ public sealed class SoeClientManager : IDisposable
     public async Task RunAsync(CancellationToken ct)
     {
         if (_isDisposed)
-            throw new ObjectDisposedException(nameof(SoeClientManager));
+            throw new ObjectDisposedException(nameof(SingleSessionManager));
 
         await Task.Yield();
 
+        using CancellationTokenSource internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         using UdpSocketNetworkInterface networkInterface = new((int)_application.SessionParams.UdpLength);
-        networkInterface.Connect(_remoteEndPoint);
+
+        switch (_mode)
+        {
+            case SessionMode.Client:
+                networkInterface.Connect(_remoteEndPoint);
+                break;
+            case SessionMode.Server:
+                networkInterface.Bind(_remoteEndPoint);
+                break;
+            default:
+                throw new InvalidOperationException("Unknown mode");
+        }
 
         _protocolHandler = new SoeProtocolHandler
         (
-            SessionMode.Client,
+            _mode,
             _application.SessionParams,
             _spanPool,
             networkInterface,
             _application
         );
 
-        Task receiveTask = RunReceiveLoopAsync(networkInterface, ct);
-        Task handlerTask = _protocolHandler.RunAsync(ct);
+        Task receiveTask = RunReceiveLoopAsync(networkInterface, internalCts.Token);
+        Task handlerTask = _protocolHandler.RunAsync(internalCts.Token);
 
         try
         {
-            _protocolHandler.SendSessionRequest();
+            if (_mode is SessionMode.Client)
+                _protocolHandler.SendSessionRequest();
             await Task.WhenAny(receiveTask, handlerTask);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SoeClientManager run failure");
+            _logger.LogError(ex, $"{nameof(SingleSessionManager)} run failure");
         }
 
-        // Just in case we had an error in the receive loop
-        if (_protocolHandler.State is not SessionState.Terminated)
-            _protocolHandler.TerminateSession();
+        internalCts.Cancel();
+
+        try
+        {
+            await Task.WhenAll(receiveTask, handlerTask);
+        }
+        catch (AggregateException aex)
+        {
+            foreach (Exception ex in aex.InnerExceptions)
+                _logger.LogError(ex, $"{nameof(SingleSessionManager)} run failure");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"{nameof(SingleSessionManager)} run failure");
+        }
 
         receiveTask.Dispose();
         handlerTask.Dispose();
@@ -124,9 +153,6 @@ public sealed class SoeClientManager : IDisposable
             return;
 
         _protocolHandler?.Dispose();
-
-        if (_application is IDisposable disposable)
-            disposable.Dispose();
 
         _isDisposed = true;
     }
