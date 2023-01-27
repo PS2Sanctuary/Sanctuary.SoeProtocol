@@ -89,6 +89,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         );
 
         State = SessionState.Negotiating;
+        _application.Initialise(this);
     }
 
     /// <summary>
@@ -116,12 +117,19 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         await Task.Yield();
         using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(10));
 
-        while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
+        try
         {
-            SendHeartbeatIfRequired();
+            while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
+            {
+                SendHeartbeatIfRequired();
 
-            if (!ProcessOneFromPacketQueue())
-                await timer.WaitForNextTickAsync(ct);
+                if (!ProcessOneFromPacketQueue())
+                    await timer.WaitForNextTickAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // This is fine
         }
 
         if (State is SessionState.Running)
@@ -155,16 +163,8 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
         TerminationReason = reason;
 
-        if (notifyRemote)
+        if (notifyRemote && State is SessionState.Running)
         {
-            if (State is not SessionState.Running)
-            {
-                throw new InvalidOperationException
-                (
-                    "Can only notify the remote of a termination while the session is running"
-                );
-            }
-
             Disconnect disconnect = new(SessionId, reason);
             Span<byte> buffer = stackalloc byte[Disconnect.Size];
             disconnect.Serialize(buffer);
@@ -179,7 +179,8 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         if (!_packetQueue.TryDequeue(out NativeSpan? packet))
             return false;
 
-        if (ValidatePacket(packet.FullSpan, SessionParams, out SoeOpCode opCode) is not SoePacketValidationResult.Valid)
+        SoePacketValidationResult validationResult = ValidatePacket(packet.UsedSpan, SessionParams, out SoeOpCode opCode);
+        if (validationResult is not SoePacketValidationResult.Valid)
         {
             TerminateSession(DisconnectReason.CorruptPacket, true);
             return true;
@@ -188,7 +189,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         if (_openSessionOnNextClientPacket)
             _application.OnSessionOpened();
 
-        Span<byte> packetData = packet.FullSpan[sizeof(SoeOpCode)..];
+        Span<byte> packetData = packet.UsedSpan[sizeof(SoeOpCode)..];
         bool isSessionless = IsContextlessPacket(opCode);
 
         if (isSessionless)
