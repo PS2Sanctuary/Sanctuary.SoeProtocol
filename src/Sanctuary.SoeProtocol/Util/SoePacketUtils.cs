@@ -98,7 +98,7 @@ public static class SoePacketUtils
         if (!IsContextlessPacket(opCode) && !IsContextualPacket(opCode))
             return SoePacketValidationResult.InvalidOpCode;
 
-        if (GetPacketMinimumLength(opCode, sessionParams) < packetData.Length)
+        if (GetPacketMinimumLength(opCode, sessionParams) > packetData.Length)
             return SoePacketValidationResult.TooShort;
 
         if (IsContextlessPacket(opCode) || sessionParams.CrcLength is 0)
