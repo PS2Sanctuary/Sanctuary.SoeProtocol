@@ -71,10 +71,10 @@ public sealed class SoeClientManager : IDisposable
 
         Task receiveTask = RunReceiveLoopAsync(networkInterface, ct);
         Task handlerTask = _protocolHandler.RunAsync(ct);
-        // TODO: We have to connect the session handler
 
         try
         {
+            _protocolHandler.SendSessionRequest();
             await Task.WhenAny(receiveTask, handlerTask);
         }
         catch (Exception ex)

@@ -6,6 +6,39 @@ namespace Sanctuary.SoeProtocol;
 
 public partial class SoeProtocolHandler
 {
+    /// <summary>
+    /// Sends a session request to the remote. The underlying network writer must be connected,
+    /// and the handler must be in client mode, and ready for negotiation.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the handler is not ready, or the <see cref="SessionParameters.ApplicationProtocol"/> is too long.
+    /// </exception>
+    public void SendSessionRequest()
+    {
+        if (State is not SessionState.Negotiating)
+            throw new InvalidOperationException("Can only send a session request while in the Negotiating state");
+
+        if (Mode is not SessionMode.Client)
+            throw new InvalidOperationException("Can only send a session request while in the Client mode");
+
+        uint id = (uint)Random.Shared.NextInt64();
+        SessionRequest request = new
+        (
+            SoeConstants.SoeProtocolVersion,
+            id,
+            SessionParams.UdpLength,
+            SessionParams.ApplicationProtocol
+        );
+
+        int packetSize = request.GetSize();
+        if (packetSize > SessionParams.RemoteUdpLength)
+            throw new InvalidOperationException("The ApplicationProtocol string is too long");
+
+        byte[] buffer = new byte[packetSize];
+        request.Serialize(buffer);
+        _networkWriter.Send(buffer);
+    }
+
     private void HandleContextlessPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
     {
         // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
