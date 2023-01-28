@@ -16,7 +16,6 @@ public class PingApplication : IApplicationProtocolHandler
     private readonly ILogger<PingApplication> _logger;
 
     private ISessionHandler? _sessionHandler;
-    private int pingCount;
 
     /// <inheritdoc />
     public SessionParameters SessionParams { get; }
@@ -54,19 +53,15 @@ public class PingApplication : IApplicationProtocolHandler
         string message = Encoding.UTF8.GetString(data);
         _logger.LogInformation("{Mode} Received {Message}", GetModePrefix(), message);
 
-        if (pingCount++ is 10)
-        {
-            _sessionHandler!.TerminateSession();
+        if (message is not "Ping!")
             return;
-        }
+
+        _sessionHandler!.EnqueueData("Pong!"u8);
 
         Task.Run(() =>
         {
             Task.Delay(1000).Wait();
-            _sessionHandler!.EnqueueData
-            (
-                message is "Ping!" ? "Pong!"u8 : "Ping!"u8
-            );
+            _sessionHandler!.TerminateSession();
         });
     }
 

@@ -176,6 +176,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         _application.OnSessionClosed(reason);
     }
 
+    // ReSharper disable once UnusedMethodReturnValue.Local
     private bool ProcessOneFromPacketQueue()
     {
         if (!_packetQueue.TryDequeue(out NativeSpan? packet))

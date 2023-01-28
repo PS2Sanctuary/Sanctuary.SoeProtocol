@@ -15,21 +15,14 @@ namespace SingleSessionPeersSample;
 /// </summary>
 public class ClientWorker : BackgroundService
 {
-    private readonly ILogger<ClientWorker> _logger;
     private readonly IServiceProvider _services;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ClientWorker"/> class.
     /// </summary>
-    /// <param name="logger">The logging interface to use.</param>
     /// <param name="services">The service provider.</param>
-    public ClientWorker
-    (
-        ILogger<ClientWorker> logger,
-        IServiceProvider services
-    )
+    public ClientWorker(IServiceProvider services)
     {
-        _logger = logger;
         _services = services;
     }
 
