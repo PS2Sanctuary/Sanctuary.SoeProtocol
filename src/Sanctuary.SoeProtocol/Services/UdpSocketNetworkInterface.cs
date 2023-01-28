@@ -114,10 +114,7 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         ).ConfigureAwait(false);
 
         if (_connectOnReceive && !_socket.Connected)
-        {
-            await _socket.ConnectAsync(result.RemoteEndPoint, ct);
-            _remoteEndPoint = result.RemoteEndPoint;
-        }
+            Connect(result.RemoteEndPoint);
 
         return result.ReceivedBytes;
     }

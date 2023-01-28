@@ -13,7 +13,7 @@ namespace Sanctuary.SoeProtocol;
 public partial class SoeProtocolHandler
 {
     private readonly byte[] _contextualSendBuffer;
-    private long _lastReceivedContextualPacketTick;
+    private long _lastReceivedPacketTick;
 
     /// <summary>
     /// Sends a contextual packet.
@@ -42,20 +42,18 @@ public partial class SoeProtocolHandler
 
     private void HandleContextualPacket(SoeOpCode opCode, Span<byte> packetData)
     {
-        _lastReceivedContextualPacketTick = Stopwatch.GetTimestamp();
         MemoryStream? decompressedData = null;
 
         if (SessionParams.IsCompressionEnabled)
         {
-            if (packetData[0] > 0)
+            bool isCompressed = packetData[0] > 0;
+            packetData = packetData[1..];
+
+            if (isCompressed)
             {
                 decompressedData = Decompress(packetData, _spanPool);
                 packetData = decompressedData.GetBuffer()
                     .AsSpan(0, (int)decompressedData.Length);
-            }
-            else
-            {
-                packetData = packetData[1..];
             }
         }
 
@@ -132,7 +130,7 @@ public partial class SoeProtocolHandler
         bool maySendHeartbeat = Mode is SessionMode.Client
             && State is SessionState.Running
             && SessionParams.HeartbeatAfter != TimeSpan.Zero
-            && Stopwatch.GetElapsedTime(_lastReceivedContextualPacketTick) > SessionParams.HeartbeatAfter;
+            && Stopwatch.GetElapsedTime(_lastReceivedPacketTick) > SessionParams.HeartbeatAfter;
 
         if (maySendHeartbeat)
             SendContextualPacket(SoeOpCode.Heartbeat, Array.Empty<byte>());

@@ -6,6 +6,7 @@ using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
@@ -122,9 +123,9 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
             {
                 SendHeartbeatIfRequired();
-
-                if (!ProcessOneFromPacketQueue())
-                    await timer.WaitForNextTickAsync(ct);
+                ProcessOneFromPacketQueue();
+                _dataOutputChannel.RunTick(ct);
+                await timer.WaitForNextTickAsync(ct);
             }
         }
         catch (OperationCanceledException)
@@ -172,6 +173,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         }
 
         State = SessionState.Terminated;
+        _application.OnSessionClosed(reason);
     }
 
     private bool ProcessOneFromPacketQueue()
@@ -187,15 +189,19 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         }
 
         if (_openSessionOnNextClientPacket)
+        {
             _application.OnSessionOpened();
+            _openSessionOnNextClientPacket = false;
+        }
 
+        _lastReceivedPacketTick = Stopwatch.GetTimestamp();
         Span<byte> packetData = packet.UsedSpan[sizeof(SoeOpCode)..];
         bool isSessionless = IsContextlessPacket(opCode);
 
         if (isSessionless)
             HandleContextlessPacket(opCode, packetData);
         else
-            HandleContextualPacket(opCode, packetData);
+            HandleContextualPacket(opCode, packetData[..^SessionParams.CrcLength]);
 
         _spanPool.Return(packet);
         return true;
