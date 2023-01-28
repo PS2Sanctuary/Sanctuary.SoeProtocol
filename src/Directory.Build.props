@@ -9,14 +9,27 @@
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
+  <!-- Common packages -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
+  </ItemGroup>
+
   <!-- NuGet-related properties -->
   <PropertyGroup>
     <Authors>Carl Stephens</Authors>
-    <PackageTags>soe-protocol planetside2</PackageTags>
+    <PackageLicenseExpression>ISC</PackageLicenseExpression>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)nuget</PackageOutputPath>
     <PackageProjectUrl>https://github.com/PS2Sanctuary/Sanctuary.SoeProtocol</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>soe-protocol planetside2</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/PS2Sanctuary/Sanctuary.SoeProtocol</RepositoryUrl>
-    <PackageOutputPath>$(MSBuildThisFileDirectory)nuget</PackageOutputPath>
+  </PropertyGroup>
+
+  <!-- NuGet-related release properties -->
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <!-- Source-link setup -->
@@ -28,10 +41,11 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
-  <!-- NuGet-related release properties -->
-  <PropertyGroup Condition="'$(Configuration)'=='Release'">
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-  </PropertyGroup>
+  <!-- Pack inclusions -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md">
+      <Pack>True</Pack>
+    </None>
+  </ItemGroup>
   
 </Project>
