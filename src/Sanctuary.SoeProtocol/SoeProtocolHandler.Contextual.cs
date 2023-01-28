@@ -13,7 +13,6 @@ namespace Sanctuary.SoeProtocol;
 public partial class SoeProtocolHandler
 {
     private readonly byte[] _contextualSendBuffer;
-    private long _lastReceivedPacketTick;
 
     /// <summary>
     /// Sends a contextual packet.

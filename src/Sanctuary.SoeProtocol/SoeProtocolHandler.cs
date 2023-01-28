@@ -27,6 +27,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
     private bool _isDisposed;
     private bool _openSessionOnNextClientPacket;
+    private long _lastReceivedPacketTick;
 
     /// <summary>
     /// Gets the session parameters in use by the session.
@@ -125,6 +126,13 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
                 SendHeartbeatIfRequired();
                 ProcessOneFromPacketQueue();
                 _dataOutputChannel.RunTick(ct);
+
+                if (Stopwatch.GetElapsedTime(_lastReceivedPacketTick) > SessionParams.InactivityTimeout)
+                {
+                    TerminateSession(DisconnectReason.Timeout, false);
+                    break;
+                }
+
                 await timer.WaitForNextTickAsync(ct);
             }
         }
