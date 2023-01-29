@@ -21,6 +21,9 @@ public partial class SoeProtocolHandler
     /// <param name="packetData">The packet data, not including the OP code.</param>
     internal void SendContextualPacket(SoeOpCode opCode, ReadOnlySpan<byte> packetData)
     {
+        if (packetData.Length is 0)
+            throw new InvalidOperationException("Cannot send a zero-length packet");
+
         int extraBytes = sizeof(SoeOpCode)
             + (SessionParams.IsCompressionEnabled ? 1 : 0)
             + SessionParams.CrcLength;
