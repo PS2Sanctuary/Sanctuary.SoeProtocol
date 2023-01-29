@@ -12,13 +12,13 @@ namespace Sanctuary.SoeProtocol.Objects;
 public sealed unsafe class NativeSpan : IDisposable
 {
     private readonly int _len;
-    private readonly byte* _ptr;
+    private byte* _ptr;
 
     /// <summary>
     /// Gets a value indicating whether or not this <see cref="NativeSpan"/>
     /// instance has been disposed.
     /// </summary>
-    public bool IsDisposed { get; private set; }
+    public bool IsDisposed => _ptr is null;
 
     /// <summary>
     /// Gets or sets the index into the <see cref="FullSpan"/> at which data begins.
@@ -78,7 +78,6 @@ public sealed unsafe class NativeSpan : IDisposable
 
         _ptr = pointer;
         _len = length;
-        IsDisposed = false;
         StartOffset = 0;
         UsedLength = 0;
     }
@@ -102,31 +101,38 @@ public sealed unsafe class NativeSpan : IDisposable
     }
 
     /// <summary>
-    /// Creates an <see cref="UnmanagedMemoryStream"/> over the underlying
-    /// native memory.
+    /// Creates an <see cref="UnmanagedMemoryStream"/> over the
+    /// <see cref="UsedSpan"/>
     /// </summary>
     /// <returns>An <see cref="UnmanagedMemoryStream"/> instance.</returns>
     public UnmanagedMemoryStream ToStream()
     {
         DisposedCheck();
-        return new UnmanagedMemoryStream(_ptr, UsedLength, _len, FileAccess.ReadWrite);
+
+        return new UnmanagedMemoryStream
+        (
+            _ptr + StartOffset,
+            UsedLength,
+            _len - StartOffset,
+            FileAccess.ReadWrite
+        );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void DisposedCheck()
     {
-        if (IsDisposed)
+        if (_ptr is null)
             throw new ObjectDisposedException(nameof(NativeSpan));
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        if (IsDisposed)
+        if (_ptr is null)
             return;
 
         NativeMemory.Free(_ptr);
-        IsDisposed = true;
+        _ptr = null;
         GC.SuppressFinalize(this);
     }
 
