@@ -61,7 +61,7 @@ public sealed unsafe class Rc4KeyState : IDisposable
     /// <summary>
     /// Copies this <see cref="Rc4KeyState"/> instance.
     /// </summary>
-    /// <returns></returns>
+    /// <returns>The copied object.</returns>
     public Rc4KeyState Copy()
         => new(this);
 
@@ -73,5 +73,12 @@ public sealed unsafe class Rc4KeyState : IDisposable
 
         NativeMemory.Free(_state);
         _state = null;
+        GC.SuppressFinalize(this);
     }
+
+    /// <summary>
+    /// Disposes of the <see cref="Rc4KeyState"/> upon destruction.
+    /// </summary>
+    ~Rc4KeyState()
+        => Dispose();
 }
