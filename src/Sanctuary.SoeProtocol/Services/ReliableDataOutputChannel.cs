@@ -291,7 +291,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
 
         Rc4Cipher.Transform(data, storage.AsSpan(1), ref _cipherState);
         output = storage[1] == 0
-            ? storage.AsSpan(0, data.Length + 1)
+            ? storage
             : storage.AsSpan(1, data.Length);
 
         return storage;

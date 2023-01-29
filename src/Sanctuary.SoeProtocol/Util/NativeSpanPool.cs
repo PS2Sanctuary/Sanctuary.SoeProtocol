@@ -68,6 +68,8 @@ public sealed class NativeSpanPool : IDisposable
             return;
         }
 
+        span.StartOffset = 0;
+        span.UsedLength = 0;
         _pool.Push(span);
     }
 
