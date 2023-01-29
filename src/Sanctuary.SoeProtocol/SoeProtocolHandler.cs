@@ -118,6 +118,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     {
         await Task.Yield();
         using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(10));
+        _lastReceivedPacketTick = Stopwatch.GetTimestamp();
 
         try
         {
