@@ -174,7 +174,13 @@ public sealed class ReliableDataInputChannel : IDisposable
             // We should never reach a state where we have skipped
             // past stashed fragments
             if (curr.Sequence < _windowStartSequence)
-                throw new Exception("Invalid state: stashed fragment had mismatching sequence");
+            {
+                throw new Exception
+                (
+                    "Invalid state: stashed fragment did not match window start sequence " +
+                    $"({curr.Sequence}/{_windowStartSequence})"
+                );
+            }
 
             if (curr.Span is null)
                 throw new Exception("Invalid state: attempting to use a decommissioned stashed fragment");
