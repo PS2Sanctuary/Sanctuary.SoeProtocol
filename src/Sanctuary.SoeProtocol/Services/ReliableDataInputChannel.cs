@@ -167,13 +167,13 @@ public sealed class ReliableDataInputChannel : IDisposable
         // Copy over any stashed fragments that can be written
         // directly to the buffer; i.e they equal the current
         // window start sequence and we have space left
-        while (_dataBacklog.Current.IsActive)
+        while (_dataBacklog.Current.IsActive && _dataBacklog.Current.Sequence <= _windowStartSequence)
         {
             StashedData curr = _dataBacklog.Current;
 
             // We should never reach a state where we have skipped
             // past stashed fragments
-            if (curr.Sequence != _windowStartSequence)
+            if (curr.Sequence < _windowStartSequence)
                 throw new Exception("Invalid state: stashed fragment had mismatching sequence");
 
             if (curr.Span is null)
