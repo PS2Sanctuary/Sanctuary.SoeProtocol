@@ -88,9 +88,19 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         if (sequence != _windowStartSequence)
         {
+            StashedData stash = _dataBacklog[sequence - _windowStartSequence];
+
+            // We may have already received this sequence
+            if (stash.IsActive)
+            {
+                if (stash.Sequence != sequence)
+                    throw new InvalidOperationException("Invalid state: Attempting to replace active stash");
+                return;
+            }
+
             NativeSpan span = _spanPool.Rent();
             span.CopyDataInto(data);
-            _dataBacklog[sequence - _windowStartSequence].Init(sequence, false, span);
+            stash.Init(sequence, false, span);
 
             return;
         }
@@ -112,9 +122,19 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         if (sequence != _windowStartSequence)
         {
+            StashedData stash = _dataBacklog[sequence - _windowStartSequence];
+
+            // We may have already received this sequence
+            if (stash.IsActive)
+            {
+                if (stash.Sequence != sequence)
+                    throw new InvalidOperationException("Invalid state: Attempting to replace active stash");
+                return;
+            }
+
             NativeSpan span = _spanPool.Rent();
             span.CopyDataInto(data);
-            _dataBacklog[sequence - _windowStartSequence].Init(sequence, true, span);
+            stash.Init(sequence, true, span);
 
             return;
         }
