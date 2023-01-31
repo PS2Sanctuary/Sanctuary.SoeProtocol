@@ -52,6 +52,9 @@ public sealed unsafe class Rc4KeyState : IDisposable
     /// <param name="existingState">The state to copy.</param>
     public Rc4KeyState(Rc4KeyState existingState)
     {
+        if (existingState._state is null)
+            throw new ObjectDisposedException(nameof(Rc4KeyState), "Existing state is disposed");
+
         _state = (byte*)NativeMemory.Alloc(LENGTH);
         Index1 = existingState.Index1;
         Index2 = existingState.Index2;
