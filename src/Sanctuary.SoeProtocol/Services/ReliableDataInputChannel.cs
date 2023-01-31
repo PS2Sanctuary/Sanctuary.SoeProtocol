@@ -88,15 +88,9 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         if (sequence != _windowStartSequence)
         {
-            StashedData stash = _dataBacklog[sequence - _windowStartSequence];
-
-            // We may have already received this sequence
-            if (stash.IsActive)
-            {
-                if (stash.Sequence != sequence)
-                    throw new InvalidOperationException("Invalid state: Attempting to replace active stash");
+            StashedData? stash = TryGetStash(sequence);
+            if (stash is null)
                 return;
-            }
 
             NativeSpan span = _spanPool.Rent();
             span.CopyDataInto(data);
@@ -122,15 +116,9 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         if (sequence != _windowStartSequence)
         {
-            StashedData stash = _dataBacklog[sequence - _windowStartSequence];
-
-            // We may have already received this sequence
-            if (stash.IsActive)
-            {
-                if (stash.Sequence != sequence)
-                    throw new InvalidOperationException("Invalid state: Attempting to replace active stash");
+            StashedData? stash = TryGetStash(sequence);
+            if (stash is null)
                 return;
-            }
 
             NativeSpan span = _spanPool.Rent();
             span.CopyDataInto(data);
@@ -144,6 +132,26 @@ public sealed class ReliableDataInputChannel : IDisposable
         WriteImmediateFragmentToBuffer(data);
         TryProcessCurrentBuffer();
         ConsumeStashedDataFragments();
+    }
+
+    // Helper method
+    private StashedData? TryGetStash(long sequence)
+    {
+        StashedData stash = _dataBacklog[sequence - _windowStartSequence];
+
+        // We may have already received this sequence. Confirm not active
+        if (!stash.IsActive)
+            return stash;
+
+        if (stash.Sequence != sequence)
+        {
+            throw new InvalidOperationException
+            (
+                $"Invalid state: Attempting to replace active stash {stash.Sequence} with {sequence}"
+            );
+        }
+
+        return null;
     }
 
     private void SendAckIfRequired()
@@ -235,9 +243,6 @@ public sealed class ReliableDataInputChannel : IDisposable
                     $"({curr.Sequence}/{_windowStartSequence})"
                 );
             }
-
-            if (curr.Span is null)
-                throw new Exception("Invalid state: attempting to use a decommissioned stashed fragment");
 
             if (!_dataBacklog.Current.IsFragment)
             {
