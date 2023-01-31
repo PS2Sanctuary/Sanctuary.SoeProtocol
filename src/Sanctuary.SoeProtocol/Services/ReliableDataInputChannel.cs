@@ -330,6 +330,9 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         public void Init(long sequence, bool isFragment, NativeSpan span)
         {
+            if (IsActive)
+                throw new InvalidOperationException("Already active");
+
             Sequence = sequence;
             IsFragment = isFragment;
             Span = span;
@@ -338,8 +341,11 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         public void Clear(NativeSpanPool spanPool)
         {
+            if (!IsActive)
+                throw new InvalidOperationException("Not active");
+
             IsActive = false;
-            spanPool.Return(Span!);
+            spanPool.Return(Span);
             Span = null;
         }
     }

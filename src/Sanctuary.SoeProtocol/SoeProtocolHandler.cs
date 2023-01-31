@@ -243,6 +243,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         if (disposeManaged)
         {
             _dataInputChannel.Dispose();
+            _dataOutputChannel.Dispose();
             SessionParams.Dispose();
 
             while (_packetQueue.TryDequeue(out NativeSpan? packet))

@@ -312,7 +312,9 @@ public sealed class ReliableDataOutputChannel : IDisposable
             _spanPool.Return(element.DataSpan);
         _dispatchStash.Clear();
 
+        _spanPool.Return(_multiBuffer);
         _cipherState.Dispose();
+        _packetOutputQueueLock.Dispose();
     }
 
     private readonly record struct StashedOutputPacket(bool IsFragment, NativeSpan DataSpan);

@@ -80,6 +80,7 @@ public sealed class SingleSessionManager : IDisposable
                 throw new InvalidOperationException("Unknown mode");
         }
 
+        _protocolHandler?.Dispose();
         _protocolHandler = new SoeProtocolHandler
         (
             _mode,
@@ -149,7 +150,9 @@ public sealed class SingleSessionManager : IDisposable
 
                 NativeSpan span = _spanPool.Rent();
                 span.CopyDataInto(receiveBuffer.AsSpan(0, amount));
-                _protocolHandler.EnqueuePacket(span);
+
+                if (!_protocolHandler.EnqueuePacket(span))
+                    _spanPool.Return(span);
             }
         }
         catch (OperationCanceledException)
@@ -164,6 +167,7 @@ public sealed class SingleSessionManager : IDisposable
         if (_isDisposed)
             return;
 
+        _spanPool.Dispose();
         _protocolHandler?.Dispose();
 
         _isDisposed = true;

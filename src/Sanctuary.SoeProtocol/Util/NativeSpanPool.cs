@@ -31,16 +31,23 @@ public sealed class NativeSpanPool : IDisposable
 
     /// <summary>
     /// Rents a <see cref="NativeSpan"/> object from the pool.
-    /// Rented objects must be returned to the pool.
+    /// Rented objects should be returned to the pool.
     /// </summary>
     /// <remarks>
     /// This method will allocate a new <see cref="NativeSpan"/> object if the pool is empty.
     /// </remarks>
     /// <returns>The rented object.</returns>
     public NativeSpan Rent()
-        => _pool.TryPop(out NativeSpan? span)
+    {
+        NativeSpan retrieved = _pool.TryPop(out NativeSpan? span)
             ? span
             : new NativeSpan(_memorySize);
+
+        if (retrieved.UsedLength > 0 || retrieved.StartOffset > 0)
+            throw new Exception("Span has been used after return to pool");
+
+        return retrieved;
+    }
 
     /// <summary>
     /// Returns a rented <see cref="NativeSpan"/> object to the pool.
