@@ -4,6 +4,7 @@ using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Sanctuary.SoeProtocol.Services;
@@ -17,6 +18,8 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// A delegate that will be called when application data is received.
     /// </summary>
     public delegate void DataHandler(ReadOnlySpan<byte> data);
+
+    private static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(150);
 
     private readonly SoeProtocolHandler _handler;
     private readonly NativeSpanPool _spanPool;
@@ -32,6 +35,10 @@ public sealed class ReliableDataInputChannel : IDisposable
     private int _expectedDataLength;
     private int _runningDataLength;
     private byte[]? _currentBuffer;
+
+    // Ack variables
+    private long _lastAcknowledged = -1;
+    private long _lastAckAt = -1;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReliableDataInputChannel"/>.
@@ -62,6 +69,9 @@ public sealed class ReliableDataInputChannel : IDisposable
             _dataBacklog[i] = new StashedData();
     }
 
+    public void RunTick()
+        => SendAckIfRequired();
+
     /// <summary>
     /// Handles a <see cref="SoeOpCode.ReliableData"/> packet.
     /// </summary>
@@ -84,8 +94,6 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         ProcessData(data);
         ConsumeStashedDataFragments();
-
-        SendAck((ushort)(_windowStartSequence - 1)); // TODO: Acks not necessarily on every data block
     }
 
     /// <summary>
@@ -113,8 +121,31 @@ public sealed class ReliableDataInputChannel : IDisposable
         WriteImmediateFragmentToBuffer(data);
         TryProcessCurrentBuffer();
         ConsumeStashedDataFragments();
+    }
 
-        SendAck((ushort)(_windowStartSequence - 1)); // TODO: Acks not necessarily on every data block
+    private void SendAckIfRequired()
+    {
+        long toAcknowledge = _windowStartSequence - 1;
+        if (_lastAcknowledged >= toAcknowledge)
+            return;
+
+        if (_handler.SessionParams.AcknowledgeAllData)
+        {
+            SendAck((ushort)toAcknowledge);
+            return;
+        }
+
+        if (_lastAckAt is -1)
+            _lastAckAt = Stopwatch.GetTimestamp();
+
+        bool needAck = Stopwatch.GetElapsedTime(_lastAckAt) > MAX_ACK_DELAY
+            || toAcknowledge >= _lastAcknowledged + _handler.SessionParams.MaxQueuedReliableDataPackets / 2;
+        if (!needAck)
+            return;
+
+        SendAck((ushort)toAcknowledge);
+        _lastAcknowledged = toAcknowledge;
+        _lastAckAt = Stopwatch.GetTimestamp();
     }
 
     private bool CheckSequence(ReadOnlySpan<byte> data, out long sequence)

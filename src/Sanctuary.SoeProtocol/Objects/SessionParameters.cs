@@ -82,6 +82,11 @@ public class SessionParameters : IDisposable
     public required Rc4KeyState EncryptionKeyState { get; init; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether all data packets should be acknowledged.
+    /// </summary>
+    public bool AcknowledgeAllData { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="SessionParameters"/> class.
     /// </summary>
     public SessionParameters()

@@ -126,6 +126,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             {
                 SendHeartbeatIfRequired();
                 ProcessOneFromPacketQueue();
+                _dataInputChannel.RunTick();
                 _dataOutputChannel.RunTick(ct);
 
                 if (Stopwatch.GetElapsedTime(_lastReceivedPacketTick) > SessionParams.InactivityTimeout)
