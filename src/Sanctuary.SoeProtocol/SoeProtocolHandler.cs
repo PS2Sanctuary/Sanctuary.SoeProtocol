@@ -117,7 +117,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     public async Task RunAsync(CancellationToken ct)
     {
         await Task.Yield();
-        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(10));
+        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
         _lastReceivedPacketTick = Stopwatch.GetTimestamp();
 
         try
@@ -125,7 +125,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
             {
                 SendHeartbeatIfRequired();
-                ProcessOneFromPacketQueue();
+                bool processedPacket = ProcessOneFromPacketQueue();
                 _dataInputChannel.RunTick();
                 _dataOutputChannel.RunTick(ct);
 
@@ -135,7 +135,8 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
                     break;
                 }
 
-                await timer.WaitForNextTickAsync(ct);
+                if (!processedPacket)
+                    await timer.WaitForNextTickAsync(ct);
             }
         }
         catch (OperationCanceledException)

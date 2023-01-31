@@ -69,6 +69,9 @@ public sealed class ReliableDataInputChannel : IDisposable
             _dataBacklog[i] = new StashedData();
     }
 
+    /// <summary>
+    /// Runs a tick of the <see cref="ReliableDataInputChannel"/> operations.
+    /// </summary>
     public void RunTick()
         => SendAckIfRequired();
 
