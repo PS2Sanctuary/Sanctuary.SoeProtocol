@@ -81,7 +81,7 @@ public partial class SoeProtocolHandler
                     HandleContextualPacketInternal
                     (
                         subPacketOpCode,
-                        packetData.Slice(offset + sizeof(SoeOpCode), subPacketLength)
+                        packetData.Slice(offset + sizeof(SoeOpCode), subPacketLength - sizeof(SoeOpCode))
                     );
                     offset += subPacketLength;
                 }
