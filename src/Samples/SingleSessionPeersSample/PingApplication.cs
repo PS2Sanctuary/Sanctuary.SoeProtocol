@@ -17,12 +17,17 @@ public class PingApplication : IApplicationProtocolHandler
 
     private ISessionHandler? _sessionHandler;
 
+    /// <inheritdoc />
+    public ApplicationParameters SessionParams { get; }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PingApplication"/> class.
     /// </summary>
     public PingApplication(ILogger<PingApplication> logger)
     {
         _logger = logger;
+
+        SessionParams = new ApplicationParameters(null);
     }
 
     /// <inheritdoc />

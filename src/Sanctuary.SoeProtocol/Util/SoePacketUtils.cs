@@ -6,6 +6,7 @@ using System;
 using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.CompilerServices;
 
 namespace Sanctuary.SoeProtocol.Util;
 
@@ -98,7 +99,8 @@ public static class SoePacketUtils
         if (!IsContextlessPacket(opCode) && !IsContextualPacket(opCode))
             return SoePacketValidationResult.InvalidOpCode;
 
-        if (GetPacketMinimumLength(opCode, sessionParams) > packetData.Length)
+        int minimumLength = GetPacketMinimumLength(opCode, sessionParams.IsCompressionEnabled, sessionParams.CrcLength);
+        if (minimumLength > packetData.Length)
             return SoePacketValidationResult.TooShort;
 
         if (IsContextlessPacket(opCode) || sessionParams.CrcLength is 0)
@@ -144,23 +146,24 @@ public static class SoePacketUtils
     /// Gets the minimum length that a packet may be, given its OP code.
     /// </summary>
     /// <param name="opCode">The OP code.</param>
-    /// <param name="sessionParams">The current session parameters.</param>
+    /// <param name="isCompressionEnabled">Whether compression is enabled.</param>
+    /// <param name="crcLength">The CRC length of the session.</param>
     /// <returns>The minimum length.</returns>
     /// <exception cref="ArgumentOutOfRangeException">An unknown OP code was provided.</exception>
-    public static int GetPacketMinimumLength(SoeOpCode opCode, SessionParameters sessionParams)
+    public static int GetPacketMinimumLength(SoeOpCode opCode, bool isCompressionEnabled, byte crcLength)
         => opCode switch
         {
             SoeOpCode.SessionRequest => SessionRequest.MinSize,
             SoeOpCode.SessionResponse => SessionResponse.Size,
-            SoeOpCode.MultiPacket => GetContextualPacketPadding(sessionParams) + 2, // Data length + first byte of data,
-            SoeOpCode.Disconnect => GetContextualPacketPadding(sessionParams) + Disconnect.Size,
-            SoeOpCode.Heartbeat => GetContextualPacketPadding(sessionParams),
-            SoeOpCode.NetStatusRequest => GetContextualPacketPadding(sessionParams),
-            SoeOpCode.NetStatusResponse => GetContextualPacketPadding(sessionParams),
-            SoeOpCode.ReliableData or SoeOpCode.ReliableDataFragment => GetContextualPacketPadding(sessionParams)
+            SoeOpCode.MultiPacket => GetContextualPacketPadding(isCompressionEnabled, crcLength) + 2, // Data length + first byte of data,
+            SoeOpCode.Disconnect => GetContextualPacketPadding(isCompressionEnabled, crcLength) + Disconnect.Size,
+            SoeOpCode.Heartbeat => GetContextualPacketPadding(isCompressionEnabled, crcLength),
+            SoeOpCode.NetStatusRequest => GetContextualPacketPadding(isCompressionEnabled, crcLength),
+            SoeOpCode.NetStatusResponse => GetContextualPacketPadding(isCompressionEnabled, crcLength),
+            SoeOpCode.ReliableData or SoeOpCode.ReliableDataFragment => GetContextualPacketPadding(isCompressionEnabled, crcLength)
                 + sizeof(ushort) + 1, // Sequence + first byte of data,
-            SoeOpCode.OutOfOrder => GetContextualPacketPadding(sessionParams) + OutOfOrder.Size,
-            SoeOpCode.Acknowledge => GetContextualPacketPadding(sessionParams) + Acknowledge.Size,
+            SoeOpCode.OutOfOrder => GetContextualPacketPadding(isCompressionEnabled, crcLength) + OutOfOrder.Size,
+            SoeOpCode.Acknowledge => GetContextualPacketPadding(isCompressionEnabled, crcLength) + Acknowledge.Size,
             SoeOpCode.UnknownSender => UnknownSender.Size,
             SoeOpCode.RemapConnection => RemapConnection.Size,
             _ => throw new ArgumentOutOfRangeException(nameof(opCode), opCode, "Invalid OP code")
@@ -169,9 +172,9 @@ public static class SoePacketUtils
     /// <summary>
     /// Decompresses a ZLIB-compressed buffer.
     /// </summary>
-    /// <param name="input"></param>
-    /// <param name="pool"></param>
-    /// <returns></returns>
+    /// <param name="input">The compressed input buffer.</param>
+    /// <param name="pool">A span pool to use temporary elements from.</param>
+    /// <returns>A stream containing the decompressed data.</returns>
     public static MemoryStream Decompress(ReadOnlySpan<byte> input, NativeSpanPool pool)
     {
         NativeSpan span = pool.Rent();
@@ -186,8 +189,9 @@ public static class SoePacketUtils
         return output;
     }
 
-    private static int GetContextualPacketPadding(SessionParameters sessionParams)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int GetContextualPacketPadding(bool isCompressionEnabled, byte crcLength)
         => sizeof(SoeOpCode)
-            + (sessionParams.IsCompressionEnabled ? 1 : 0)
-            + sessionParams.CrcLength;
+            + (isCompressionEnabled ? 1 : 0)
+            + crcLength;
 }

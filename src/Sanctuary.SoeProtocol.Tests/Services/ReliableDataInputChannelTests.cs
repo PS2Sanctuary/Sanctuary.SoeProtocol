@@ -1,6 +1,4 @@
-﻿using Moq;
-using Sanctuary.SoeProtocol.Abstractions;
-using Sanctuary.SoeProtocol.Objects;
+﻿using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Tests.Mocks;
 using Sanctuary.SoeProtocol.Util;
@@ -200,12 +198,11 @@ public class ReliableDataInputChannelTests
             {
                 ApplicationProtocol = "TestProtocol",
                 RemoteUdpLength = 512,
-                EncryptionKeyState = new Rc4KeyState(new byte[] { 0, 1, 2, 3, 4 }),
                 AcknowledgeAllData = true
             },
             SpanPool,
             networkInterface,
-            Mock.Of<IApplicationProtocolHandler>()
+            new MockApplicationProtocolHandler()
         );
 
         return new ReliableDataInputChannel

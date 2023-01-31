@@ -34,6 +34,11 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// </summary>
     internal SessionParameters SessionParams { get; }
 
+    /// <summary>
+    /// Gets the application parameters in use by the session.
+    /// </summary>
+    internal ApplicationParameters ApplicationParams { get; }
+
     /// <inheritdoc />
     public SessionMode Mode { get; }
 
@@ -67,25 +72,15 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     {
         Mode = mode;
         SessionParams = sessionParameters;
+        ApplicationParams = application.SessionParams;
         _spanPool = spanPool;
         _networkWriter = networkWriter;
         _application = application;
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
         _contextualSendBuffer = GC.AllocateArray<byte>((int)sessionParameters.UdpLength, true);
-
-        _dataInputChannel = new ReliableDataInputChannel
-        (
-            this,
-            _spanPool,
-            _application.HandleAppData
-        );
-        _dataOutputChannel = new ReliableDataOutputChannel
-        (
-            this,
-            _spanPool,
-            CalculateMaxDataLength()
-        );
+        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, _application.HandleAppData);
+        _dataOutputChannel = new ReliableDataOutputChannel(this, _spanPool, CalculateMaxDataLength());
 
         State = SessionState.Negotiating;
         _application.Initialise(this);
@@ -242,7 +237,6 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         {
             _dataInputChannel.Dispose();
             _dataOutputChannel.Dispose();
-            SessionParams.Dispose();
 
             while (_packetQueue.TryDequeue(out NativeSpan? packet))
                 _spanPool.Return(packet);

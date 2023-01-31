@@ -5,10 +5,8 @@ namespace Sanctuary.SoeProtocol.Objects;
 /// <summary>
 /// Contains parameters used to control a session.
 /// </summary>
-public class SessionParameters : IDisposable
+public sealed class SessionParameters
 {
-    private bool _isDisposed;
-
     /// <summary>
     /// Gets the application protocol being proxied by this session.
     /// </summary>
@@ -44,12 +42,6 @@ public class SessionParameters : IDisposable
     public bool IsCompressionEnabled { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether encryption is enabled
-    /// for the session.
-    /// </summary>
-    public bool IsEncryptionEnabled { get; set; }
-
-    /// <summary>
     /// Gets or sets the maximum number of raw packets that may queued
     /// for either processing or sending.
     /// </summary>
@@ -82,11 +74,6 @@ public class SessionParameters : IDisposable
     public TimeSpan InactivityTimeout { get; init; }
 
     /// <summary>
-    /// Gets the encryption key state to use with this session.
-    /// </summary>
-    public required Rc4KeyState EncryptionKeyState { get; init; }
-
-    /// <summary>
     /// Gets or sets a value indicating whether all data packets should be acknowledged.
     /// </summary>
     public bool AcknowledgeAllData { get; set; }
@@ -103,34 +90,5 @@ public class SessionParameters : IDisposable
         DataAckWindow = 32;
         HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
         InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
-    }
-
-    /// <summary>
-    /// Creates a deep clone of this <see cref="SessionParameters"/> object.
-    /// </summary>
-    /// <returns>The cloned object.</returns>
-    public SessionParameters Clone()
-        => (SessionParameters)this.MemberwiseClone();
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Disposes of managed and unmanaged resources.
-    /// </summary>
-    /// <param name="disposeManaged">Whether to dispose of managed resources.</param>
-    protected virtual void Dispose(bool disposeManaged)
-    {
-        if (_isDisposed)
-            return;
-
-        if (disposeManaged)
-            EncryptionKeyState.Dispose();
-
-        _isDisposed = true;
     }
 }

@@ -23,12 +23,13 @@ public sealed class ReliableDataOutputChannel : IDisposable
 
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
+    private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
     private readonly List<StashedOutputPacket> _dispatchStash;
     private readonly SemaphoreSlim _packetOutputQueueLock;
 
     // Data-related
-    private Rc4KeyState _cipherState;
+    private Rc4KeyState? _cipherState;
     private int _maxDataLength;
 
     // Sequencing
@@ -60,12 +61,13 @@ public sealed class ReliableDataOutputChannel : IDisposable
     {
         _handler = handler;
         _sessionParams = handler.SessionParams;
+        _applicationParams = handler.ApplicationParams;
         _spanPool = spanPool;
 
         _dispatchStash = new List<StashedOutputPacket>();
         _packetOutputQueueLock = new SemaphoreSlim(1);
 
-        _cipherState = _sessionParams.EncryptionKeyState.Copy();
+        _cipherState = _applicationParams.EncryptionKeyState?.Copy();
         SetMaxDataLength(maxDataLength);
         SetupNewMultiBuffer();
 
@@ -182,7 +184,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         if (!isRecursing)
             _packetOutputQueueLock.Wait();
 
-        if (!isRecursing && _sessionParams.IsEncryptionEnabled)
+        if (!isRecursing && _applicationParams.IsEncryptionEnabled)
             encryptedSpan = Encrypt(data, out data);
 
         int multiLength = DataUtils.GetVariableLengthSize(data.Length) + data.Length;
@@ -289,7 +291,9 @@ public sealed class ReliableDataOutputChannel : IDisposable
         byte[] storage = ArrayPool<byte>.Shared.Rent(data.Length + 1);
         storage[0] = 0;
 
-        Rc4Cipher.Transform(data, storage.AsSpan(1), ref _cipherState);
+        // We can assume the key state is not null, as encryption cannot be enabled
+        // by the application without setting a key state
+        Rc4Cipher.Transform(data, storage.AsSpan(1), ref _cipherState!);
         output = storage[1] == 0
             ? storage
             : storage.AsSpan(1, data.Length);
@@ -313,7 +317,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _dispatchStash.Clear();
 
         _spanPool.Return(_multiBuffer);
-        _cipherState.Dispose();
+        _cipherState?.Dispose();
         _packetOutputQueueLock.Dispose();
     }
 

@@ -34,8 +34,7 @@ public class ServerWorker : BackgroundService
             _services.GetRequiredService<ILogger<SingleSessionManager>>(),
             new SessionParameters
             {
-                ApplicationProtocol = "Ping_1",
-                EncryptionKeyState = new Rc4KeyState(new byte[1])
+                ApplicationProtocol = "Ping_1"
             },
             _services.GetRequiredService<PingApplication>(),
             new IPEndPoint(IPAddress.Loopback, 12345),

@@ -26,13 +26,14 @@ public sealed class ReliableDataInputChannel : IDisposable
 
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
+    private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
     private readonly DataHandler _dataHandler;
 
     private readonly SlidingWindowArray<StashedData> _dataBacklog;
     private readonly byte[] _ackBuffer;
 
-    private Rc4KeyState _cipherState;
+    private Rc4KeyState? _cipherState;
     private long _windowStartSequence;
 
     // Fragment stitching variables
@@ -59,13 +60,14 @@ public sealed class ReliableDataInputChannel : IDisposable
     {
         _handler = handler;
         _sessionParams = handler.SessionParams;
+        _applicationParams = handler.ApplicationParams;
         _spanPool = spanPool;
         _dataHandler = dataHandler;
 
         _dataBacklog = new SlidingWindowArray<StashedData>(_sessionParams.MaxQueuedReliableDataPackets);
         _ackBuffer = GC.AllocateArray<byte>(Acknowledge.Size, true);
 
-        _cipherState = _sessionParams.EncryptionKeyState.Copy();
+        _cipherState = _applicationParams.EncryptionKeyState?.Copy();
         _windowStartSequence = 0;
 
         _lastAcknowledged = -1;
@@ -308,13 +310,15 @@ public sealed class ReliableDataInputChannel : IDisposable
 
     private void DecryptAndCallDataHandler(Span<byte> data)
     {
-        if (_sessionParams.IsEncryptionEnabled)
+        if (_applicationParams.IsEncryptionEnabled)
         {
             // A single 0x00 byte may be used to prefix encrypted data. We must ignore it
             if (data.Length > 1 && data[0] == 0)
                 data = data[1..];
 
-            Rc4Cipher.Transform(data, data, ref _cipherState);
+            // We can assume the key state is not null, as encryption cannot be enabled
+            // by the application without setting a key state
+            Rc4Cipher.Transform(data, data, ref _cipherState!);
         }
 
         _dataHandler(data);
@@ -344,7 +348,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        _cipherState.Dispose();
+        _cipherState?.Dispose();
 
         for (int i = 0; i < _dataBacklog.Length; i++)
         {

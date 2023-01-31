@@ -1,6 +1,4 @@
-﻿using Moq;
-using Sanctuary.SoeProtocol.Abstractions;
-using Sanctuary.SoeProtocol.Objects;
+﻿using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Tests.Mocks;
@@ -139,14 +137,12 @@ public class ReliableDataOutputChannelTests
                 ApplicationProtocol = "TestProtocol",
                 RemoteUdpLength = SoeConstants.DefaultUdpLength,
                 IsCompressionEnabled = false,
-                IsEncryptionEnabled = false,
                 CrcLength = SoeConstants.CrcLength,
-                MaxQueuedReliableDataPackets = FRAGMENT_WINDOW_SIZE,
-                EncryptionKeyState = new Rc4KeyState(new byte[] { 0, 1, 2, 3, 4 })
+                MaxQueuedReliableDataPackets = FRAGMENT_WINDOW_SIZE
             },
             SpanPool,
             networkInterface,
-            Mock.Of<IApplicationProtocolHandler>()
+            new MockApplicationProtocolHandler()
         );
 
         return new ReliableDataOutputChannel(handler, SpanPool, MAX_DATA_LENGTH + sizeof(ushort));
