@@ -122,7 +122,13 @@ public sealed class SingleSessionManager : IDisposable
         receiveTask.Dispose();
         handlerTask.Dispose();
 
-        _logger.LogDebug("{Mode} session closed: {ID}", _mode, _protocolHandler?.SessionId);
+        _logger.LogDebug
+        (
+            "{Mode} session {ID} closed with reason: {Reason}",
+            _mode,
+            _protocolHandler?.SessionId,
+            _protocolHandler?.TerminationReason
+        );
     }
 
     private async Task RunReceiveLoopAsync(INetworkReader networkReader, CancellationToken ct)
