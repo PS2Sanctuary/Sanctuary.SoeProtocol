@@ -162,7 +162,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             _lastAckAt = Stopwatch.GetTimestamp();
 
         bool needAck = Stopwatch.GetElapsedTime(_lastAckAt) > MAX_ACK_DELAY
-            || toAcknowledge >= _lastAcknowledged + _handler.SessionParams.MaxQueuedReliableDataPackets / 2;
+            || toAcknowledge >= _lastAcknowledged + _handler.SessionParams.DataAckWindow / 2;
         if (!needAck)
             return;
 

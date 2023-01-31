@@ -62,6 +62,11 @@ public class SessionParameters : IDisposable
     public short MaxQueuedReliableDataPackets { get; init; }
 
     /// <summary>
+    /// Gets or sets the data acknowledgement window
+    /// </summary>
+    public short DataAckWindow { get; set; }
+
+    /// <summary>
     /// Gets the timespan after which to send a heartbeat, if no contextual
     /// packets have been received within the interval. Set to <see cref="TimeSpan.Zero"/>
     /// to disable heart-beating.
@@ -93,8 +98,9 @@ public class SessionParameters : IDisposable
     {
         CrcLength = SoeConstants.CrcLength;
         UdpLength = SoeConstants.DefaultUdpLength;
-        MaxQueuedRawPackets = 256;
-        MaxQueuedReliableDataPackets = 128;
+        MaxQueuedRawPackets = 512;
+        MaxQueuedReliableDataPackets = 256;
+        DataAckWindow = 32;
         HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
         InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
     }
