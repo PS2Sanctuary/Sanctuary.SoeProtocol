@@ -184,7 +184,9 @@ public sealed class ReliableDataInputChannel : IDisposable
         ushort packetSequence = BinaryPrimitives.ReadUInt16BigEndian(data);
         sequence = GetTrueIncomingSequence(packetSequence);
 
-        if (sequence >= _windowStartSequence)
+        bool isValid = sequence >= _windowStartSequence
+            && sequence < _windowStartSequence + _handler.SessionParams.MaxQueuedReliableDataPackets;
+        if (isValid)
             return true;
 
         SendAck((ushort)(_windowStartSequence - 1));
