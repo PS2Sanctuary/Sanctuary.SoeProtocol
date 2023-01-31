@@ -1,5 +1,4 @@
-﻿using Sanctuary.SoeProtocol.Objects;
-using Sanctuary.SoeProtocol.Objects.Packets;
+﻿using Sanctuary.SoeProtocol.Objects.Packets;
 using System;
 
 namespace Sanctuary.SoeProtocol.Abstractions;
@@ -10,12 +9,6 @@ namespace Sanctuary.SoeProtocol.Abstractions;
 /// </summary>
 public interface IApplicationProtocolHandler
 {
-    /// <summary>
-    /// Gets the session parameters that the application protocol wishes to
-    /// use in the underlying SOE session.
-    /// </summary>
-    SessionParameters SessionParams { get; }
-
     /// <summary>
     /// Initializes the application handler.
     /// </summary>

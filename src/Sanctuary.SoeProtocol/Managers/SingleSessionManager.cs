@@ -17,6 +17,7 @@ namespace Sanctuary.SoeProtocol.Managers;
 public sealed class SingleSessionManager : IDisposable
 {
     private readonly ILogger<SingleSessionManager> _logger;
+    private readonly SessionParameters _sessionParams;
     private readonly IApplicationProtocolHandler _application;
     private readonly IPEndPoint _remoteEndPoint;
     private readonly NativeSpanPool _spanPool;
@@ -29,24 +30,27 @@ public sealed class SingleSessionManager : IDisposable
     /// Initializes a new instance of the <see cref="SingleSessionManager"/> class.
     /// </summary>
     /// <param name="logger">The logging interface to use.</param>
+    /// <param name="sessionParams">The session parameters to use.</param>
     /// <param name="application">The application protocol handler.</param>
     /// <param name="connectTo">The endpoint to connect to.</param>
     /// <param name="mode">The operation mode of the </param>
     public SingleSessionManager
     (
         ILogger<SingleSessionManager> logger,
+        SessionParameters sessionParams,
         IApplicationProtocolHandler application,
         IPEndPoint connectTo,
         SessionMode mode
     )
     {
         _logger = logger;
+        _sessionParams = sessionParams;
         _application = application;
         _remoteEndPoint = connectTo;
         _mode = mode;
 
-        int bufferSize = (int)Math.Max(_application.SessionParams.UdpLength, _application.SessionParams.RemoteUdpLength);
-        _spanPool = new NativeSpanPool(bufferSize, _application.SessionParams.MaxQueuedRawPackets);
+        int bufferSize = (int)Math.Max(sessionParams.UdpLength, sessionParams.RemoteUdpLength);
+        _spanPool = new NativeSpanPool(bufferSize, sessionParams.MaxQueuedRawPackets);
     }
 
     /// <summary>
@@ -64,7 +68,7 @@ public sealed class SingleSessionManager : IDisposable
         using CancellationTokenSource internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         using UdpSocketNetworkInterface networkInterface = new
         (
-            (int)_application.SessionParams.UdpLength,
+            (int)_sessionParams.UdpLength,
             _mode == SessionMode.Server
         );
 
@@ -84,7 +88,7 @@ public sealed class SingleSessionManager : IDisposable
         _protocolHandler = new SoeProtocolHandler
         (
             _mode,
-            _application.SessionParams,
+            _sessionParams,
             _spanPool,
             networkInterface,
             _application
@@ -138,7 +142,7 @@ public sealed class SingleSessionManager : IDisposable
             throw new InvalidOperationException("Cannot run the receive loop while the protocol handler is null");
 
         await Task.Yield();
-        byte[] receiveBuffer = GC.AllocateArray<byte>((int)_application.SessionParams.UdpLength, true);
+        byte[] receiveBuffer = GC.AllocateArray<byte>((int)_sessionParams.UdpLength, true);
 
         try
         {
