@@ -163,7 +163,6 @@ public class ReliableDataChannelEndToEndTests
     )
     {
         networkInterface = new MockNetworkInterface();
-        Rc4KeyState keyState = new(new byte[] { 0, 1, 2, 3, 4 });
         const int fragmentWindowSize = 32;
 
         SoeProtocolHandler handler = new
@@ -177,19 +176,18 @@ public class ReliableDataChannelEndToEndTests
                 IsEncryptionEnabled = false,
                 CrcLength = SoeConstants.CrcLength,
                 MaxQueuedReliableDataPackets = fragmentWindowSize,
-                EncryptionKeyState = keyState
+                EncryptionKeyState = new Rc4KeyState(new byte[] { 0, 1, 2, 3, 4 })
             },
             SpanPool,
             networkInterface,
             Mock.Of<IApplicationProtocolHandler>()
         );
 
-        outputChannel = new ReliableDataOutputChannel(handler, SpanPool, keyState, MAX_DATA_LENGTH + sizeof(ushort));
+        outputChannel = new ReliableDataOutputChannel(handler, SpanPool, MAX_DATA_LENGTH + sizeof(ushort));
         inputChannel = new ReliableDataInputChannel
         (
             handler,
             SpanPool,
-            keyState,
             data => receiveQueue.Enqueue(data.ToArray())
         );
     }

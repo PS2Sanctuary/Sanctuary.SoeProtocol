@@ -78,15 +78,12 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         (
             this,
             _spanPool,
-            sessionParameters.EncryptionKeyState.Copy(),
             _application.HandleAppData
         );
-
         _dataOutputChannel = new ReliableDataOutputChannel
         (
             this,
             _spanPool,
-            sessionParameters.EncryptionKeyState,
             CalculateMaxDataLength()
         );
 

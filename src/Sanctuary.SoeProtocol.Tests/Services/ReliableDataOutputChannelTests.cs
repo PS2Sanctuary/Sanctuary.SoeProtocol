@@ -129,7 +129,6 @@ public class ReliableDataOutputChannelTests
 
     private static ReliableDataOutputChannel CreateChannel(out MockNetworkInterface networkInterface)
     {
-        Rc4KeyState keyState = new(new byte[] { 0, 1, 2, 3, 4 });
         networkInterface = new MockNetworkInterface();
 
         SoeProtocolHandler handler = new
@@ -143,14 +142,14 @@ public class ReliableDataOutputChannelTests
                 IsEncryptionEnabled = false,
                 CrcLength = SoeConstants.CrcLength,
                 MaxQueuedReliableDataPackets = FRAGMENT_WINDOW_SIZE,
-                EncryptionKeyState = keyState
+                EncryptionKeyState = new Rc4KeyState(new byte[] { 0, 1, 2, 3, 4 })
             },
             SpanPool,
             networkInterface,
             Mock.Of<IApplicationProtocolHandler>()
         );
 
-        return new ReliableDataOutputChannel(handler, SpanPool, keyState, MAX_DATA_LENGTH + sizeof(ushort));
+        return new ReliableDataOutputChannel(handler, SpanPool, MAX_DATA_LENGTH + sizeof(ushort));
     }
 
     private static byte[] GeneratePacket(int size)

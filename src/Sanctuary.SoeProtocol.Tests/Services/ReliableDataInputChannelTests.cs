@@ -191,7 +191,6 @@ public class ReliableDataInputChannelTests
         out MockNetworkInterface networkInterface
     )
     {
-        Rc4KeyState keyState = new(new byte[] { 0, 1, 2, 3, 4 });
         networkInterface = new MockNetworkInterface();
 
         SoeProtocolHandler handler = new
@@ -201,7 +200,7 @@ public class ReliableDataInputChannelTests
             {
                 ApplicationProtocol = "TestProtocol",
                 RemoteUdpLength = 512,
-                EncryptionKeyState = keyState
+                EncryptionKeyState = new Rc4KeyState(new byte[] { 0, 1, 2, 3, 4 })
             },
             SpanPool,
             networkInterface,
@@ -212,7 +211,6 @@ public class ReliableDataInputChannelTests
         (
             handler,
             SpanPool,
-            keyState,
             data => dataOutputQueue.Enqueue(data.ToArray())
         );
     }

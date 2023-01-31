@@ -22,6 +22,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     public const int ACK_WAIT_MILLISECONDS = 500;
 
     private readonly SoeProtocolHandler _handler;
+    private readonly SessionParameters _sessionParams;
     private readonly NativeSpanPool _spanPool;
     private readonly List<StashedOutputPacket> _dispatchStash;
     private readonly SemaphoreSlim _packetOutputQueueLock;
@@ -49,23 +50,22 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// </summary>
     /// <param name="handler">The parent handler.</param>
     /// <param name="spanPool">The native span pool to use.</param>
-    /// <param name="cipherState">The initial RC4 cipher state to use. This will be disposed with the channel.</param>
     /// <param name="maxDataLength">The maximum length of data that may be sent by the output channel.</param>
     public ReliableDataOutputChannel
     (
         SoeProtocolHandler handler,
         NativeSpanPool spanPool,
-        Rc4KeyState cipherState,
         int maxDataLength
     )
     {
         _handler = handler;
+        _sessionParams = handler.SessionParams;
         _spanPool = spanPool;
 
         _dispatchStash = new List<StashedOutputPacket>();
         _packetOutputQueueLock = new SemaphoreSlim(1);
 
-        _cipherState = cipherState;
+        _cipherState = _sessionParams.EncryptionKeyState.Copy();
         SetMaxDataLength(maxDataLength);
         SetupNewMultiBuffer();
 
@@ -120,7 +120,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
             _currentSequence = _windowStartSequence;
 
         // Send everything we haven't sent from the current window
-        long lastSequenceToSend = Math.Min(_totalSequence, _currentSequence + _handler.SessionParams.MaxQueuedReliableDataPackets);
+        long lastSequenceToSend = Math.Min(_totalSequence, _currentSequence + _sessionParams.MaxQueuedReliableDataPackets);
 
         while (_currentSequence < lastSequenceToSend)
         {
@@ -182,7 +182,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         if (!isRecursing)
             _packetOutputQueueLock.Wait();
 
-        if (!isRecursing && _handler.SessionParams.IsEncryptionEnabled)
+        if (!isRecursing && _sessionParams.IsEncryptionEnabled)
             encryptedSpan = Encrypt(data, out data);
 
         int multiLength = DataUtils.GetVariableLengthSize(data.Length) + data.Length;
@@ -302,7 +302,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         (
             packetSequence,
             _windowStartSequence,
-            _handler.SessionParams.MaxQueuedReliableDataPackets
+            _sessionParams.MaxQueuedReliableDataPackets
         );
 
     /// <inheritdoc />

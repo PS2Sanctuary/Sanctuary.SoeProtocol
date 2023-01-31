@@ -22,6 +22,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     private static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(150);
 
     private readonly SoeProtocolHandler _handler;
+    private readonly SessionParameters _sessionParams;
     private readonly NativeSpanPool _spanPool;
     private readonly DataHandler _dataHandler;
 
@@ -45,24 +46,23 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// </summary>
     /// <param name="handler">The protocol handler that owns this channel.</param>
     /// <param name="spanPool">A pool that may be used to stash out-of-order fragments.</param>
-    /// <param name="cipherState">The initial RC4 state to use. This will be disposed with the channel.</param>
     /// <param name="dataHandler">The handler for processed data.</param>
     public ReliableDataInputChannel
     (
         SoeProtocolHandler handler,
         NativeSpanPool spanPool,
-        Rc4KeyState cipherState,
         DataHandler dataHandler
     )
     {
         _handler = handler;
+        _sessionParams = handler.SessionParams;
         _spanPool = spanPool;
         _dataHandler = dataHandler;
 
-        _dataBacklog = new SlidingWindowArray<StashedData>(_handler.SessionParams.MaxQueuedReliableDataPackets);
+        _dataBacklog = new SlidingWindowArray<StashedData>(_sessionParams.MaxQueuedReliableDataPackets);
         _ackBuffer = GC.AllocateArray<byte>(Acknowledge.Size, true);
 
-        _cipherState = cipherState;
+        _cipherState = _sessionParams.EncryptionKeyState.Copy();
         _windowStartSequence = 0;
 
         for (int i = 0; i < _dataBacklog.Length; i++)
@@ -160,7 +160,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (_lastAcknowledged >= toAcknowledge)
             return;
 
-        if (_handler.SessionParams.AcknowledgeAllData)
+        if (_sessionParams.AcknowledgeAllData)
         {
             SendAck((ushort)toAcknowledge);
             return;
@@ -170,7 +170,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             _lastAckAt = Stopwatch.GetTimestamp();
 
         bool needAck = Stopwatch.GetElapsedTime(_lastAckAt) > MAX_ACK_DELAY
-            || toAcknowledge >= _lastAcknowledged + _handler.SessionParams.DataAckWindow / 2;
+            || toAcknowledge >= _lastAcknowledged + _sessionParams.DataAckWindow / 2;
         if (!needAck)
             return;
 
@@ -185,7 +185,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         sequence = GetTrueIncomingSequence(packetSequence);
 
         bool isValid = sequence >= _windowStartSequence
-            && sequence < _windowStartSequence + _handler.SessionParams.MaxQueuedReliableDataPackets;
+            && sequence < _windowStartSequence + _sessionParams.MaxQueuedReliableDataPackets;
         if (isValid)
             return true;
 
@@ -296,7 +296,7 @@ public sealed class ReliableDataInputChannel : IDisposable
 
     private void DecryptAndCallDataHandler(Span<byte> data)
     {
-        if (_handler.SessionParams.IsEncryptionEnabled)
+        if (_sessionParams.IsEncryptionEnabled)
         {
             // A single 0x00 byte may be used to prefix encrypted data. We must ignore it
             if (data.Length > 1 && data[0] == 0)
@@ -326,7 +326,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         (
             packetSequence,
             _windowStartSequence,
-            _handler.SessionParams.MaxQueuedReliableDataPackets
+            _sessionParams.MaxQueuedReliableDataPackets
         );
 
     /// <inheritdoc />
