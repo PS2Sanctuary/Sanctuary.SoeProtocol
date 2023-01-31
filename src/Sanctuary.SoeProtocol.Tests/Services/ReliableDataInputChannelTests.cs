@@ -200,7 +200,8 @@ public class ReliableDataInputChannelTests
             {
                 ApplicationProtocol = "TestProtocol",
                 RemoteUdpLength = 512,
-                EncryptionKeyState = new Rc4KeyState(new byte[] { 0, 1, 2, 3, 4 })
+                EncryptionKeyState = new Rc4KeyState(new byte[] { 0, 1, 2, 3, 4 }),
+                AcknowledgeAllData = true
             },
             SpanPool,
             networkInterface,

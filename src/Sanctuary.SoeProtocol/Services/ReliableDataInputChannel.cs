@@ -19,7 +19,10 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// </summary>
     public delegate void DataHandler(ReadOnlySpan<byte> data);
 
-    private static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(150);
+    /// <summary>
+    /// Gets the maximum length of time that data may go un-acknowledged.
+    /// </summary>
+    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(150);
 
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
@@ -38,8 +41,8 @@ public sealed class ReliableDataInputChannel : IDisposable
     private byte[]? _currentBuffer;
 
     // Ack variables
-    private long _lastAcknowledged = -1;
-    private long _lastAckAt = -1;
+    private long _lastAcknowledged;
+    private long _lastAckAt;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReliableDataInputChannel"/>.
@@ -65,6 +68,9 @@ public sealed class ReliableDataInputChannel : IDisposable
         _cipherState = _sessionParams.EncryptionKeyState.Copy();
         _windowStartSequence = 0;
 
+        _lastAcknowledged = -1;
+        _lastAckAt = Stopwatch.GetTimestamp();
+
         for (int i = 0; i < _dataBacklog.Length; i++)
             _dataBacklog[i] = new StashedData();
     }
@@ -73,7 +79,10 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// Runs a tick of the <see cref="ReliableDataInputChannel"/> operations.
     /// </summary>
     public void RunTick()
-        => SendAckIfRequired();
+    {
+        if (!_sessionParams.AcknowledgeAllData)
+            SendAckIfRequired();
+    }
 
     /// <summary>
     /// Handles a <see cref="SoeOpCode.ReliableData"/> packet.
@@ -101,6 +110,9 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         ProcessData(data);
         ConsumeStashedDataFragments();
+
+        if (_sessionParams.AcknowledgeAllData)
+            SendAckIfRequired();
     }
 
     /// <summary>
@@ -132,6 +144,9 @@ public sealed class ReliableDataInputChannel : IDisposable
         WriteImmediateFragmentToBuffer(data);
         TryProcessCurrentBuffer();
         ConsumeStashedDataFragments();
+
+        if (_sessionParams.AcknowledgeAllData)
+            SendAckIfRequired();
     }
 
     // Helper method
@@ -165,9 +180,6 @@ public sealed class ReliableDataInputChannel : IDisposable
             SendAck((ushort)toAcknowledge);
             return;
         }
-
-        if (_lastAckAt is -1)
-            _lastAckAt = Stopwatch.GetTimestamp();
 
         bool needAck = Stopwatch.GetElapsedTime(_lastAckAt) > MAX_ACK_DELAY
             || toAcknowledge >= _lastAcknowledged + _sessionParams.DataAckWindow / 2;
