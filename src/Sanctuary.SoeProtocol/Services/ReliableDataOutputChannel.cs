@@ -19,7 +19,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// <summary>
     /// Gets the maximum amount of time to wait for an acknowledgement
     /// </summary>
-    public const int ACK_WAIT_MILLISECONDS = 500;
+    public const int ACK_WAIT_MILLISECONDS = 500; // TODO: High ping could mess this up. Needs to be dynamic
 
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;

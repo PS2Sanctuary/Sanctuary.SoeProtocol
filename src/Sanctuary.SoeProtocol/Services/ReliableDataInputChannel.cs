@@ -21,8 +21,9 @@ public sealed class ReliableDataInputChannel : IDisposable
 
     /// <summary>
     /// Gets the maximum length of time that data may go un-acknowledged.
+    /// TODO: This should probably be dynamic, in cases of slow connection to sender
     /// </summary>
-    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(150);
+    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(40);
 
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
