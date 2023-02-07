@@ -141,12 +141,13 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     }
 
     /// <inheritdoc />
-    public void EnqueueData(ReadOnlySpan<byte> data)
+    public bool EnqueueData(ReadOnlySpan<byte> data)
     {
         if (State is not SessionState.Running)
-            throw new InvalidOperationException("Data can only be sent while the session is running");
+            return false;
 
         _dataOutputChannel.EnqueueData(data);
+        return true;
     }
 
     /// <inheritdoc />

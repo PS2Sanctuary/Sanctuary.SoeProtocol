@@ -36,7 +36,8 @@ public interface ISessionHandler
     /// Enqueues data to be sent to the other party.
     /// </summary>
     /// <param name="data">The data.</param>
-    public void EnqueueData(ReadOnlySpan<byte> data);
+    /// <returns><c>True</c> if the data was enqueued, otherwise <c>false</c>.</returns>
+    public bool EnqueueData(ReadOnlySpan<byte> data);
 
     /// <summary>
     /// Terminates the session handler.
