@@ -74,11 +74,12 @@ public static class Crc32
             {
                 for (int unrolling = 0; unrolling < unroll; ++unrolling)
                 {
-                    //Little endian
+                    // Little endian
                     uint one = *uintPtr++ ^ crc;
                     uint two = *uintPtr++;
                     uint three = *uintPtr++;
                     uint four = *uintPtr++;
+
                     crc = lookup_0[(four >> 24) & 0xFF] ^
                           lookup_1[(four >> 16) & 0xFF] ^
                           lookup_2[(four >> 8) & 0xFF] ^
@@ -100,7 +101,7 @@ public static class Crc32
 
             // remaining 1 to 63 bytes (standard algorithm)
             for (int i = (count / bytesAtOnce) * bytesAtOnce; i < count;)
-                crc = (crc >> 8) ^ *(lookup_0 + ((crc & 0xFF) ^ dataPtr[i++]));
+                crc = (crc >> 8) ^ lookup_0[(crc & 0xFF) ^ dataPtr[i++]];
         }
 
         return ~crc;
@@ -148,11 +149,12 @@ public static class Crc32
             {
                 for (int unrolling = 0; unrolling < unroll; ++unrolling)
                 {
-                    //Big endian
+                    // Big endian
                     uint one = *uintPtr++ ^ ReverseEndianness(crc);
                     uint two = *uintPtr++;
                     uint three = *uintPtr++;
                     uint four = *uintPtr++;
+
                     crc = lookup_0[four & 0xFF] ^
                           lookup_1[(four >> 8) & 0xFF] ^
                           lookup_2[(four >> 16) & 0xFF] ^

@@ -32,8 +32,7 @@ public class Crc32Tests
     [Fact]
     public void Hash_IsCorrect()
     {
-        const ushort hash = 52395;
-
-        Assert.Equal(hash, (ushort)Crc32.Hash(Data, Seed));
+        const uint hash = 3893349547;
+        Assert.Equal(hash, Crc32.Hash(Data, Seed));
     }
 }
