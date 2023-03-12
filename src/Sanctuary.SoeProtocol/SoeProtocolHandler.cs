@@ -135,9 +135,10 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         {
             // This is fine
         }
-
-        if (State is SessionState.Running)
+        finally
+        {
             TerminateSession();
+        }
     }
 
     /// <inheritdoc />
