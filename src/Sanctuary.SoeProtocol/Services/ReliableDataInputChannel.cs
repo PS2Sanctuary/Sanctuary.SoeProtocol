@@ -23,7 +23,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// Gets the maximum length of time that data may go un-acknowledged.
     /// TODO: This should probably be dynamic, in cases of slow connection to sender
     /// </summary>
-    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(40);
+    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(100);
 
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
@@ -45,6 +45,11 @@ public sealed class ReliableDataInputChannel : IDisposable
     // Ack variables
     private long _lastAcknowledged;
     private long _lastAckAt;
+
+    /// <summary>
+    /// Gets the input statistics.
+    /// </summary>
+    public DataInputStats InputStats { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReliableDataInputChannel"/>.
@@ -76,6 +81,8 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         for (int i = 0; i < _dataBacklog.Length; i++)
             _dataBacklog[i] = new StashedData();
+
+        InputStats = new DataInputStats();
     }
 
     /// <summary>
@@ -93,23 +100,8 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <param name="data">The reliable data.</param>
     public void HandleReliableData(Span<byte> data)
     {
-        if (!CheckSequence(data, out long sequence))
+        if (!PreprocessData(ref data, false))
             return;
-
-        data = data[sizeof(ushort)..];
-
-        if (sequence != _windowStartSequence)
-        {
-            StashedData? stash = TryGetStash(sequence);
-            if (stash is null)
-                return;
-
-            NativeSpan span = _spanPool.Rent();
-            span.CopyDataInto(data);
-            stash.Init(sequence, false, span);
-
-            return;
-        }
 
         ProcessData(data);
         ConsumeStashedDataFragments();
@@ -122,25 +114,10 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// Handles a <see cref="SoeOpCode.ReliableDataFragment"/> packet.
     /// </summary>
     /// <param name="data">The reliable data fragment.</param>
-    public void HandleReliableDataFragment(ReadOnlySpan<byte> data)
+    public void HandleReliableDataFragment(Span<byte> data)
     {
-        if (!CheckSequence(data, out long sequence))
+        if (!PreprocessData(ref data, true))
             return;
-
-        data = data[sizeof(ushort)..];
-
-        if (sequence != _windowStartSequence)
-        {
-            StashedData? stash = TryGetStash(sequence);
-            if (stash is null)
-                return;
-
-            NativeSpan span = _spanPool.Rent();
-            span.CopyDataInto(data);
-            stash.Init(sequence, true, span);
-
-            return;
-        }
 
         // At this point we know this fragment can be written directly to the buffer
         // as it is next in the sequence.
@@ -152,6 +129,41 @@ public sealed class ReliableDataInputChannel : IDisposable
             SendAckIfRequired();
     }
 
+    /// <summary>
+    /// Pre-processes reliable data, and stashes it if required.
+    /// </summary>
+    /// <param name="data">The data.</param>
+    /// <param name="isFragment">Indicates whether this data is a reliable fragment.</param>
+    /// <returns><c>True</c> if the processed data should be used, otherwise <c>false</c>.</returns>
+    private bool PreprocessData(ref Span<byte> data, bool isFragment)
+    {
+        InputStats.TotalReceived++;
+
+        if (!CheckSequence(data, out long sequence))
+        {
+            InputStats.DuplicateCount++;
+            return false;
+        }
+
+        // Remove the sequence bytes
+        data = data[sizeof(ushort)..];
+
+        if (sequence == _windowStartSequence)
+            return true;
+
+        InputStats.OutOfOrderCount++;
+
+        StashedData? stash = TryGetStash(sequence);
+        if (stash is null)
+            return false;
+
+        NativeSpan span = _spanPool.Rent();
+        span.CopyDataInto(data);
+        stash.Init(sequence, isFragment, span);
+
+        return false;
+    }
+
     // Helper method
     private StashedData? TryGetStash(long sequence)
     {
@@ -161,6 +173,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (!stash.IsActive)
             return stash;
 
+        // Sanity check. Theoretically we should never exceed the window
         if (stash.Sequence != sequence)
         {
             throw new InvalidOperationException
@@ -169,6 +182,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             );
         }
 
+        // We've already got actively stashed data with this sequence. No need to replace
         return null;
     }
 
@@ -322,6 +336,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             Rc4Cipher.Transform(data, data, ref _cipherState!);
         }
 
+        InputStats.TotalReceivedBytes += data.Length;
         _dataHandler(data);
     }
 
@@ -330,6 +345,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         Acknowledge ack = new(sequence);
         ack.Serialize(_ackBuffer);
         _handler.SendContextualPacket(SoeOpCode.Acknowledge, _ackBuffer);
+        InputStats.AcknowledgeCount++;
     }
 
     private void IncrementWindow()

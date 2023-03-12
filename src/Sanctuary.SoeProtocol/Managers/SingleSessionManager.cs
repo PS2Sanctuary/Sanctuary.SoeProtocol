@@ -27,6 +27,11 @@ public sealed class SingleSessionManager : IDisposable
     private bool _isDisposed;
 
     /// <summary>
+    /// Gets statistics related to receiving reliable data.
+    /// </summary>
+    public DataInputStats? ReliableDataReceiveStats => _protocolHandler?.ReliableDataReceiveStats;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="SingleSessionManager"/> class.
     /// </summary>
     /// <param name="logger">The logging interface to use.</param>

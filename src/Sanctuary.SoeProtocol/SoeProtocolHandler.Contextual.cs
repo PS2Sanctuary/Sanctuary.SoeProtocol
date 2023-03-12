@@ -15,6 +15,11 @@ public partial class SoeProtocolHandler
     private readonly byte[] _contextualSendBuffer;
 
     /// <summary>
+    /// Gets statistics related to receiving reliable data.
+    /// </summary>
+    public DataInputStats ReliableDataReceiveStats => _dataInputChannel.InputStats;
+
+    /// <summary>
     /// Sends a contextual packet.
     /// </summary>
     /// <param name="opCode">The OP code of the packet to send.</param>
