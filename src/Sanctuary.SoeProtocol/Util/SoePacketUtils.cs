@@ -18,6 +18,19 @@ public static class SoePacketUtils
     private static readonly RecyclableMemoryStreamManager _msManager = new();
 
     /// <summary>
+    /// Reads a <see cref="SoeOpCode"/> from a buffer.
+    /// </summary>
+    /// <param name="buffer">The buffer.</param>
+    /// <returns>The protocol OP code.</returns>
+    public static SoeOpCode ReadSoeOpCode(ReadOnlySpan<byte> buffer)
+    {
+        if (buffer.Length < sizeof(SoeOpCode))
+            return SoeOpCode.Invalid;
+
+        return (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(buffer);
+    }
+
+    /// <summary>
     /// Gets a value indicating whether the given OP code represents a
     /// packet that is used outside the context of a session.
     /// </summary>
@@ -95,7 +108,7 @@ public static class SoePacketUtils
         if (packetData.Length < sizeof(SoeOpCode))
             return SoePacketValidationResult.TooShort;
 
-        opCode = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packetData);
+        opCode = ReadSoeOpCode(packetData);
         if (!IsContextlessPacket(opCode) && !IsContextualPacket(opCode))
             return SoePacketValidationResult.InvalidOpCode;
 

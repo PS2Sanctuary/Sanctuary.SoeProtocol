@@ -2,7 +2,6 @@
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
-using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO;
 using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
@@ -76,13 +75,13 @@ public partial class SoeProtocolHandler
                 while (offset < packetData.Length)
                 {
                     int subPacketLength = (int)MultiPacketUtils.ReadVariableLength(packetData, ref offset);
-                    if (subPacketLength < 1 || subPacketLength > packetData.Length - offset)
+                    if (subPacketLength < sizeof(SoeOpCode) || subPacketLength > packetData.Length - offset)
                     {
                         TerminateSession(DisconnectReason.CorruptPacket, true);
                         return;
                     }
 
-                    SoeOpCode subPacketOpCode = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packetData[offset..]);
+                    SoeOpCode subPacketOpCode = ReadSoeOpCode(packetData[offset..]);
                     HandleContextualPacketInternal
                     (
                         subPacketOpCode,
