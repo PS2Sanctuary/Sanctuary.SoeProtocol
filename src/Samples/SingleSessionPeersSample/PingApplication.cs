@@ -3,8 +3,8 @@ using Sanctuary.SoeProtocol.Abstractions;
 using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using System;
+using System.Diagnostics;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace SingleSessionPeersSample;
 
@@ -16,6 +16,8 @@ public class PingApplication : IApplicationProtocolHandler
     private readonly ILogger<PingApplication> _logger;
 
     private ISessionHandler? _sessionHandler;
+    private long _sessionStart;
+    private long _receiveCount;
 
     /// <inheritdoc />
     public ApplicationParameters SessionParams { get; }
@@ -37,6 +39,7 @@ public class PingApplication : IApplicationProtocolHandler
     /// <inheritdoc />
     public void OnSessionOpened()
     {
+        _sessionStart = Stopwatch.GetTimestamp();
         _logger.LogInformation("{Mode} Session opened", GetModePrefix());
 
         if (_sessionHandler!.Mode is SessionMode.Client)
@@ -46,24 +49,27 @@ public class PingApplication : IApplicationProtocolHandler
     /// <inheritdoc />
     public void HandleAppData(ReadOnlySpan<byte> data)
     {
+        _receiveCount++;
         string message = Encoding.UTF8.GetString(data);
         _logger.LogInformation("{Mode} Received {Message}", GetModePrefix(), message);
 
-        if (message is not "Ping!")
-            return;
+        _sessionHandler!.EnqueueData
+        (
+            message is "Ping!" ? "Pong!"u8 : "Ping!"u8
+        );
 
-        _sessionHandler!.EnqueueData("Pong!"u8);
-
-        Task.Run(() =>
-        {
-            Task.Delay(1000).Wait();
+        if (_sessionHandler!.Mode is SessionMode.Client && Stopwatch.GetElapsedTime(_sessionStart) >= TimeSpan.FromSeconds(10))
             _sessionHandler!.TerminateSession();
-        });
     }
 
     /// <inheritdoc />
     public void OnSessionClosed(DisconnectReason disconnectReason)
-        => _logger.LogInformation("{Mode} Session closed", GetModePrefix());
+        => _logger.LogInformation
+        (
+            "{Mode} Session closed. Throughput: {Throughput}/s",
+            GetModePrefix(),
+            _receiveCount / Stopwatch.GetElapsedTime(_sessionStart).Seconds
+        );
 
     private string GetModePrefix()
         => _sessionHandler is not null
