@@ -37,7 +37,7 @@ public class ClientWorker : BackgroundService
                 ApplicationProtocol = "Ping_1"
             },
             _services.GetRequiredService<PingApplication>(),
-            new IPEndPoint(IPAddress.Loopback, 12345),
+            new IPEndPoint(IPAddress.Loopback, Program.Port),
             SessionMode.Client
         );
 
