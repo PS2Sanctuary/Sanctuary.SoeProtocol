@@ -116,16 +116,18 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         {
             while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
             {
-                SendHeartbeatIfRequired();
                 bool processedPacket = ProcessOneFromPacketQueue();
-                _dataInputChannel.RunTick();
-                _dataOutputChannel.RunTick(ct);
+
+                SendHeartbeatIfRequired();
 
                 if (Stopwatch.GetElapsedTime(_lastReceivedPacketTick) > SessionParams.InactivityTimeout)
                 {
                     TerminateSession(DisconnectReason.Timeout, false);
                     break;
                 }
+
+                _dataInputChannel.RunTick();
+                _dataOutputChannel.RunTick(ct);
 
                 if (!processedPacket)
                     await timer.WaitForNextTickAsync(ct);
@@ -201,6 +203,8 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             _openSessionOnNextClientPacket = false;
         }
 
+        // We set this after packet validation as a primitive method of stopping the connection
+        // if all we've received is multiple corrupt packets in a row
         _lastReceivedPacketTick = Stopwatch.GetTimestamp();
         Span<byte> packetData = packet.UsedSpan[sizeof(SoeOpCode)..];
         bool isSessionless = IsContextlessPacket(opCode);
