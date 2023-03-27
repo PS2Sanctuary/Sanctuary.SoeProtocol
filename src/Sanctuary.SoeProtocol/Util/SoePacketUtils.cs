@@ -192,7 +192,7 @@ public static class SoePacketUtils
     {
         NativeSpan span = pool.Rent();
         span.CopyDataInto(input);
-        using UnmanagedMemoryStream ums = span.ToStream();
+        using MemoryStream ums = span.ToStream();
 
         using ZLibStream zs = new(ums, CompressionMode.Decompress);
         MemoryStream output = _msManager.GetStream();

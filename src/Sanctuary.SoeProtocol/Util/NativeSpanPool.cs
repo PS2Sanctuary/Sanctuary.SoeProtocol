@@ -7,7 +7,7 @@ namespace Sanctuary.SoeProtocol.Util;
 /// <summary>
 /// Represents a fixed-limit pool of fixed-size <see cref="NativeSpan"/> objects.
 /// </summary>
-public sealed class NativeSpanPool : IDisposable
+public sealed class NativeSpanPool
 {
     private readonly int _memorySize;
     private readonly int _poolSize;
@@ -66,24 +66,11 @@ public sealed class NativeSpanPool : IDisposable
         if (span.FullSpan.Length != _memorySize)
             throw new InvalidOperationException($"The {nameof(NativeSpan)} was not rented from this pool");
 
-        if (span.IsDisposed)
-            return;
-
         if (_pool.Count >= _poolSize)
-        {
-            span.Dispose();
             return;
-        }
 
         span.StartOffset = 0;
         span.UsedLength = 0;
         _pool.Push(span);
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        while (_pool.TryPop(out NativeSpan? span))
-            span.Dispose();
     }
 }

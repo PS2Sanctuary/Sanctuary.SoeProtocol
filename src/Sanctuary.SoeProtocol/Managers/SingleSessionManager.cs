@@ -176,7 +176,6 @@ public sealed class SingleSessionManager : IDisposable
         if (_isDisposed)
             return;
 
-        _spanPool.Dispose();
         _protocolHandler?.Dispose();
 
         _isDisposed = true;
