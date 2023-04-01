@@ -102,6 +102,46 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     }
 
     /// <summary>
+    /// Initializes the handler. This method should be called before
+    /// <see cref="RunTick"/>.
+    /// </summary>
+    public void Initialize()
+        => _lastReceivedPacketTick = Stopwatch.GetTimestamp();
+
+    /// <summary>
+    /// Runs a single iteration of the handler's logic.
+    /// </summary>
+    /// <param name="needsMoreTime">
+    /// A value indicating whether <see cref="RunTick"/> should be called again as soon as possible.
+    /// </param>
+    /// <param name="ct">A <see cref="CancellationToken"/> that can be used to stop the operation.</param>
+    /// <returns>
+    /// <c>True</c> if the iteration ran successfully, otherwise <c>false</c>. In this case,
+    /// the handler should be considered terminated.
+    /// </returns>
+    public bool RunTick(out bool needsMoreTime, CancellationToken ct)
+    {
+        needsMoreTime = false;
+
+        if (State is SessionState.Terminated)
+            return false;
+
+        needsMoreTime = ProcessOneFromPacketQueue();
+        SendHeartbeatIfRequired();
+
+        if (Stopwatch.GetElapsedTime(_lastReceivedPacketTick) > SessionParams.InactivityTimeout)
+        {
+            TerminateSession(DisconnectReason.Timeout, false);
+            return false;
+        }
+
+        _dataInputChannel.RunTick();
+        _dataOutputChannel.RunTick(ct);
+
+        return true;
+    }
+
+    /// <summary>
     /// Asynchronously runs the protocol handler. This method will not return
     /// until either it is cancelled, or the remote party terminates the session.
     /// </summary>
