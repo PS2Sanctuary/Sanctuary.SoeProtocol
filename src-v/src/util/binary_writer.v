@@ -87,7 +87,7 @@ pub fn (mut writer BinaryWriter) write_bytes(buffer []u8) ! {
 	}
 
 	unsafe {
-		vmemmove(&u8(writer.buffer.data) + isize(writer.offset), buffer.data, buffer.len)
+		vmemmove(&u8(writer.buffer.data) + usize(writer.offset), buffer.data, buffer.len)
 	}
 	writer.offset += buffer.len
 }
@@ -99,7 +99,7 @@ pub fn (mut writer BinaryWriter) write_string_null_terminated(value string) ! {
 	}
 
 	unsafe {
-		vmemmove(&u8(writer.buffer.data) + isize(writer.offset), value.str, value.len)
+		vmemmove(&u8(writer.buffer.data) + usize(writer.offset), value.str, value.len)
 	}
 	writer.offset += value.len
 
