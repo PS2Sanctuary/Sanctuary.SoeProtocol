@@ -63,6 +63,9 @@ pub fn (mut reader BinaryReader) read_u24_be() u32 {
 	b := reader.buffer
 	o := reader.offset
 
+	_ = b[o] // bounds check
+	_ = b[o + 2] // bounds check
+
 	value := u32(b[o + 2]) | (u32(b[o + 1]) << u32(8)) | (u32(b[o]) << u32(16))
 	reader.offset += 3
 	return value
