@@ -1,11 +1,23 @@
 module main
 
 import time
+import core
+import util
 
 fn main() {
-	st := time.new_stopwatch()
+	buffer := [u8(0), u8(core.SoeOpCode.acknowledge), 0, 1, 2, 3]
+	params := core.SoeSessionParameters{
+		application_protocol: 'test'
+	}
 
-	time.sleep(time.microsecond * 1000)
+	mut total_time := time.Duration(0)
+	mut st := time.new_stopwatch()
 
-	println("Slept for ${st.elapsed().microseconds()}")
+	for _ in 0 .. 100 {
+		st.restart()
+		util.validate_soe_packet(buffer, params)
+		total_time += st.elapsed()
+	}
+
+	print('Took ${time.Duration(total_time / 100).nanoseconds()}ns avg')
 }
