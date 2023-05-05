@@ -17,7 +17,7 @@ pub enum SoePacketValidationResult {
 
 [inline]
 pub fn read_soe_op_code(buffer []u8) core.SoeOpCode {
-	if buffer.len < sizeof(core.SoeOpCode) {
+	if _unlikely_(buffer.len < sizeof(core.SoeOpCode)) {
 		return core.SoeOpCode.invalid
 	}
 
@@ -51,7 +51,7 @@ pub fn is_contextual_packet(op core.SoeOpCode) bool {
 // append_crc writes a CRC check value to the given BinaryWriter. The entirety
 // of the writer's buffer is used to calculate the check.
 pub fn append_crc(mut writer BinaryWriter, crc_seed u32, crc_length u8) {
-	if crc_length == 0 {
+	if _unlikely_(crc_length == 0) {
 		return
 	}
 
@@ -67,17 +67,17 @@ pub fn append_crc(mut writer BinaryWriter, crc_seed u32, crc_length u8) {
 
 // validate_soe_packet checks that the packet_data 'most likely' contains an SOE protocol packet.
 pub fn validate_soe_packet(packet_data []u8, params core.SoeSessionParameters) (SoePacketValidationResult, core.SoeOpCode) {
-	if packet_data.len < sizeof(core.SoeOpCode) {
+	if _unlikely_(packet_data.len < sizeof(core.SoeOpCode)) {
 		return SoePacketValidationResult.too_short, core.SoeOpCode.invalid
 	}
 
 	op := read_soe_op_code(packet_data)
-	if !is_contextless_packet(op) && !is_contextual_packet(op) {
+	if _unlikely_(!is_contextless_packet(op)) && _unlikely_(!is_contextual_packet(op)) {
 		return SoePacketValidationResult.invalid_op_code, op
 	}
 
 	minimum_length := get_packet_minimum_length(op, params.is_compression_enabled, params.crc_length)
-	if minimum_length > packet_data.len {
+	if _unlikely_(minimum_length > packet_data.len) {
 		return SoePacketValidationResult.too_short, op
 	}
 
