@@ -10,7 +10,7 @@ mut:
 
 // new_binary_reader initializes a BinaryReader instance over a mutable slice.
 [inline]
-pub fn new_binary_reader(mut buffer []u8) BinaryReader {
+pub fn new_binary_reader(buffer []u8) BinaryReader {
 	return BinaryReader{
 		buffer: buffer
 		offset: 0
