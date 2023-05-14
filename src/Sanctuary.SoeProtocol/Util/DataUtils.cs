@@ -111,13 +111,26 @@ public static class DataUtils
     }
 
     /// <summary>
-    /// Gets the amount of space in a buffer that a
-    /// variable-length integer will consume.
+    /// Gets the amount of space in a buffer that a variable-length value will consume.
     /// </summary>
     /// <param name="length">The length value.</param>
     /// <returns>The required buffer size.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetVariableLengthSize(int length)
+    {
+        if (length < 0)
+            throw new ArgumentOutOfRangeException(nameof(length), length, "Length must not be negative");
+
+        return GetVariableLengthSize((uint)length);
+    }
+
+    /// <summary>
+    /// Gets the amount of space in a buffer that a variable-length integer will consume.
+    /// </summary>
+    /// <param name="length">The length value.</param>
+    /// <returns>The required buffer size.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetVariableLengthSize(uint length)
         => length switch
         {
             < byte.MaxValue => sizeof(byte),
@@ -126,7 +139,7 @@ public static class DataUtils
         };
 
     /// <summary>
-    /// Writes a variable-length integer to a buffer.
+    /// Writes a variable-length value to a buffer.
     /// </summary>
     /// <param name="buffer">The buffer to write to.</param>
     /// <param name="length">The length value to write.</param>
