@@ -90,11 +90,11 @@ public static class DataUtils
     {
         uint value;
 
-        if (buffer[offset] < byte.MaxValue)
+        if (buffer[offset] < 0xFE)
         {
             value = buffer[offset++];
         }
-        else if (buffer[offset + 1] == byte.MaxValue && buffer[offset + 2] == byte.MaxValue)
+        else if (buffer[offset + 1] == 0xFF && buffer[offset + 2] == 0xFF)
         {
             offset += 3;
             value = BinaryPrimitives.ReadUInt32BigEndian(buffer[offset..]);
@@ -133,8 +133,8 @@ public static class DataUtils
     public static int GetVariableLengthSize(uint length)
         => length switch
         {
-            < byte.MaxValue => sizeof(byte),
-            < ushort.MaxValue => sizeof(ushort) + 1,
+            < 0xFE => sizeof(byte),
+            < 0xFFFF => sizeof(ushort) + 1,
             _ => sizeof(uint) + 3
         };
 
@@ -149,11 +149,11 @@ public static class DataUtils
     /// </param>
     public static void WriteVariableLength(Span<byte> buffer, uint length, ref int offset)
     {
-        if (length < byte.MaxValue)
+        if (length < 0xFE)
         {
             buffer[offset++] = (byte)length;
         }
-        else if (length < ushort.MaxValue)
+        else if (length < 0xFFFF)
         {
             buffer[offset++] = byte.MaxValue;
             BinaryPrimitives.WriteUInt16BigEndian(buffer[offset..], (ushort)length);
