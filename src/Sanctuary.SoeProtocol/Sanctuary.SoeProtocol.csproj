@@ -4,7 +4,7 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
         <!-- Package info -->
-        <Version>0.3.2</Version>
+        <Version>0.3.3</Version>
         <Description>A simple implementation of the SOE Protocol, a game networking layer.</Description>
     </PropertyGroup>
     
