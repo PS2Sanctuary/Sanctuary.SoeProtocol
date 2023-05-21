@@ -73,7 +73,7 @@ public sealed class SingleSessionManager : IDisposable
         using CancellationTokenSource internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         using UdpSocketNetworkInterface networkInterface = new
         (
-            (int)_sessionParams.UdpLength,
+            (int)_sessionParams.UdpLength * 64,
             _mode == SessionMode.Server
         );
 

@@ -62,6 +62,7 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         _sendSemaphore = new SemaphoreSlim(1);
 
         _socket.SendBufferSize = maxDataLength;
+        _socket.ReceiveBufferSize = maxDataLength;
     }
 
     /// <inheritdoc />
