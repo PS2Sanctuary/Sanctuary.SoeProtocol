@@ -32,12 +32,12 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// <summary>
     /// Gets the session parameters in use by the session.
     /// </summary>
-    internal SessionParameters SessionParams { get; }
+    public SessionParameters SessionParams { get; }
 
     /// <summary>
     /// Gets the application parameters in use by the session.
     /// </summary>
-    internal ApplicationParameters ApplicationParams { get; }
+    public ApplicationParameters ApplicationParams { get; }
 
     /// <inheritdoc />
     public SessionMode Mode { get; }
