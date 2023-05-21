@@ -29,7 +29,12 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
     /// <param name="maxDataLength">The maximum length of data that can be sent.</param>
     /// <param name="connectOnReceive"><c>True</c> to connect the socket upon receiving remote data.</param>
     public UdpSocketNetworkInterface(int maxDataLength, bool connectOnReceive = false)
-        : this(new Socket(SocketType.Dgram, ProtocolType.Udp), maxDataLength, connectOnReceive)
+        : this
+        (
+            new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.IP),
+            maxDataLength,
+            connectOnReceive
+        )
     {
     }
 
@@ -50,11 +55,14 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         bool disposeSocket = true
     )
     {
+        if (socket.AddressFamily is not (AddressFamily.InterNetwork or AddressFamily.InterNetworkV6))
+            throw new ArgumentException("Must be an inter-network socket");
+
         if (socket.SocketType is not SocketType.Dgram)
             throw new ArgumentException("Must be a datagram socket", nameof(socket));
 
-        if (socket.ProtocolType is not ProtocolType.Udp)
-            throw new ArgumentException("Socket must use the UDP protocol", nameof(socket));
+        if (socket.ProtocolType is not (ProtocolType.IP or ProtocolType.Udp))
+            throw new ArgumentException("Socket must use the IP or UDP protocol", nameof(socket));
 
         _socket = socket;
         _connectOnReceive = connectOnReceive;
@@ -63,6 +71,7 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
 
         _socket.SendBufferSize = maxDataLength;
         _socket.ReceiveBufferSize = maxDataLength;
+        _socket.Blocking = false;
     }
 
     /// <inheritdoc />
