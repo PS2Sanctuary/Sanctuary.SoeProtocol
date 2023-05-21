@@ -28,6 +28,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     private bool _isDisposed;
     private bool _openSessionOnNextClientPacket;
     private long _lastReceivedPacketTick;
+    private bool _runningAsync;
 
     /// <summary>
     /// Gets the session parameters in use by the session.
@@ -102,6 +103,23 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     }
 
     /// <summary>
+    /// Processes a packet immediately. Use in tandem with <see cref="RunTick"/>.
+    /// </summary>
+    /// <param name="packetData">The packet data.</param>
+    /// <param name="validate">
+    /// Use to indicate that the packet has already been validated. Must set <paramref name="opCode"/>.
+    /// </param>
+    /// <param name="opCode">The OP code of the packet, if known.</param>
+    /// <exception cref="InvalidOperationException"></exception>
+    public void ProcessPacket(Span<byte> packetData, bool validate, SoeOpCode opCode = SoeOpCode.Invalid)
+    {
+        if (_runningAsync)
+            throw new InvalidOperationException("This method should only be used in tandem with RunTick");
+
+        ProcessPacketCore(packetData, validate, opCode);
+    }
+
+    /// <summary>
     /// Initializes the handler. This method should be called before
     /// <see cref="RunTick"/>.
     /// </summary>
@@ -148,6 +166,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// <param name="ct">A <see cref="CancellationToken"/> that can be used to stop the operation.</param>
     public async Task RunAsync(CancellationToken ct)
     {
+        _runningAsync = true;
         await Task.Yield();
         using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
         _lastReceivedPacketTick = Stopwatch.GetTimestamp();
@@ -181,6 +200,8 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         {
             TerminateSession();
         }
+
+        _runningAsync = false;
     }
 
     /// <inheritdoc />
@@ -224,17 +245,25 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         _application.OnSessionClosed(reason);
     }
 
-    // ReSharper disable once UnusedMethodReturnValue.Local
     private bool ProcessOneFromPacketQueue()
     {
         if (!_packetQueue.TryDequeue(out NativeSpan? packet))
             return false;
 
-        SoePacketValidationResult validationResult = ValidatePacket(packet.UsedSpan, SessionParams, out SoeOpCode opCode);
-        if (validationResult is not SoePacketValidationResult.Valid)
+        ProcessPacketCore(packet.UsedSpan, true);
+        return true;
+    }
+
+    private void ProcessPacketCore(Span<byte> packetData, bool validate, SoeOpCode opCode = SoeOpCode.Invalid)
+    {
+        if (validate)
         {
-            TerminateSession(DisconnectReason.CorruptPacket, true);
-            return true;
+            SoePacketValidationResult validationResult = ValidatePacket(packetData, SessionParams, out opCode);
+            if (validationResult is not SoePacketValidationResult.Valid)
+            {
+                TerminateSession(DisconnectReason.CorruptPacket, true);
+                return;
+            }
         }
 
         if (_openSessionOnNextClientPacket)
@@ -246,16 +275,13 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         // We set this after packet validation as a primitive method of stopping the connection
         // if all we've received is multiple corrupt packets in a row
         _lastReceivedPacketTick = Stopwatch.GetTimestamp();
-        Span<byte> packetData = packet.UsedSpan[sizeof(SoeOpCode)..];
+        packetData = packetData[sizeof(SoeOpCode)..];
         bool isSessionless = IsContextlessPacket(opCode);
 
         if (isSessionless)
             HandleContextlessPacket(opCode, packetData);
         else
             HandleContextualPacket(opCode, packetData[..^SessionParams.CrcLength]);
-
-        _spanPool.Return(packet);
-        return true;
     }
 
     private int CalculateMaxDataLength()
