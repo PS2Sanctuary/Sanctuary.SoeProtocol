@@ -91,4 +91,11 @@ public sealed class SessionParameters
         HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
         InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
     }
+
+    /// <summary>
+    /// Creates a shallow copy of this <see cref="SessionParameters"/> instance.
+    /// </summary>
+    /// <returns>The copied instance.</returns>
+    public SessionParameters Clone()
+        => (SessionParameters)MemberwiseClone();
 }

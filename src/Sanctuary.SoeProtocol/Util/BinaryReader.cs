@@ -131,6 +131,13 @@ public ref struct BinaryReader
         return value;
     }
 
+    public float ReadSingleLE()
+    {
+        float value = BinaryPrimitives.ReadSingleLittleEndian(Span[Offset..]);
+        Offset += sizeof(float);
+        return value;
+    }
+
     public ReadOnlySpan<byte> ReadBytes(int length)
     {
         ReadOnlySpan<byte> slice = Span.Slice(Offset, length);

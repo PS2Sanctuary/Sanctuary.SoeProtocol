@@ -206,6 +206,16 @@ public ref struct BinaryWriter
     }
 
     /// <summary>
+    /// Writes a 32-bit floating point value in little endian form.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    public void WriteSingleLE(float value)
+    {
+        BinaryPrimitives.WriteSingleLittleEndian(Span[Offset..], value);
+        Offset += sizeof(float);
+    }
+
+    /// <summary>
     /// Copies the given bytes into the underlying span.
     /// </summary>
     /// <param name="buffer">The buffer to copy.</param>
