@@ -7,12 +7,12 @@ public class AcknowledgeTests
     [Fact]
     public void RoundTrip_Succeeds()
     {
-        Acknowledge acknowledge = new(2);
+        Acknowledge ack = new(2);
 
         byte[] buffer = new byte[Acknowledge.Size];
-        acknowledge.Serialize(buffer);
+        ack.Serialize(buffer);
 
         Acknowledge deserialized = Acknowledge.Deserialize(buffer);
-        Assert.Equal(acknowledge, deserialized);
+        Assert.Equal(ack, deserialized);
     }
 }

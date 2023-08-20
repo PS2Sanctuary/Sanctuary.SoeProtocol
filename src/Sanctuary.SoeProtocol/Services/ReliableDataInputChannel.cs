@@ -71,7 +71,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         _dataHandler = dataHandler;
 
         _dataBacklog = new SlidingWindowArray<StashedData>(_sessionParams.MaxQueuedReliableDataPackets);
-        _ackBuffer = GC.AllocateArray<byte>(Acknowledge.Size, true);
+        _ackBuffer = GC.AllocateArray<byte>(AcknowledgeAll.Size, true);
 
         _cipherState = _applicationParams.EncryptionKeyState?.Copy();
         _windowStartSequence = 0;
@@ -342,9 +342,9 @@ public sealed class ReliableDataInputChannel : IDisposable
 
     private void SendAck(ushort sequence)
     {
-        Acknowledge ack = new(sequence);
+        AcknowledgeAll ack = new(sequence);
         ack.Serialize(_ackBuffer);
-        _handler.SendContextualPacket(SoeOpCode.Acknowledge, _ackBuffer);
+        _handler.SendContextualPacket(SoeOpCode.AcknowledgeAll, _ackBuffer);
         InputStats.AcknowledgeCount++;
     }
 

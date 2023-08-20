@@ -4,7 +4,6 @@ using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -25,7 +24,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
-    private readonly List<StashedOutputPacket> _dispatchStash;
+    private readonly StashedOutputPacket[] _dispatchStash;
     private readonly SemaphoreSlim _packetOutputQueueLock;
 
     // Data-related
@@ -36,8 +35,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
     private long _windowStartSequence;
     private long _currentSequence;
     private long _totalSequence;
-    private long _lastAcknowledged;
-    private long _newAcknowledgement;
     private long _lastAckAt;
 
     // MultiBuffer related
@@ -64,7 +61,10 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _applicationParams = handler.ApplicationParams;
         _spanPool = spanPool;
 
-        _dispatchStash = new List<StashedOutputPacket>();
+        _dispatchStash = new StashedOutputPacket[_sessionParams.MaxQueuedReliableDataPackets];
+        for (int i = 0; i < _dispatchStash.Length; i++)
+            _dispatchStash[i] = new StashedOutputPacket();
+
         _packetOutputQueueLock = new SemaphoreSlim(1);
 
         _cipherState = _applicationParams.EncryptionKeyState?.Copy();
@@ -74,8 +74,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _windowStartSequence = 0;
         _currentSequence = 0;
         _totalSequence = 0;
-        _lastAcknowledged = -1;
-        _newAcknowledgement = -1;
     }
 
     /// <summary>
@@ -93,20 +91,9 @@ public sealed class ReliableDataOutputChannel : IDisposable
     {
         _packetOutputQueueLock.Wait(ct);
 
-        int slide = (int)(_newAcknowledgement - _lastAcknowledged);
-        if (slide > 0)
-        {
-            for (int i = 0; i < slide; i++)
-                _spanPool.Return(_dispatchStash[i].DataSpan);
-            _dispatchStash.RemoveRange(0, slide);
-
-            _lastAcknowledged = _newAcknowledgement;
-            _windowStartSequence = _newAcknowledgement + 1;
-
-            // Just in case we've received a late ack, after reverting to repeat
-            if (_currentSequence < _windowStartSequence)
-                _currentSequence = _windowStartSequence;
-        }
+        // Just in case we've received a late ack, after reverting to repeat
+        if (_currentSequence < _windowStartSequence)
+            _currentSequence = _windowStartSequence;
 
         // Pull anything from the multi-buffer
         EnqueueMultiBuffer();
@@ -128,8 +115,10 @@ public sealed class ReliableDataOutputChannel : IDisposable
         {
             ct.ThrowIfCancellationRequested();
 
-            int index = (int)(_currentSequence - _windowStartSequence);
+            int index = (int)_windowStartSequence % _sessionParams.MaxQueuedReliableDataPackets;
             StashedOutputPacket stashedPacket = _dispatchStash[index];
+            if (stashedPacket.DataSpan is null)
+                continue;
 
             SoeOpCode opCode = stashedPacket.IsFragment ? SoeOpCode.ReliableDataFragment : SoeOpCode.ReliableData;
             _handler.SendContextualPacket(opCode, stashedPacket.DataSpan.UsedSpan);
@@ -141,22 +130,21 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// Notifies the channel of an acknowledgement packet.
     /// </summary>
     /// <param name="ack">The acknowledgement.</param>
-    public void NotifyOfAcknowledge(Acknowledge ack)
+    public void NotifyOfAcknowlege(Acknowledge ack)
     {
-        if (GetTrueIncomingSequence(ack.Sequence) <= _lastAcknowledged)
-            return;
-
-        _newAcknowledgement = ack.Sequence;
-        _lastAckAt = Stopwatch.GetTimestamp();
+        long seq = GetTrueIncomingSequence(ack.Sequence);
+        ProcessAck(seq);
     }
 
     /// <summary>
-    /// Notifies the channel of an out-of-order packet.
+    /// Notifies the channel of an acknowledgement packet.
     /// </summary>
-    /// <param name="outOfOrder">The out-of-order packet.</param>
-    public void NotifyOfOutOfOrder(OutOfOrder outOfOrder)
+    /// <param name="ackAll">The acknowledgement.</param>
+    public void NotifyOfAcknowledgeAll(AcknowledgeAll ackAll)
     {
-        // TODO: We should immediately resend the mis-ordered packet
+        long seq = GetTrueIncomingSequence(ackAll.Sequence);
+        for (long i = _windowStartSequence; i <= seq; i++)
+            ProcessAck(i);
     }
 
     /// <summary>
@@ -177,6 +165,32 @@ public sealed class ReliableDataOutputChannel : IDisposable
 
         _maxDataLength = maxDataLength;
     }
+
+    private void ProcessAck(long sequence)
+    {
+        int index = GetSequenceIndexInDispatchBuffer(sequence);
+
+        StashedOutputPacket packet = _dispatchStash[index];
+        if (packet.DataSpan is not null)
+        {
+            _spanPool.Return(packet.DataSpan);
+            packet.DataSpan = null;
+        }
+
+        while (_windowStartSequence < _currentSequence)
+        {
+            index = GetSequenceIndexInDispatchBuffer(_windowStartSequence);
+            if (_dispatchStash[index].DataSpan is not null)
+                break;
+
+            _windowStartSequence++;
+        }
+
+        _lastAckAt = Stopwatch.GetTimestamp();
+    }
+
+    private int GetSequenceIndexInDispatchBuffer(long sequence)
+        => (int)sequence % _sessionParams.MaxQueuedReliableDataPackets;
 
     private void EnqueueDataInternal(ReadOnlySpan<byte> data, bool isRecursing)
     {
@@ -240,7 +254,11 @@ public sealed class ReliableDataOutputChannel : IDisposable
         writer.WriteBytes(data[..amountToTake]);
         span.UsedLength = writer.Offset;
 
-        _dispatchStash.Add(new StashedOutputPacket(true, span));
+        int dispatchIndex = GetSequenceIndexInDispatchBuffer(_totalSequence);
+        StashedOutputPacket packet = _dispatchStash[dispatchIndex];
+        packet.IsFragment = true;
+        packet.DataSpan = span;
+
         _totalSequence++;
         data = data[amountToTake..];
     }
@@ -270,7 +288,11 @@ public sealed class ReliableDataOutputChannel : IDisposable
                 break;
         }
 
-        _dispatchStash.Add(new StashedOutputPacket(false, _multiBuffer));
+        int dispatchIndex = GetSequenceIndexInDispatchBuffer(_totalSequence);
+        StashedOutputPacket packet = _dispatchStash[dispatchIndex];
+        packet.IsFragment = false;
+        packet.DataSpan = _multiBuffer;
+
         _totalSequence++;
 
         SetupNewMultiBuffer();
@@ -312,14 +334,23 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        foreach (StashedOutputPacket element in _dispatchStash)
-            _spanPool.Return(element.DataSpan);
-        _dispatchStash.Clear();
+        foreach (StashedOutputPacket packet in _dispatchStash)
+        {
+            if (packet.DataSpan is null)
+                continue;
+
+            _spanPool.Return(packet.DataSpan);
+            packet.DataSpan = null;
+        }
 
         _spanPool.Return(_multiBuffer);
         _cipherState?.Dispose();
         _packetOutputQueueLock.Dispose();
     }
 
-    private readonly record struct StashedOutputPacket(bool IsFragment, NativeSpan DataSpan);
+    private class StashedOutputPacket
+    {
+        public bool IsFragment { get; set; }
+        public NativeSpan? DataSpan { get; set; }
+    }
 }

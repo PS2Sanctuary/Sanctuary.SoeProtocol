@@ -4,7 +4,7 @@ using System.Buffers.Binary;
 namespace Sanctuary.SoeProtocol.Objects.Packets;
 
 /// <summary>
-/// Represents a packet used to acknowledge data sequences.
+/// Represents a packet used to acknowledge a data sequence.
 /// </summary>
 /// <param name="Sequence">The sequence number.</param>
 public readonly record struct Acknowledge(ushort Sequence)

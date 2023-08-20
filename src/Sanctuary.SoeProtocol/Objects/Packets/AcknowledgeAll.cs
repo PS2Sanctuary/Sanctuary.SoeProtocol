@@ -4,31 +4,30 @@ using System.Buffers.Binary;
 namespace Sanctuary.SoeProtocol.Objects.Packets;
 
 /// <summary>
-/// Represents a packet used to indicate that out-of-order
-/// data sequences have been received.
+/// Represents a packet used to acknowledge all outstanding data sequences up to the given sequence.
 /// </summary>
-/// <param name="Sequence">The mis-ordered sequence number.</param>
-public readonly record struct OutOfOrder(ushort Sequence)
+/// <param name="Sequence">The sequence number.</param>
+public readonly record struct AcknowledgeAll(ushort Sequence)
 {
     /// <summary>
     /// Gets the buffer size required to serialize an
-    /// <see cref="OutOfOrder"/> packet.
+    /// <see cref="AcknowledgeAll"/> packet.
     /// </summary>
     public const int Size = sizeof(ushort); // Sequence
 
     /// <summary>
-    /// Deserializes an <see cref="OutOfOrder"/> packet from a buffer.
+    /// Deserializes an <see cref="AcknowledgeAll"/> packet from a buffer.
     /// </summary>
     /// <param name="buffer">The buffer.</param>
     /// <returns>The deserialized packet.</returns>
-    public static OutOfOrder Deserialize(ReadOnlySpan<byte> buffer)
+    public static AcknowledgeAll Deserialize(ReadOnlySpan<byte> buffer)
     {
         ushort sequence = BinaryPrimitives.ReadUInt16BigEndian(buffer);
-        return new OutOfOrder(sequence);
+        return new AcknowledgeAll(sequence);
     }
 
     /// <summary>
-    /// Serializes this <see cref="OutOfOrder"/> packet to a buffer.
+    /// Serializes this <see cref="AcknowledgeAll"/> packet to a buffer.
     /// </summary>
     /// <param name="buffer">The buffer.</param>
     public void Serialize(Span<byte> buffer)

@@ -56,8 +56,8 @@ public static class SoePacketUtils
             or SoeOpCode.NetStatusResponse
             or SoeOpCode.ReliableData
             or SoeOpCode.ReliableDataFragment
-            or SoeOpCode.OutOfOrder
-            or SoeOpCode.Acknowledge;
+            or SoeOpCode.Acknowledge
+            or SoeOpCode.AcknowledgeAll;
 
     /// <summary>
     /// Appends a CRC check value to the given <see cref="BinaryWriter"/>.
@@ -175,8 +175,8 @@ public static class SoePacketUtils
             SoeOpCode.NetStatusResponse => GetContextualPacketPadding(isCompressionEnabled, crcLength),
             SoeOpCode.ReliableData or SoeOpCode.ReliableDataFragment => GetContextualPacketPadding(isCompressionEnabled, crcLength)
                 + sizeof(ushort) + 1, // Sequence + first byte of data,
-            SoeOpCode.OutOfOrder => GetContextualPacketPadding(isCompressionEnabled, crcLength) + OutOfOrder.Size,
             SoeOpCode.Acknowledge => GetContextualPacketPadding(isCompressionEnabled, crcLength) + Acknowledge.Size,
+            SoeOpCode.AcknowledgeAll => GetContextualPacketPadding(isCompressionEnabled, crcLength) + AcknowledgeAll.Size,
             SoeOpCode.UnknownSender => UnknownSender.Size,
             SoeOpCode.RemapConnection => RemapConnection.Size,
             _ => throw new ArgumentOutOfRangeException(nameof(opCode), opCode, "Invalid OP code")

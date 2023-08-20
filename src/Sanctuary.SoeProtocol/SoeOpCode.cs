@@ -59,12 +59,12 @@ public enum SoeOpCode : ushort
     /// <summary>
     /// Used to indicate that a data sequence was received out-of-order.
     /// </summary>
-    OutOfOrder = 0x11,
+    Acknowledge = 0x11,
 
     /// <summary>
     /// Used to acknowledge that a data sequence has been received.
     /// </summary>
-    Acknowledge = 0x15,
+    AcknowledgeAll = 0x15,
 
     /// <summary>
     /// Used to indicate that the receiving party does not have a session

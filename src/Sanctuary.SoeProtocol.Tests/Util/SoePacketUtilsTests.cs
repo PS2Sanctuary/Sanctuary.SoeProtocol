@@ -72,12 +72,12 @@ public class SoePacketUtilsTests
     public void ValidatePacket_Validates_ValidContextualPacketForAllCrcLengths(byte crcLength)
     {
         SessionParameters sessionParams = GetSessionParams(crcLength);
-        byte[] packet = new byte[sizeof(SoeOpCode) + Acknowledge.Size + crcLength];
+        byte[] packet = new byte[sizeof(SoeOpCode) + AcknowledgeAll.Size + crcLength];
         BinaryWriter writer = new(packet);
 
-        writer.WriteUInt16BE((ushort)SoeOpCode.Acknowledge);
-        new Acknowledge(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
-        writer.Advance(Acknowledge.Size);
+        writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
+        new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
+        writer.Advance(AcknowledgeAll.Size);
         SoePacketUtils.AppendCrc(ref writer, sessionParams.CrcSeed, crcLength);
 
         SoePacketValidationResult result = SoePacketUtils.ValidatePacket(packet, sessionParams, out _);
@@ -90,12 +90,12 @@ public class SoePacketUtilsTests
         const byte CRC_LENGTH = 2;
 
         SessionParameters sessionParams = GetSessionParams(CRC_LENGTH);
-        byte[] packet = new byte[sizeof(SoeOpCode) + Acknowledge.Size + CRC_LENGTH];
+        byte[] packet = new byte[sizeof(SoeOpCode) + AcknowledgeAll.Size + CRC_LENGTH];
         BinaryWriter writer = new(packet);
 
-        writer.WriteUInt16BE((ushort)SoeOpCode.Acknowledge);
-        new Acknowledge(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
-        writer.Advance(Acknowledge.Size);
+        writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
+        new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
+        writer.Advance(AcknowledgeAll.Size);
         SoePacketUtils.AppendCrc(ref writer, 0, CRC_LENGTH);
 
         SoePacketValidationResult result = SoePacketUtils.ValidatePacket(packet, sessionParams, out _);

@@ -112,16 +112,16 @@ public partial class SoeProtocolHandler
                 _dataInputChannel.HandleReliableDataFragment(packetData);
                 break;
             }
-            case SoeOpCode.OutOfOrder:
-            {
-                OutOfOrder ooo = OutOfOrder.Deserialize(packetData);
-                _dataOutputChannel.NotifyOfOutOfOrder(ooo);
-                break;
-            }
             case SoeOpCode.Acknowledge:
             {
                 Acknowledge ack = Acknowledge.Deserialize(packetData);
-                _dataOutputChannel.NotifyOfAcknowledge(ack);
+                _dataOutputChannel.NotifyOfAcknowlege(ack);
+                break;
+            }
+            case SoeOpCode.AcknowledgeAll:
+            {
+                AcknowledgeAll ackAll = AcknowledgeAll.Deserialize(packetData);
+                _dataOutputChannel.NotifyOfAcknowledgeAll(ackAll);
                 break;
             }
         }

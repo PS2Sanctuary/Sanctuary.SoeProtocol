@@ -84,7 +84,7 @@ public class ReliableDataOutputChannelTests
             true
         );
 
-        channel.NotifyOfAcknowledge(new Acknowledge(FRAGMENT_WINDOW_SIZE - 2));
+        channel.NotifyOfAcknowledgeAll(new AcknowledgeAll(FRAGMENT_WINDOW_SIZE - 2));
         await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
         channel.RunTick(CancellationToken.None);
 
