@@ -230,7 +230,8 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         if (State is SessionState.Terminated)
             return;
 
-        // TODO: Should we flush data output when notifying remote?
+        // Naive flush of the output channel
+        _dataOutputChannel.RunTick(CancellationToken.None);
         TerminationReason = reason;
 
         if (notifyRemote && State is SessionState.Running)
