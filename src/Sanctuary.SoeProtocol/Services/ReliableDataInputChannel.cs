@@ -32,7 +32,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     private readonly DataHandler _dataHandler;
 
     private readonly SlidingWindowArray<StashedData> _dataBacklog;
-    private readonly byte[] _ackBuffer;
+    private readonly byte[] _ackAllBuffer;
 
     private Rc4KeyState? _cipherState;
     private long _windowStartSequence;
@@ -71,7 +71,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         _dataHandler = dataHandler;
 
         _dataBacklog = new SlidingWindowArray<StashedData>(_sessionParams.MaxQueuedReliableDataPackets);
-        _ackBuffer = GC.AllocateArray<byte>(AcknowledgeAll.Size, true);
+        _ackAllBuffer = GC.AllocateArray<byte>(AcknowledgeAll.Size, true);
 
         _cipherState = _applicationParams.EncryptionKeyState?.Copy();
         _windowStartSequence = 0;
@@ -194,16 +194,17 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         if (_sessionParams.AcknowledgeAllData)
         {
-            SendAck((ushort)toAcknowledge);
+            SendAckAll((ushort)toAcknowledge);
             return;
         }
 
+        // TODO: Send ack if we receive a packet ahead
         bool needAck = Stopwatch.GetElapsedTime(_lastAckAt) > MAX_ACK_DELAY
             || toAcknowledge >= _lastAcknowledged + _sessionParams.DataAckWindow / 2;
         if (!needAck)
             return;
 
-        SendAck((ushort)toAcknowledge);
+        SendAckAll((ushort)toAcknowledge);
         _lastAcknowledged = toAcknowledge;
         _lastAckAt = Stopwatch.GetTimestamp();
     }
@@ -218,7 +219,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (isValid)
             return true;
 
-        SendAck((ushort)(_windowStartSequence - 1));
+        SendAckAll((ushort)(_windowStartSequence - 1));
         return false;
     }
 
@@ -340,11 +341,11 @@ public sealed class ReliableDataInputChannel : IDisposable
         _dataHandler(data);
     }
 
-    private void SendAck(ushort sequence)
+    private void SendAckAll(ushort sequence)
     {
         AcknowledgeAll ack = new(sequence);
-        ack.Serialize(_ackBuffer);
-        _handler.SendContextualPacket(SoeOpCode.AcknowledgeAll, _ackBuffer);
+        ack.Serialize(_ackAllBuffer);
+        _handler.SendContextualPacket(SoeOpCode.AcknowledgeAll, _ackAllBuffer);
         InputStats.AcknowledgeCount++;
     }
 
