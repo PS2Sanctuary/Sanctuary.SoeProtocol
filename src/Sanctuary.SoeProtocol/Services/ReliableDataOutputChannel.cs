@@ -115,7 +115,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         {
             ct.ThrowIfCancellationRequested();
 
-            int index = (int)_windowStartSequence % _sessionParams.MaxQueuedReliableDataPackets;
+            int index = (int)_currentSequence % _sessionParams.MaxQueuedReliableDataPackets;
             StashedOutputPacket stashedPacket = _dispatchStash[index];
             if (stashedPacket.DataSpan is null)
                 continue;
