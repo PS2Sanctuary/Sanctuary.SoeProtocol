@@ -4,7 +4,6 @@ using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Diagnostics;
 using System.IO;
-using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
 using BinaryWriter = Sanctuary.SoeProtocol.Util.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol;
@@ -38,7 +37,7 @@ public partial class SoeProtocolHandler
         if (SessionParams.IsCompressionEnabled)
             writer.WriteBool(false); // Compression is not implemented at the moment
         writer.WriteBytes(packetData);
-        AppendCrc(ref writer, SessionParams.CrcSeed, SessionParams.CrcLength);
+        SoePacketUtils.AppendCrc(ref writer, SessionParams.CrcSeed, SessionParams.CrcLength);
 
         _networkWriter.Send(writer.Consumed);
     }
@@ -54,7 +53,7 @@ public partial class SoeProtocolHandler
 
             if (isCompressed)
             {
-                decompressedData = Decompress(packetData, _spanPool);
+                decompressedData = SoePacketUtils.Decompress(packetData, _spanPool);
                 packetData = decompressedData.GetBuffer()
                     .AsSpan(0, (int)decompressedData.Length);
             }
@@ -81,7 +80,7 @@ public partial class SoeProtocolHandler
                         return;
                     }
 
-                    SoeOpCode subPacketOpCode = ReadSoeOpCode(packetData[offset..]);
+                    SoeOpCode subPacketOpCode = SoePacketUtils.ReadSoeOpCode(packetData[offset..]);
                     HandleContextualPacketInternal
                     (
                         subPacketOpCode,

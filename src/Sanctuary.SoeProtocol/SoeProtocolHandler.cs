@@ -251,6 +251,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
             return false;
 
         ProcessPacketCore(packet.UsedSpan, true);
+        _spanPool.Return(packet);
         return true;
     }
 

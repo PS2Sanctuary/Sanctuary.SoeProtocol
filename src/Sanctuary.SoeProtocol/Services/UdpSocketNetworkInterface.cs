@@ -16,7 +16,6 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
     private readonly Socket _socket;
     private readonly bool _connectOnReceive;
     private readonly bool _disposeSocket;
-    private readonly SemaphoreSlim _sendSemaphore;
 
     private EndPoint? _remoteEndPoint;
 
@@ -67,7 +66,6 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         _socket = socket;
         _connectOnReceive = connectOnReceive;
         _disposeSocket = disposeSocket;
-        _sendSemaphore = new SemaphoreSlim(1);
 
         _socket.SendBufferSize = maxDataLength;
         _socket.ReceiveBufferSize = maxDataLength;
@@ -80,10 +78,8 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         if (_remoteEndPoint is null)
             throw new InvalidOperationException("The remote endpoint has not been set. Either bind or connect the interface");
 
-        _sendSemaphore.Wait();
         int sent = _socket.SendTo(data, _remoteEndPoint);
 
-        _sendSemaphore.Release();
         return sent;
     }
 
@@ -93,7 +89,6 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         if (_remoteEndPoint is null)
             throw new InvalidOperationException("The remote endpoint has not been set. Either bind or connect the interface");
 
-        await _sendSemaphore.WaitAsync(ct).ConfigureAwait(false);
         int sent = await _socket.SendToAsync
         (
             data,
@@ -102,7 +97,6 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
             ct
         ).ConfigureAwait(false);
 
-        _sendSemaphore.Release();
         return sent;
     }
 
@@ -148,7 +142,5 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
     {
         if (_disposeSocket)
             _socket.Dispose();
-
-        _sendSemaphore.Dispose();
     }
 }
