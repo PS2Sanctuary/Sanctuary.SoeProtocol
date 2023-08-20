@@ -4,6 +4,10 @@ using System.Text;
 
 namespace Sanctuary.SoeProtocol.Util;
 
+/// <summary>
+/// A binary writer implementation optimised for allocation-free writes
+/// of primitive types to an underlying <see cref="Span{T}"/>.
+/// </summary>
 public ref struct BinaryWriter
 {
     /// <summary>
