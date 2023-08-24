@@ -43,8 +43,9 @@ public sealed class ReliableDataInputChannel : IDisposable
     private byte[]? _currentBuffer;
 
     // Ack variables
-    private long _lastAcknowledged;
-    private long _lastAckAt;
+    private long _lastAcknowledgedSequence;
+    private long _lastAckAllAt;
+    private long _lastReliableDataReceivedAt;
 
     /// <summary>
     /// Gets the input statistics.
@@ -76,8 +77,8 @@ public sealed class ReliableDataInputChannel : IDisposable
         _cipherState = _applicationParams.EncryptionKeyState?.Copy();
         _windowStartSequence = 0;
 
-        _lastAcknowledged = -1;
-        _lastAckAt = Stopwatch.GetTimestamp();
+        _lastAcknowledgedSequence = -1;
+        _lastAckAllAt = Stopwatch.GetTimestamp();
 
         for (int i = 0; i < _dataBacklog.Length; i++)
             _dataBacklog[i] = new StashedData();
@@ -89,10 +90,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// Runs a tick of the <see cref="ReliableDataInputChannel"/> operations.
     /// </summary>
     public void RunTick()
-    {
-        if (!_sessionParams.AcknowledgeAllData)
-            SendAckIfRequired();
-    }
+        => SendAckIfRequired();
 
     /// <summary>
     /// Handles a <see cref="SoeOpCode.ReliableData"/> packet.
@@ -105,9 +103,7 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         ProcessData(data);
         ConsumeStashedDataFragments();
-
-        if (_sessionParams.AcknowledgeAllData)
-            SendAckIfRequired();
+        SendAckIfRequired();
     }
 
     /// <summary>
@@ -124,9 +120,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         WriteImmediateFragmentToBuffer(data);
         TryProcessCurrentBuffer();
         ConsumeStashedDataFragments();
-
-        if (_sessionParams.AcknowledgeAllData)
-            SendAckIfRequired();
+        SendAckIfRequired();
     }
 
     /// <summary>
@@ -137,9 +131,10 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <returns><c>True</c> if the processed data should be used, otherwise <c>false</c>.</returns>
     private bool PreprocessData(ref Span<byte> data, bool isFragment)
     {
+        _lastReliableDataReceivedAt = Stopwatch.GetTimestamp();
         InputStats.TotalReceived++;
 
-        if (!CheckSequence(data, out long sequence))
+        if (!IsValidReliableData(data, out long sequence))
         {
             InputStats.DuplicateCount++;
             return false;
@@ -189,27 +184,29 @@ public sealed class ReliableDataInputChannel : IDisposable
     private void SendAckIfRequired()
     {
         long toAcknowledge = _windowStartSequence - 1;
-        if (_lastAcknowledged >= toAcknowledge)
+        if (_lastAcknowledgedSequence >= toAcknowledge)
             return;
 
-        if (_sessionParams.AcknowledgeAllData)
-        {
-            SendAckAll((ushort)toAcknowledge);
-            return;
-        }
-
-        // TODO: Send ack if we receive a packet ahead
-        bool needAck = Stopwatch.GetElapsedTime(_lastAckAt) > MAX_ACK_DELAY
-            || toAcknowledge >= _lastAcknowledged + _sessionParams.DataAckWindow / 2;
+        // RE the time checks - we want to wait a little bit, but we don't want this to trip
+        // a send when there's actually no data received that needs acking
+        bool needAck = (Stopwatch.GetElapsedTime(_lastAckAllAt) > MAX_ACK_DELAY
+                && Stopwatch.GetElapsedTime(_lastReliableDataReceivedAt) <= MAX_ACK_DELAY.Add(TimeSpan.FromMilliseconds(50)))
+            || toAcknowledge >= _lastAcknowledgedSequence + _sessionParams.DataAckWindow / 2
+            || _sessionParams.AcknowledgeAllData;
         if (!needAck)
             return;
 
         SendAckAll((ushort)toAcknowledge);
-        _lastAcknowledged = toAcknowledge;
-        _lastAckAt = Stopwatch.GetTimestamp();
     }
 
-    private bool CheckSequence(ReadOnlySpan<byte> data, out long sequence)
+    /// <summary>
+    /// Checks whether the given reliable data is valid.
+    /// This method will ack up to the current sequence
+    /// </summary>
+    /// <param name="data">The data.</param>
+    /// <param name="sequence">The parsed </param>
+    /// <returns></returns>
+    private bool IsValidReliableData(ReadOnlySpan<byte> data, out long sequence)
     {
         ushort packetSequence = BinaryPrimitives.ReadUInt16BigEndian(data);
         sequence = GetTrueIncomingSequence(packetSequence);
@@ -219,7 +216,11 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (isValid)
             return true;
 
-        SendAckAll((ushort)(_windowStartSequence - 1));
+        // De-dupe acks
+        long ackSeq = _windowStartSequence - 1;
+        if (_lastAcknowledgedSequence < ackSeq && Stopwatch.GetElapsedTime(_lastAckAllAt) < MAX_ACK_DELAY)
+            SendAckAll((ushort)(_windowStartSequence - 1));
+
         return false;
     }
 
@@ -347,6 +348,9 @@ public sealed class ReliableDataInputChannel : IDisposable
         ack.Serialize(_ackAllBuffer);
         _handler.SendContextualPacket(SoeOpCode.AcknowledgeAll, _ackAllBuffer);
         InputStats.AcknowledgeCount++;
+
+        _lastAcknowledgedSequence = sequence;
+        _lastAckAllAt = Stopwatch.GetTimestamp();
     }
 
     private void IncrementWindow()
