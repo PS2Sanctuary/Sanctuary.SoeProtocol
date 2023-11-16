@@ -1,5 +1,4 @@
-﻿use std::io::Read;
-use std::mem::size_of;
+﻿use std::mem::size_of;
 
 pub const MULTI_DATA_INDICATOR: [u8; 2] = [0x00, 0x19];
 
