@@ -6,6 +6,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Sanctuary.SoeProtocol.Services;
@@ -31,16 +32,23 @@ public sealed class ReliableDataOutputChannel : IDisposable
     private Rc4KeyState? _cipherState;
     private int _maxDataLength;
 
-    // Sequencing
+    /// The sequence number that the remote has most recently acknowledged.
     private long _windowStartSequence;
+    /// The sequence number that we need to output from.
     private long _currentSequence;
+    /// The total number of sequences that have been output.
     private long _totalSequence;
+
+    /// The timestamp at which we last received an ack packet.
     private long _lastAckAt;
 
-    // MultiBuffer related
+    /// The current multi-buffer
     private NativeSpan _multiBuffer;
+    /// The current offset into the multi-buffer at which data should be written.
     private int _multiBufferOffset;
+    /// The number of items that have been written to the current multi-buffer.
     private int _multiBufferItemCount;
+    /// The offset into the multi-buffer at which the first item has been written.
     private int _multiBufferFirstItemOffset;
 
     /// <summary>
@@ -61,7 +69,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _applicationParams = handler.ApplicationParams;
         _spanPool = spanPool;
 
-        _dispatchStash = new StashedOutputPacket[_sessionParams.MaxQueuedReliableDataPackets];
+        _dispatchStash = new StashedOutputPacket[_sessionParams.MaxQueuedOutgoingReliableDataPackets];
         for (int i = 0; i < _dispatchStash.Length; i++)
             _dispatchStash[i] = new StashedOutputPacket();
 
@@ -82,6 +90,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// <param name="data">The data.</param>
     public void EnqueueData(ReadOnlySpan<byte> data)
         => EnqueueDataInternal(data, false);
+    // TODO: We need to prevent overwriting stashes we're given data that splits into more fragments than we can queue
 
     /// <summary>
     /// Runs a tick of the output channel, which will send queued data.
@@ -109,16 +118,20 @@ public sealed class ReliableDataOutputChannel : IDisposable
             _currentSequence = _windowStartSequence;
 
         // Send everything we haven't sent from the current window
-        long lastSequenceToSend = Math.Min(_totalSequence, _currentSequence + _sessionParams.MaxQueuedReliableDataPackets);
+        long lastSequenceToSend = Math.Min
+        (
+            _totalSequence,
+            _currentSequence + _sessionParams.MaxQueuedOutgoingReliableDataPackets
+        );
 
         while (_currentSequence < lastSequenceToSend)
         {
             ct.ThrowIfCancellationRequested();
 
-            int index = (int)_currentSequence % _sessionParams.MaxQueuedReliableDataPackets;
+            int index = GetSequenceIndexInDispatchBuffer(_currentSequence);
             StashedOutputPacket stashedPacket = _dispatchStash[index];
             if (stashedPacket.DataSpan is null)
-                continue;
+                continue; // Packets ahead of _currentSequence may have been individually acked & cleared
 
             SoeOpCode opCode = stashedPacket.IsFragment ? SoeOpCode.ReliableDataFragment : SoeOpCode.ReliableData;
             _handler.SendContextualPacket(opCode, stashedPacket.DataSpan.UsedSpan);
@@ -130,7 +143,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// Notifies the channel of an acknowledgement packet.
     /// </summary>
     /// <param name="ack">The acknowledgement.</param>
-    public void NotifyOfAcknowlege(Acknowledge ack)
+    public void NotifyOfAcknowledge(Acknowledge ack)
     {
         long seq = GetTrueIncomingSequence(ack.Sequence);
         ProcessAck(seq);
@@ -177,6 +190,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
             packet.DataSpan = null;
         }
 
+        // Walk the window forward to our _currentSequence, until we find a packet that hasn't been acked
         while (_windowStartSequence < _currentSequence)
         {
             index = GetSequenceIndexInDispatchBuffer(_windowStartSequence);
@@ -189,8 +203,9 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _lastAckAt = Stopwatch.GetTimestamp();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetSequenceIndexInDispatchBuffer(long sequence)
-        => (int)sequence % _sessionParams.MaxQueuedReliableDataPackets;
+        => (int)sequence % _sessionParams.MaxQueuedOutgoingReliableDataPackets;
 
     private void EnqueueDataInternal(ReadOnlySpan<byte> data, bool isRecursing)
     {
@@ -263,13 +278,17 @@ public sealed class ReliableDataOutputChannel : IDisposable
         data = data[amountToTake..];
     }
 
+    /// <summary>
+    /// Queues the current multi-buffer as a full data packet.
+    /// </summary>
     private void EnqueueMultiBuffer()
     {
         switch (_multiBufferItemCount)
         {
             case 0:
                 return;
-            case 1: // Just send a normal data packet in this case
+            case 1: // Just send a non-multi data packet in this case
+                // Overwrite the multi-data indicator with the sequence
                 _multiBuffer.StartOffset = _multiBufferFirstItemOffset - sizeof(ushort);
                 _multiBuffer.UsedLength = _multiBufferOffset - _multiBuffer.StartOffset;
                 BinaryPrimitives.WriteUInt16BigEndian
@@ -279,6 +298,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
                 );
                 break;
             default:
+                // Write the current sequence to the head of the buffer
                 BinaryPrimitives.WriteUInt16BigEndian
                 (
                     _multiBuffer.FullSpan,
@@ -310,6 +330,9 @@ public sealed class ReliableDataOutputChannel : IDisposable
 
     private byte[] Encrypt(ReadOnlySpan<byte> data, out ReadOnlySpan<byte> output)
     {
+        // Note the logic for ensuring that encrypted data which begins with a zero,
+        // gets prefixed with a 0
+
         byte[] storage = ArrayPool<byte>.Shared.Rent(data.Length + 1);
         storage[0] = 0;
 
@@ -323,12 +346,13 @@ public sealed class ReliableDataOutputChannel : IDisposable
         return storage;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private long GetTrueIncomingSequence(ushort packetSequence)
         => DataUtils.GetTrueIncomingSequence
         (
             packetSequence,
             _windowStartSequence,
-            _sessionParams.MaxQueuedReliableDataPackets
+            _sessionParams.MaxQueuedOutgoingReliableDataPackets
         );
 
     /// <inheritdoc />

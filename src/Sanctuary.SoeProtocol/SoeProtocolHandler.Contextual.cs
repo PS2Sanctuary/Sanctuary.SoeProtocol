@@ -115,7 +115,7 @@ public partial class SoeProtocolHandler
             case SoeOpCode.Acknowledge:
             {
                 Acknowledge ack = Acknowledge.Deserialize(packetData);
-                _dataOutputChannel.NotifyOfAcknowlege(ack);
+                _dataOutputChannel.NotifyOfAcknowledge(ack);
                 break;
             }
             case SoeOpCode.AcknowledgeAll:

@@ -172,7 +172,8 @@ public class ReliableDataChannelEndToEndTests
                 RemoteUdpLength = SoeConstants.DefaultUdpLength,
                 IsCompressionEnabled = false,
                 CrcLength = SoeConstants.CrcLength,
-                MaxQueuedReliableDataPackets = fragmentWindowSize
+                MaxQueuedIncomingReliableDataPackets = fragmentWindowSize,
+                MaxQueuedOutgoingReliableDataPackets = fragmentWindowSize
             },
             SpanPool,
             networkInterface,

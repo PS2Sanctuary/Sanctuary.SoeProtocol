@@ -16,51 +16,48 @@ public class ReliableDataOutputChannelTests
 
     private static readonly NativeSpanPool SpanPool = new(512, 8);
 
-    // [Fact]
-    // public async Task TestRepeatsDataOnAckFailure()
-    // {
-    //     const int fragmentCount = 4;
-    //     DataOutputHandler handler = CreateChannel(false, false, out INetworkInterface networkInterface);
-    //
-    //     int packetLength = DataFragment.GetMaximumDataLength(false, false, false)
-    //         + DataFragment.GetMaximumDataLength(true, false, false) * (fragmentCount - 1);
-    //     byte[] packet = GeneratePacket(packetLength);
-    //
-    //     handler.EnqueuePacket(new MockDataPacket(packet));
-    //     await handler.RunTickAsync(CancellationToken.None);
-    //
-    //     await AssertReceivedPacketsEqualBuffer(networkInterface, packet, false, true);
-    //
-    //     // Don't acknowledge
-    //     await Task.Delay(DataOutputHandler.ACK_WAIT_MILLISECONDS + 100);
-    //     await handler.RunTickAsync(CancellationToken.None);
-    //
-    //     await AssertReceivedPacketsEqualBuffer(networkInterface, packet, false, true);
-    // }
-    //
-    // [Fact]
-    // public async Task TestRepeatsDataFromArbitraryPositionOnAckDelay()
-    // {
-    //     const int fragmentCount = 4;
-    //     DataOutputHandler handler = CreateChannel(false, false, out INetworkInterface networkInterface);
-    //
-    //     int packetLength = DataFragment.GetMaximumDataLength(false, false, false)
-    //         + DataFragment.GetMaximumDataLength(true, false, false) * (fragmentCount - 1);
-    //     byte[] packet = GeneratePacket(packetLength);
-    //
-    //     handler.EnqueuePacket(new MockDataPacket(packet));
-    //     await handler.RunTickAsync(CancellationToken.None);
-    //
-    //     await AssertReceivedPacketsEqualBuffer(networkInterface, packet, false, true);
-    //     handler.NotifyOfAcknowledge(new Acknowledge(1));
-    //
-    //     await Task.Delay(DataOutputHandler.ACK_WAIT_MILLISECONDS + 100);
-    //     await handler.RunTickAsync(CancellationToken.None);
-    //
-    //     int expectedConsumed = DataFragment.GetMaximumDataLength(false, false, false)
-    //         + DataFragment.GetMaximumDataLength(true, false, false);
-    //     await AssertReceivedPacketsEqualBuffer(networkInterface, packet.AsMemory(expectedConsumed), false, false);
-    // }
+    [Fact]
+    public async Task TestRepeatsDataOnAckFailure()
+    {
+        const int fragmentCount = 4;
+        ReliableDataOutputChannel handler = CreateChannel(out MockNetworkInterface networkInterface);
+
+        const int packetLength = MAX_DATA_LENGTH - 4
+            + MAX_DATA_LENGTH * (fragmentCount - 1);
+        byte[] packet = GeneratePacket(packetLength);
+
+        handler.EnqueueData(packet);
+        handler.RunTick(CancellationToken.None);
+        AssertReceivedPacketsEqualBuffer(networkInterface, packet, true);
+
+        // Don't acknowledge
+        await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        handler.RunTick(CancellationToken.None);
+        AssertReceivedPacketsEqualBuffer(networkInterface, packet, true);
+    }
+
+    [Fact]
+    public async Task TestRepeatsDataFromArbitraryPositionOnAckDelay()
+    {
+        const int fragmentCount = 4;
+        ReliableDataOutputChannel handler = CreateChannel(out MockNetworkInterface networkInterface);
+
+        const int packetLength = MAX_DATA_LENGTH - 4
+            + MAX_DATA_LENGTH * (fragmentCount - 1);
+        byte[] packet = GeneratePacket(packetLength);
+
+        handler.EnqueueData(packet);
+        handler.RunTick(CancellationToken.None);
+
+        AssertReceivedPacketsEqualBuffer(networkInterface, packet, true);
+        handler.NotifyOfAcknowledgeAll(new AcknowledgeAll(1));
+
+        await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        handler.RunTick(CancellationToken.None);
+
+        const int expectedConsumed = MAX_DATA_LENGTH - 4 + MAX_DATA_LENGTH;
+        AssertReceivedPacketsEqualBuffer(networkInterface, packet.AsSpan(expectedConsumed), false);
+    }
 
     [Fact]
     public async Task TestRepeatsFullWindowOfDataFromArbitraryPositionOnAckDelay()
@@ -90,7 +87,7 @@ public class ReliableDataOutputChannelTests
 
         const int expectedConsumed = MAX_DATA_LENGTH - 4
             + MAX_DATA_LENGTH * (FRAGMENT_WINDOW_SIZE - 2);
-        const int expectedRepeatLength = MAX_DATA_LENGTH * FRAGMENT_WINDOW_SIZE;
+        const int expectedRepeatLength = MAX_DATA_LENGTH * 2;
 
         AssertReceivedPacketsEqualBuffer
         (
@@ -138,7 +135,7 @@ public class ReliableDataOutputChannelTests
                 RemoteUdpLength = SoeConstants.DefaultUdpLength,
                 IsCompressionEnabled = false,
                 CrcLength = SoeConstants.CrcLength,
-                MaxQueuedReliableDataPackets = FRAGMENT_WINDOW_SIZE
+                MaxQueuedOutgoingReliableDataPackets = FRAGMENT_WINDOW_SIZE
             },
             SpanPool,
             networkInterface,

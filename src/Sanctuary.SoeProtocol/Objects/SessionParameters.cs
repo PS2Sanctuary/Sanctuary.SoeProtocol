@@ -51,7 +51,13 @@ public sealed class SessionParameters
     /// Gets or sets the maximum number of data fragments that may be
     /// queued for either stitching or dispatch.
     /// </summary>
-    public short MaxQueuedReliableDataPackets { get; init; }
+    public short MaxQueuedIncomingReliableDataPackets { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of reliable data fragments that may
+    /// be queued for output.
+    /// </summary>
+    public short MaxQueuedOutgoingReliableDataPackets { get; init; }
 
     /// <summary>
     /// Gets or sets the data acknowledgement window
@@ -86,7 +92,8 @@ public sealed class SessionParameters
         CrcLength = SoeConstants.CrcLength;
         UdpLength = SoeConstants.DefaultUdpLength;
         MaxQueuedRawPackets = 512;
-        MaxQueuedReliableDataPackets = 256;
+        MaxQueuedIncomingReliableDataPackets = 256;
+        MaxQueuedOutgoingReliableDataPackets = 196;
         DataAckWindow = 32;
         HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
         InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;

@@ -71,7 +71,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         _spanPool = spanPool;
         _dataHandler = dataHandler;
 
-        _dataBacklog = new SlidingWindowArray<StashedData>(_sessionParams.MaxQueuedReliableDataPackets);
+        _dataBacklog = new SlidingWindowArray<StashedData>(_sessionParams.MaxQueuedIncomingReliableDataPackets);
         _ackAllBuffer = GC.AllocateArray<byte>(AcknowledgeAll.Size, true);
 
         _cipherState = _applicationParams.EncryptionKeyState?.Copy();
@@ -212,7 +212,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         sequence = GetTrueIncomingSequence(packetSequence);
 
         bool isValid = sequence >= _windowStartSequence
-            && sequence < _windowStartSequence + _sessionParams.MaxQueuedReliableDataPackets;
+            && sequence < _windowStartSequence + _sessionParams.MaxQueuedIncomingReliableDataPackets;
         if (isValid)
             return true;
 
@@ -364,7 +364,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         (
             packetSequence,
             _windowStartSequence,
-            _sessionParams.MaxQueuedReliableDataPackets
+            _sessionParams.MaxQueuedIncomingReliableDataPackets
         );
 
     /// <inheritdoc />
