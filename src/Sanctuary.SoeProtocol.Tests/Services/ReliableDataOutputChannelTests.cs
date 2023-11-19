@@ -87,7 +87,7 @@ public class ReliableDataOutputChannelTests
 
         const int expectedConsumed = MAX_DATA_LENGTH - 4
             + MAX_DATA_LENGTH * (FRAGMENT_WINDOW_SIZE - 2);
-        const int expectedRepeatLength = MAX_DATA_LENGTH * 2;
+        const int expectedRepeatLength = MAX_DATA_LENGTH * (FRAGMENT_WINDOW_SIZE);
 
         AssertReceivedPacketsEqualBuffer
         (

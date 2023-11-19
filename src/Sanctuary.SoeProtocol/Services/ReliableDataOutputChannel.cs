@@ -4,6 +4,7 @@ using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -25,7 +26,10 @@ public sealed class ReliableDataOutputChannel : IDisposable
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
+    /// Holds packets that are currently within the dispatch window.
     private readonly StashedOutputPacket[] _dispatchStash;
+    /// Holds backed-up data that can't fit into the _dispatchStash, including the true sequence of the data
+    private readonly Queue<(long, StashedOutputPacket)> _dispatchQueue;
     private readonly SemaphoreSlim _packetOutputQueueLock;
 
     // Data-related
@@ -72,6 +76,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _dispatchStash = new StashedOutputPacket[_sessionParams.MaxQueuedOutgoingReliableDataPackets];
         for (int i = 0; i < _dispatchStash.Length; i++)
             _dispatchStash[i] = new StashedOutputPacket();
+        _dispatchQueue = new Queue<(long, StashedOutputPacket)>();
 
         _packetOutputQueueLock = new SemaphoreSlim(1);
 
@@ -90,7 +95,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// <param name="data">The data.</param>
     public void EnqueueData(ReadOnlySpan<byte> data)
         => EnqueueDataInternal(data, false);
-    // TODO: We need to prevent overwriting stashes we're given data that splits into more fragments than we can queue
 
     /// <summary>
     /// Runs a tick of the output channel, which will send queued data.
@@ -99,6 +103,16 @@ public sealed class ReliableDataOutputChannel : IDisposable
     public void RunTick(CancellationToken ct)
     {
         _packetOutputQueueLock.Wait(ct);
+
+        while (_dispatchQueue.TryPeek(out (long Seq, StashedOutputPacket Data) bundle))
+        {
+            int stashIndex = GetSequenceIndexInDispatchBuffer(bundle.Seq);
+            if (_dispatchStash[stashIndex].DataSpan is not null)
+                break;
+
+            _dispatchStash[stashIndex] = bundle.Data;
+            _dispatchQueue.Dequeue();
+        }
 
         // Just in case we've received a late ack, after reverting to repeat
         if (_currentSequence < _windowStartSequence)
@@ -269,12 +283,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         writer.WriteBytes(data[..amountToTake]);
         span.UsedLength = writer.Offset;
 
-        int dispatchIndex = GetSequenceIndexInDispatchBuffer(_totalSequence);
-        StashedOutputPacket packet = _dispatchStash[dispatchIndex];
-        packet.IsFragment = true;
-        packet.DataSpan = span;
-
-        _totalSequence++;
+        AddToDispatch(span, true);
         data = data[amountToTake..];
     }
 
@@ -308,14 +317,32 @@ public sealed class ReliableDataOutputChannel : IDisposable
                 break;
         }
 
+        AddToDispatch(_multiBuffer, false);
+        SetupNewMultiBuffer();
+    }
+
+    private void AddToDispatch(NativeSpan buffer, bool isFragment)
+    {
         int dispatchIndex = GetSequenceIndexInDispatchBuffer(_totalSequence);
         StashedOutputPacket packet = _dispatchStash[dispatchIndex];
-        packet.IsFragment = false;
-        packet.DataSpan = _multiBuffer;
+
+        // Check if the stash contains backed-up data
+        if (packet.DataSpan is not null)
+        {
+            packet = new StashedOutputPacket
+            {
+                IsFragment = isFragment,
+                DataSpan = buffer
+            };
+            _dispatchQueue.Enqueue((_totalSequence, packet));
+        }
+        else
+        {
+            packet.IsFragment = isFragment;
+            packet.DataSpan = buffer;
+        }
 
         _totalSequence++;
-
-        SetupNewMultiBuffer();
     }
 
     [MemberNotNull(nameof(_multiBuffer))]
