@@ -1,4 +1,5 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
+using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Tests.Mocks;
 using Sanctuary.SoeProtocol.Util;
@@ -6,6 +7,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Threading;
+using Xunit.Abstractions;
 
 namespace Sanctuary.SoeProtocol.Tests.Services;
 
@@ -14,23 +16,28 @@ public class ReliableDataChannelEndToEndTests
     private const int MAX_DATA_LENGTH = (int)SoeConstants.DefaultUdpLength - sizeof(SoeOpCode) - sizeof(ushort) - SoeConstants.CrcLength;
     private static readonly NativeSpanPool SpanPool = new(512, 16);
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TestSingleSmallPacket(bool multiDataMode)
+    private readonly ITestOutputHelper _ouputHelper;
+
+    public ReliableDataChannelEndToEndTests(ITestOutputHelper outputHelper)
+    {
+        _ouputHelper = outputHelper;
+    }
+
+    [Fact]
+    public void TestSingleSmallPacket()
         => AssertOnPackets
         (
             new[]
             {
                 GeneratePacket(5)
             },
-            multiDataMode
+            0
         );
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TestMultipleSmallPackets(bool multiDataMode)
+    [InlineData(0)]
+    [InlineData(2)]
+    public void TestMultipleSmallPackets(int numberOfPacketsToMulti)
         => AssertOnPackets
         (
             new[]
@@ -40,13 +47,18 @@ public class ReliableDataChannelEndToEndTests
                 GeneratePacket(1),
                 GeneratePacket(214)
             },
-            multiDataMode
+            numberOfPacketsToMulti
         );
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TestMultipleSmallPacketsRequiringFragmentation(bool multiDataMode)
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void TestMultipleSmallPacketsRequiringFragmentation(int numberOfPacketsToMulti)
         => AssertOnPackets
         (
             new[]
@@ -58,39 +70,35 @@ public class ReliableDataChannelEndToEndTests
                 GeneratePacket(214),
                 GeneratePacket(214)
             },
-            multiDataMode
+            numberOfPacketsToMulti
         );
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TestLargestDataPacket(bool multiDataMode)
+    [Fact]
+    public void TestLargestDataPacket()
         => AssertOnPackets
         (
             new[]
             {
                 GeneratePacket(MAX_DATA_LENGTH)
             },
-            multiDataMode
+            0
         );
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TestSingleLargePacket(bool multiDataMode)
+    [Fact]
+    public void TestSingleLargePacket()
         => AssertOnPackets
         (
             new[]
             {
                 GeneratePacket(MAX_DATA_LENGTH + 1)
             },
-            multiDataMode
+            0
         );
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TestMultipleLargePackets(bool multiDataMode)
+    [InlineData(0)]
+    [InlineData(5)]
+    public void TestMultipleLargePackets(int numberOfPacketsToMulti)
         => AssertOnPackets
         (
             new[]
@@ -100,13 +108,23 @@ public class ReliableDataChannelEndToEndTests
                 GeneratePacket((int)SoeConstants.DefaultUdpLength + 54),
                 GeneratePacket((int)SoeConstants.DefaultUdpLength * 2)
             },
-            multiDataMode
+            numberOfPacketsToMulti
         );
 
-    private static void AssertOnPackets
+    [Fact]
+    public void TestAllThePackets()
+    {
+        byte[][] packets = new byte[256][];
+        for (int i = 1; i <= 256; i++)
+            packets[i - 1] = GeneratePacket(i * 256);
+
+        AssertOnPackets(packets, 8);
+    }
+
+    private void AssertOnPackets
     (
-        IReadOnlyCollection<byte[]> packets,
-        bool multiDataMode
+        IReadOnlyList<byte[]> packets,
+        int numberOfPacketsToMulti
     )
     {
         Queue<byte[]> receiveQueue = new();
@@ -118,34 +136,47 @@ public class ReliableDataChannelEndToEndTests
             receiveQueue
         );
 
-        foreach (byte[] packet in packets)
+        for (int i = 0; i < packets.Count; i++)
         {
-            outputChannel.EnqueueData(packet);
-            if (!multiDataMode)
-                outputChannel.RunTick(CancellationToken.None);
-        }
+            outputChannel.EnqueueData(packets[i]);
 
-        if (multiDataMode)
-            outputChannel.RunTick(CancellationToken.None);
+            // If multi-batching is disabled, or we've submitted enough packets to do a multi-dispatch
+            if (numberOfPacketsToMulti <= 0 || (i + 1) % numberOfPacketsToMulti is 0)
+                outputChannel.RunTick(CancellationToken.None);
+            outputChannel.NotifyOfAcknowledgeAll(new AcknowledgeAll());
+        }
+        outputChannel.RunTick(CancellationToken.None);
 
         while (networkInterface.SentData.TryDequeue(out byte[]? packet))
         {
             SoeOpCode op = (SoeOpCode)BinaryPrimitives.ReadUInt16BigEndian(packet);
             Span<byte> outputData = packet.AsSpan()[sizeof(SoeOpCode)..^SoeConstants.CrcLength];
+            ushort sequence = 0;
+
+            if (op is SoeOpCode.ReliableData or SoeOpCode.ReliableDataFragment)
+                sequence = BinaryPrimitives.ReadUInt16BigEndian(outputData);
+
+            _ouputHelper.WriteLine($"Handling {op} packet of length {packet.Length} with seq {sequence}");
+
             if (op is SoeOpCode.ReliableData)
                 inputChannel.HandleReliableData(outputData);
             else if (op is SoeOpCode.ReliableDataFragment)
                 inputChannel.HandleReliableDataFragment(outputData);
-            else // Ack from input handler
-                break;
+            else if (op is SoeOpCode.Acknowledge)
+                outputChannel.NotifyOfAcknowledge(Acknowledge.Deserialize(packet));
+            else if (op is SoeOpCode.AcknowledgeAll)
+                outputChannel.NotifyOfAcknowledgeAll(AcknowledgeAll.Deserialize(packet));
         }
 
         Assert.Equal(packets.Count, receiveQueue.Count);
-        foreach (byte[] value in packets)
+        for (int i = 0; i < packets.Count; i++)
         {
+            _ouputHelper.WriteLine($"Checking recomposed packet {i}");
             byte[] recomposed = receiveQueue.Dequeue();
-            Assert.Equal(value.Length, recomposed.Length);
-            Assert.Equal(value, recomposed);
+            byte[] expected = packets[i];
+
+            Assert.Equal(expected.Length, recomposed.Length);
+            Assert.Equal(expected, recomposed);
         }
 
         outputChannel.Dispose();
@@ -191,8 +222,10 @@ public class ReliableDataChannelEndToEndTests
 
     private static byte[] GeneratePacket(int size)
     {
+        Random r = new(23445);
+
         byte[] packet = new byte[size];
-        Random.Shared.NextBytes(packet);
+        r.NextBytes(packet);
         return packet;
     }
 }

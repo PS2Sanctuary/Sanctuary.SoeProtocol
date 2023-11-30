@@ -1,4 +1,5 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
+using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Tests.Mocks;
 using Sanctuary.SoeProtocol.Util;
@@ -55,8 +56,8 @@ public class ReliableDataInputChannelTests
         byte[] fragment2 = GetDataFragment(2, null, out byte[] data2);
 
         channel.HandleReliableDataFragment(fragment2);
-        Assert.Empty(dataOutputQueue);
-        Assert.Empty(networkInterface.SentData);
+        Assert.Single(networkInterface.SentData); // Check only one ack has been sent
+        AssertCanPopAck(networkInterface, 2);
 
         channel.HandleReliableDataFragment(fragment0);
         Assert.Empty(dataOutputQueue);
@@ -92,8 +93,8 @@ public class ReliableDataInputChannelTests
         networkInterface.SentData.Clear();
 
         channel.HandleReliableData(packet2);
-        Assert.Empty(dataOutputQueue);
-        Assert.Empty(networkInterface.SentData);
+        Assert.Single(networkInterface.SentData);
+        AssertCanPopAck(networkInterface, 2);
 
         channel.HandleReliableData(packet1);
         Assert.Equal(2, dataOutputQueue.Count);
@@ -126,8 +127,8 @@ public class ReliableDataInputChannelTests
         networkInterface.SentData.Clear();
 
         channel.HandleReliableDataFragment(fragment3);
-        Assert.Empty(dataOutputQueue);
-        Assert.Empty(networkInterface.SentData);
+        Assert.Single(networkInterface.SentData);
+        AssertCanPopAck(networkInterface, 3);
 
         channel.HandleReliableDataFragment(fragment2);
         Assert.Single(dataOutputQueue);
@@ -150,8 +151,9 @@ public class ReliableDataInputChannelTests
 
         channel.HandleReliableDataFragment(fragment1);
         channel.HandleReliableDataFragment(fragment2);
-        Assert.Empty(dataOutputQueue);
-        Assert.Empty(networkInterface.SentData);
+        Assert.Equal(2, networkInterface.SentData.Count); // We should have two OOO acks
+        AssertCanPopAck(networkInterface, 1);
+        AssertCanPopAck(networkInterface, 2);
 
         channel.HandleReliableData(packet0);
         Assert.Equal(2, dataOutputQueue.Count);
@@ -211,5 +213,14 @@ public class ReliableDataInputChannelTests
             SpanPool,
             data => dataOutputQueue.Enqueue(data.ToArray())
         );
+    }
+
+    private static void AssertCanPopAck(MockNetworkInterface netInterface, ushort expectedSequence)
+    {
+        Assert.NotEmpty(netInterface.SentData);
+        byte[] ack = netInterface.SentData.Dequeue();
+        Assert.Equal(SoeOpCode.Acknowledge, SoePacketUtils.ReadSoeOpCode(ack));
+        Acknowledge deserialized = Acknowledge.Deserialize(ack.AsSpan(sizeof(SoeOpCode)));
+        Assert.Equal(expectedSequence, deserialized.Sequence);
     }
 }

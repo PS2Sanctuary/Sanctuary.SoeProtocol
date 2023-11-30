@@ -6,6 +6,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Sanctuary.SoeProtocol.Services;
 
@@ -45,7 +46,6 @@ public sealed class ReliableDataInputChannel : IDisposable
     // Ack variables
     private long _lastAcknowledgedSequence;
     private long _lastAckAllAt;
-    private long _lastReliableDataReceivedAt;
 
     /// <summary>
     /// Gets the input statistics.
@@ -118,6 +118,9 @@ public sealed class ReliableDataInputChannel : IDisposable
         // At this point we know this fragment can be written directly to the buffer
         // as it is next in the sequence.
         WriteImmediateFragmentToBuffer(data);
+
+        // Attempt to process the current buffer now, as the stashed fragments may belong to a new buffer
+        // ConsumeStashedDataFragments will attempt to process the current buffer as it releases stashes
         TryProcessCurrentBuffer();
         ConsumeStashedDataFragments();
         SendAckIfRequired();
@@ -131,10 +134,9 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <returns><c>True</c> if the processed data should be used, otherwise <c>false</c>.</returns>
     private bool PreprocessData(ref Span<byte> data, bool isFragment)
     {
-        _lastReliableDataReceivedAt = Stopwatch.GetTimestamp();
         InputStats.TotalReceived++;
 
-        if (!IsValidReliableData(data, out long sequence))
+        if (!IsValidReliableData(data, out long sequence, out ushort packetSequence))
         {
             InputStats.DuplicateCount++;
             return false;
@@ -146,6 +148,8 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (sequence == _windowStartSequence)
             return true;
 
+        // We've received this data ahead of schedule, so ack it individually
+        SendAck(packetSequence);
         InputStats.OutOfOrderCount++;
 
         StashedData? stash = TryGetStash(sequence);
@@ -187,10 +191,12 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (_lastAcknowledgedSequence >= toAcknowledge)
             return;
 
-        // RE the time checks - we want to wait a little bit, but we don't want this to trip
-        // a send when there's actually no data received that needs acking
+        // Send ack if:
+        // we've not sent an ack for a little while AND we actually need to acknowledge a sequence
+        // OR we've exceeded the ack window (we're receiving a lot of data)
+        // OR we're acknowledging all data
         bool needAck = (Stopwatch.GetElapsedTime(_lastAckAllAt) > MAX_ACK_DELAY
-                && Stopwatch.GetElapsedTime(_lastReliableDataReceivedAt) <= MAX_ACK_DELAY.Add(TimeSpan.FromMilliseconds(50)))
+                && toAcknowledge > _lastAcknowledgedSequence)
             || toAcknowledge >= _lastAcknowledgedSequence + _sessionParams.DataAckWindow / 2
             || _sessionParams.AcknowledgeAllData;
         if (!needAck)
@@ -200,15 +206,16 @@ public sealed class ReliableDataInputChannel : IDisposable
     }
 
     /// <summary>
-    /// Checks whether the given reliable data is valid.
-    /// This method will ack up to the current sequence
+    /// Checks whether the given reliable data is valid for processing, by ensuring
+    /// that it is within the current window and we haven't already processed it.
     /// </summary>
     /// <param name="data">The data.</param>
-    /// <param name="sequence">The parsed </param>
-    /// <returns></returns>
-    private bool IsValidReliableData(ReadOnlySpan<byte> data, out long sequence)
+    /// <param name="sequence">The true sequence.</param>
+    /// <param name="packetSequence">The embedded packet sequence.</param>
+    /// <returns>Whether we should process this data.</returns>
+    private bool IsValidReliableData(ReadOnlySpan<byte> data, out long sequence, out ushort packetSequence)
     {
-        ushort packetSequence = BinaryPrimitives.ReadUInt16BigEndian(data);
+        packetSequence = BinaryPrimitives.ReadUInt16BigEndian(data);
         sequence = GetTrueIncomingSequence(packetSequence);
 
         bool isValid = sequence >= _windowStartSequence
@@ -216,9 +223,9 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (isValid)
             return true;
 
-        // De-dupe acks
-        long ackSeq = _windowStartSequence - 1;
-        if (_lastAcknowledgedSequence < ackSeq && Stopwatch.GetElapsedTime(_lastAckAllAt) < MAX_ACK_DELAY)
+        // We're receiving data we've already fully processed, so inform the remote about this.
+        // However because data is usually received in clumps, ensure we don't send acks too quickly
+        if (Stopwatch.GetElapsedTime(_lastAckAllAt) < MAX_ACK_DELAY)
             SendAckAll((ushort)(_windowStartSequence - 1));
 
         return false;
@@ -266,8 +273,8 @@ public sealed class ReliableDataInputChannel : IDisposable
         {
             StashedData curr = _dataBacklog.Current;
 
-            // We should never reach a state where we have skipped
-            // past stashed fragments
+            // We should never reach a state where we have skipped past stashed fragments.
+            // We perform this check (in tandem with the <= comparison above) for sanity.
             if (curr.Sequence < _windowStartSequence)
             {
                 throw new Exception
@@ -353,6 +360,16 @@ public sealed class ReliableDataInputChannel : IDisposable
         _lastAckAllAt = Stopwatch.GetTimestamp();
     }
 
+    private void SendAck(ushort sequence)
+    {
+        Acknowledge ack = new(sequence);
+        Span<byte> buffer = stackalloc byte[Acknowledge.Size];
+        ack.Serialize(buffer);
+        _handler.SendContextualPacket(SoeOpCode.Acknowledge, buffer);
+        InputStats.AcknowledgeCount++;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void IncrementWindow()
     {
         _windowStartSequence++;
@@ -383,6 +400,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         }
     }
 
+    [SkipLocalsInit]
     private class StashedData
     {
         [MemberNotNullWhen(true, nameof(Span))]
