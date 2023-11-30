@@ -7,7 +7,7 @@ namespace Sanctuary.SoeProtocol.Objects;
 /// Contains parameters used by an application to control the underlying SOE session.
 /// </summary>
 [SkipLocalsInit]
-public class ApplicationParameters : IDisposable
+public class ApplicationParameters
 {
     private bool _isEncryptionEnabled;
 
@@ -40,22 +40,5 @@ public class ApplicationParameters : IDisposable
     {
         EncryptionKeyState = encryptionKeyState;
         IsEncryptionEnabled = false;
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Disposes of managed and unmanaged resources.
-    /// </summary>
-    /// <param name="disposeManaged">Whether to dispose of managed resources.</param>
-    protected virtual void Dispose(bool disposeManaged)
-    {
-        if (disposeManaged)
-            EncryptionKeyState?.Dispose();
     }
 }

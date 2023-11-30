@@ -395,7 +395,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
         }
 
         _spanPool.Return(_multiBuffer);
-        _cipherState?.Dispose();
         _packetOutputQueueLock.Dispose();
     }
 

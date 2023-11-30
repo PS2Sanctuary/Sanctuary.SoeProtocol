@@ -19,7 +19,6 @@ public class Rc4CipherTests
 
             Rc4Cipher.Transform(plaintextBytes, cipherBytes, ref state);
             Assert.Equal(testVector.CipherText, cipherBytes);
-            state.Dispose();
         }
     }
 
@@ -39,8 +38,6 @@ public class Rc4CipherTests
             Rc4Cipher.Transform(encryptedBytes, decryptedBytes, ref decryptState);
 
             Assert.Equal(plaintextBytes, decryptedBytes);
-            encryptState.Dispose();
-            decryptState.Dispose();
         }
     }
 
@@ -62,7 +59,6 @@ public class Rc4CipherTests
             Rc4Cipher.Transform(testVector.CipherText.AsSpan(half), decrypted.AsSpan(half), ref state);
 
             Assert.Equal(testVector.PlainText, Encoding.ASCII.GetString(decrypted));
-            state.Dispose();
         }
     }
 
@@ -83,8 +79,6 @@ public class Rc4CipherTests
         Rc4Cipher.Transform(testValues2.AsSpan(2), testValues2.AsSpan(2), ref state2);
 
         Assert.Equal(testValues1[2], testValues2[2]);
-        state1.Dispose();
-        state2.Dispose();
     }
 
     private static Rc4KeyState GetRc4KeyState(TestVector testVector)

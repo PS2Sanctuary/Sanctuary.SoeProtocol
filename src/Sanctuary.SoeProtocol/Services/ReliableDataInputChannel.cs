@@ -370,8 +370,6 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        _cipherState?.Dispose();
-
         for (int i = 0; i < _dataBacklog.Length; i++)
         {
             if (_dataBacklog[i].IsActive)
