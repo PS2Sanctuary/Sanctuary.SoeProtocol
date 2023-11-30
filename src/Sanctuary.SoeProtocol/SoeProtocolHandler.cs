@@ -52,6 +52,9 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// <inheritdoc />
     public DisconnectReason TerminationReason { get; private set; }
 
+    /// <inheritdoc />
+    public bool TerminatedByRemote { get; private set; }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="SoeProtocolHandler"/> class.
     /// </summary>
@@ -224,26 +227,32 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// </summary>
     /// <param name="reason">The termination reason.</param>
     /// <param name="notifyRemote">Whether to notify the remote party.</param>
-    /// <exception cref="InvalidOperationException"></exception>
-    protected void TerminateSession(DisconnectReason reason, bool notifyRemote)
+    /// <param name="terminatedByRemote">Indicates whether this termination has come from the remote party.</param>
+    protected void TerminateSession(DisconnectReason reason, bool notifyRemote, bool terminatedByRemote = false)
     {
         if (State is SessionState.Terminated)
             return;
 
-        // Naive flush of the output channel
-        _dataOutputChannel.RunTick(CancellationToken.None);
-        TerminationReason = reason;
-
-        if (notifyRemote && State is SessionState.Running)
+        try
         {
-            Disconnect disconnect = new(SessionId, reason);
-            Span<byte> buffer = stackalloc byte[Disconnect.Size];
-            disconnect.Serialize(buffer);
-            SendContextualPacket(SoeOpCode.Disconnect, buffer);
-        }
+            // Naive flush of the output channel
+            _dataOutputChannel.RunTick(CancellationToken.None);
+            TerminationReason = reason;
 
-        State = SessionState.Terminated;
-        _application.OnSessionClosed(reason);
+            if (notifyRemote && State is SessionState.Running)
+            {
+                Disconnect disconnect = new(SessionId, reason);
+                Span<byte> buffer = stackalloc byte[Disconnect.Size];
+                disconnect.Serialize(buffer);
+                SendContextualPacket(SoeOpCode.Disconnect, buffer);
+            }
+        }
+        finally
+        {
+            State = SessionState.Terminated;
+            TerminatedByRemote = terminatedByRemote;
+            _application.OnSessionClosed(reason);
+        }
     }
 
     private bool ProcessOneFromPacketQueue()

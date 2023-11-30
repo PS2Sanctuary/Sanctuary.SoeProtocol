@@ -33,6 +33,11 @@ public interface ISessionHandler
     public DisconnectReason TerminationReason { get; }
 
     /// <summary>
+    /// Indicates whether the session was terminated by the remote party.
+    /// </summary>
+    bool TerminatedByRemote { get; }
+
+    /// <summary>
     /// Enqueues data to be sent to the other party.
     /// </summary>
     /// <param name="data">The data.</param>

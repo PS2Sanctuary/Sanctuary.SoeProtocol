@@ -190,6 +190,7 @@ public static class SoePacketUtils
     /// <returns>A stream containing the decompressed data.</returns>
     public static MemoryStream Decompress(ReadOnlySpan<byte> input, NativeSpanPool pool)
     {
+        // TODO: The efficiency of this method could really be improved
         NativeSpan span = pool.Rent();
         span.CopyDataInto(input);
         using MemoryStream ums = span.ToStream();

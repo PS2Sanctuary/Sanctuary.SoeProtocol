@@ -65,7 +65,7 @@ public partial class SoeProtocolHandler
 
     private void HandleContextualPacketInternal(SoeOpCode opCode, Span<byte> packetData)
     {
-        // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
+        // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
         switch (opCode)
         {
             case SoeOpCode.MultiPacket:
@@ -94,7 +94,7 @@ public partial class SoeProtocolHandler
             case SoeOpCode.Disconnect:
             {
                 Disconnect disconnect = Disconnect.Deserialize(packetData);
-                TerminateSession(disconnect.Reason, false);
+                TerminateSession(disconnect.Reason, false, true);
                 break;
             }
             case SoeOpCode.Heartbeat when Mode is SessionMode.Server:
@@ -123,6 +123,10 @@ public partial class SoeProtocolHandler
                 AcknowledgeAll ackAll = AcknowledgeAll.Deserialize(packetData);
                 _dataOutputChannel.NotifyOfAcknowledgeAll(ackAll);
                 break;
+            }
+            default:
+            {
+                throw new InvalidOperationException($"The contextual handler does not support {opCode} packets");
             }
         }
     }

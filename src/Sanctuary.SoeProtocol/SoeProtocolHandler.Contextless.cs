@@ -66,7 +66,9 @@ public partial class SoeProtocolHandler
                 throw new InvalidOperationException("Remap requests must be handled by the connection manager");
             }
             default:
+            {
                 throw new InvalidOperationException($"{nameof(HandleContextlessPacket)} cannot handle {opCode} packets");
+            }
         }
     }
 
