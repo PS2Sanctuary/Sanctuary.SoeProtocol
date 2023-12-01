@@ -11,7 +11,7 @@ namespace Sanctuary.SoeProtocol.Tests.Services;
 
 public class ReliableDataInputChannelTests
 {
-    private const int DATA_LENGTH = 8;
+    private const int DATA_LENGTH = 16;
 
     private static readonly NativeSpanPool SpanPool = new(DATA_LENGTH + 6, 8); // + 6, space for sequence + CompleteDataLength
 
@@ -21,9 +21,9 @@ public class ReliableDataInputChannelTests
         Queue<byte[]> dataOutputQueue = new();
         using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface networkInterface);
 
-        byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, out byte[] data0);
-        byte[] fragment1 = GetDataFragment(1, null, out byte[] data1);
-        byte[] fragment2 = GetDataFragment(2, null, out byte[] data2);
+        byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, out Span<byte> data0);
+        byte[] fragment1 = GetDataFragment(1, null, out Span<byte> data1);
+        byte[] fragment2 = GetDataFragment(2, null, out Span<byte> data2);
 
         channel.HandleReliableDataFragment(fragment0);
         Assert.Empty(dataOutputQueue);
@@ -51,13 +51,13 @@ public class ReliableDataInputChannelTests
         Queue<byte[]> dataOutputQueue = new();
         using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface networkInterface);
 
-        byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, out byte[] data0);
-        byte[] fragment1 = GetDataFragment(1, null, out byte[] data1);
-        byte[] fragment2 = GetDataFragment(2, null, out byte[] data2);
+        byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 3, out Span<byte> data0);
+        byte[] fragment1 = GetDataFragment(1, null, out Span<byte> data1);
+        byte[] fragment2 = GetDataFragment(2, null, out Span<byte> data2);
 
         channel.HandleReliableDataFragment(fragment2);
         Assert.Single(networkInterface.SentData); // Check only one ack has been sent
-        AssertCanPopAck(networkInterface, 2);
+        AssertCanPopAck(networkInterface, 2, false);
 
         channel.HandleReliableDataFragment(fragment0);
         Assert.Empty(dataOutputQueue);
@@ -83,7 +83,7 @@ public class ReliableDataInputChannelTests
 
         byte[] packet0 = GetDataFragment(0, null, out _);
         byte[] packet1 = GetDataFragment(1, null, out _);
-        byte[] packet2 = GetDataFragment(2, null, out byte[] data2);
+        byte[] packet2 = GetDataFragment(2, null, out Span<byte> data2);
 
         channel.HandleReliableData(packet0);
         Assert.Single(dataOutputQueue);
@@ -94,7 +94,7 @@ public class ReliableDataInputChannelTests
 
         channel.HandleReliableData(packet2);
         Assert.Single(networkInterface.SentData);
-        AssertCanPopAck(networkInterface, 2);
+        AssertCanPopAck(networkInterface, 2, false);
 
         channel.HandleReliableData(packet1);
         Assert.Equal(2, dataOutputQueue.Count);
@@ -112,8 +112,8 @@ public class ReliableDataInputChannelTests
 
         byte[] fragment0 = GetDataFragment(0, DATA_LENGTH * 2, out _);
         byte[] fragment1 = GetDataFragment(1, null, out _);
-        byte[] fragment2 = GetDataFragment(2, DATA_LENGTH * 2, out byte[] data2);
-        byte[] fragment3 = GetDataFragment(3, null, out byte[] data3);
+        byte[] fragment2 = GetDataFragment(2, DATA_LENGTH * 2, out Span<byte> data2);
+        byte[] fragment3 = GetDataFragment(3, null, out Span<byte> data3);
 
         channel.HandleReliableDataFragment(fragment0);
         Assert.Empty(dataOutputQueue);
@@ -128,7 +128,7 @@ public class ReliableDataInputChannelTests
 
         channel.HandleReliableDataFragment(fragment3);
         Assert.Single(networkInterface.SentData);
-        AssertCanPopAck(networkInterface, 3);
+        AssertCanPopAck(networkInterface, 3, false);
 
         channel.HandleReliableDataFragment(fragment2);
         Assert.Single(dataOutputQueue);
@@ -145,15 +145,15 @@ public class ReliableDataInputChannelTests
         Queue<byte[]> dataOutputQueue = new();
         using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface networkInterface);
 
-        byte[] packet0 = GetDataFragment(0, null, out byte[] data0);
-        byte[] fragment1 = GetDataFragment(1, DATA_LENGTH * 2, out byte[] data1);
-        byte[] fragment2 = GetDataFragment(2, null, out byte[] data2);
+        byte[] packet0 = GetDataFragment(0, null, out Span<byte> data0);
+        byte[] fragment1 = GetDataFragment(1, DATA_LENGTH * 2, out Span<byte> data1);
+        byte[] fragment2 = GetDataFragment(2, null, out Span<byte> data2);
 
         channel.HandleReliableDataFragment(fragment1);
         channel.HandleReliableDataFragment(fragment2);
-        Assert.Equal(2, networkInterface.SentData.Count); // We should have two OOO acks
-        AssertCanPopAck(networkInterface, 1);
-        AssertCanPopAck(networkInterface, 2);
+        Assert.Equal(2, networkInterface.SentData.Count); // We should have two acks
+        AssertCanPopAck(networkInterface, 1, false);
+        AssertCanPopAck(networkInterface, 2, false);
 
         channel.HandleReliableData(packet0);
         Assert.Equal(2, dataOutputQueue.Count);
@@ -165,14 +165,56 @@ public class ReliableDataInputChannelTests
         Assert.Equal(data2, stitched[DATA_LENGTH..].ToArray());
     }
 
-    public static byte[] GetDataFragment(ushort sequence, uint? completeDataLength, out byte[] data)
+    [Fact]
+    public void TestMultiData()
     {
-        int length = DATA_LENGTH
-            + sizeof(ushort)
-            + (completeDataLength is null ? 0 : sizeof(uint));
+        int multiLen = sizeof(ushort) // Sequence
+            + DataUtils.MULTI_DATA_INDICATOR.Length
+            + 2 // Two packets of len 1
+            + MultiPacketUtils.GetVariableLengthSize(1) * 2;
+        byte[] multiBuffer = new byte[multiLen];
 
-        data = new byte[DATA_LENGTH];
-        Random.Shared.NextBytes(data);
+        // Fill out the data buffer
+        int offset = sizeof(ushort);
+        DataUtils.WriteMultiDataIndicator(multiBuffer, ref offset);
+        MultiPacketUtils.WriteVariableLength(multiBuffer, 1, ref offset);
+        multiBuffer[offset++] = 2;
+        MultiPacketUtils.WriteVariableLength(multiBuffer, 1, ref offset);
+        multiBuffer[offset] = 4;
+
+        // Setup the input channel
+        Queue<byte[]> dataOutputQueue = new();
+        using ReliableDataInputChannel channel = CreateChannel(dataOutputQueue, out MockNetworkInterface netInterface);
+
+        channel.HandleReliableData(multiBuffer);
+        AssertCanPopAck(netInterface, 0, true);
+        Assert.Equal(2, dataOutputQueue.Count);
+
+        Assert.Equal(new byte[] { 2 }, dataOutputQueue.Dequeue());
+        Assert.Equal(new byte[] { 4 }, dataOutputQueue.Dequeue());
+
+        multiBuffer[1] = 0x01; // Increment the sequence
+        netInterface.SentData.Clear();
+
+        channel.HandleReliableData(multiBuffer);
+        AssertCanPopAck(netInterface, 1, true);
+        Assert.Equal(2, dataOutputQueue.Count);
+
+        Assert.Equal(new byte[] { 2 }, dataOutputQueue.Dequeue());
+        Assert.Equal(new byte[] { 4 }, dataOutputQueue.Dequeue());
+    }
+
+    public static byte[] GetDataFragment
+    (
+        ushort sequence,
+        uint? completeDataLength,
+        out Span<byte> data,
+        int dataLength = DATA_LENGTH
+    )
+    {
+        int length = dataLength
+            + sizeof(ushort) // Sequence
+            + (completeDataLength is null ? 0 : sizeof(uint));
 
         byte[] buffer = new byte[length];
         BinaryWriter writer = new(buffer);
@@ -180,7 +222,9 @@ public class ReliableDataInputChannelTests
         writer.WriteUInt16BE(sequence);
         if (completeDataLength is not null)
             writer.WriteUInt32BE(completeDataLength.Value);
-        writer.WriteBytes(data);
+
+        data = writer.RemainingSpan;
+        Random.Shared.NextBytes(data);
 
         return buffer;
     }
@@ -215,11 +259,21 @@ public class ReliableDataInputChannelTests
         );
     }
 
-    private static void AssertCanPopAck(MockNetworkInterface netInterface, ushort expectedSequence)
+    private static void AssertCanPopAck
+    (
+        MockNetworkInterface netInterface,
+        ushort expectedSequence,
+        bool expectAll
+    )
     {
         Assert.NotEmpty(netInterface.SentData);
         byte[] ack = netInterface.SentData.Dequeue();
-        Assert.Equal(SoeOpCode.Acknowledge, SoePacketUtils.ReadSoeOpCode(ack));
+
+        SoeOpCode expectedCode = expectAll
+            ? SoeOpCode.AcknowledgeAll
+            : SoeOpCode.Acknowledge;
+        Assert.Equal(expectedCode, SoePacketUtils.ReadSoeOpCode(ack));
+
         Acknowledge deserialized = Acknowledge.Deserialize(ack.AsSpan(sizeof(SoeOpCode)));
         Assert.Equal(expectedSequence, deserialized.Sequence);
     }
