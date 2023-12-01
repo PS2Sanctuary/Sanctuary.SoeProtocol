@@ -4,13 +4,13 @@ The SOE protocol is designed to facilitate reliable and ordered transmission of 
 is typically a higher-level application protocol, such as PlanetSide 2's `LoginUdp` or `ExternalGatewayApi`
 protocols.
 
-Please familiarise yourself with the definitions of `ReliableData`, `ReliableDataFragment`, `OutOfOrder`
-and `Acknowledge` packets in the [packet reference](./packet-reference.md) before continuing.
+Please familiarise yourself with the definitions of `ReliableData`, `ReliableDataFragment`, `Acknowledge`
+and `AcknowledgeAll` packets in the [packet reference](./packet-reference.md) before continuing.
 
 ## Data Preparation
 
-Before application data is sent, it may be prepared using a pipeline of stages. These stages should, of
-course, be repeated in reverse on the receiving end.
+Before application data is sent, it may be prepared using a pipeline of stages. These stages should
+be performed in the order they are documented, and of course be repeated in reverse on the receiving end.
 
 ### 1. Encryption
 
@@ -74,15 +74,14 @@ that it wrap around back to zero, which implementations must account for.
 
 ### Re-sending Data
 
-The receiver must `Acknowledge` data within a reasonable amount of time. Depending on the implementation, they
-might need to acknowledge every data sequence, or only the most recent sequence they received every so often, in a
+The receiver must `Acknowledge/AcknowledgeAll` data within a reasonable amount of time. Depending on the implementation,
+they might need to acknowledge every data sequence, or only the most recent sequence they received every so often, in a
 [sliding window](https://en.wikipedia.org/wiki/Sliding_window_protocol) fashion. For example, the PlanetSide 2
 client only acknowledges server data packets every so often, but the server acknowledges every data packet sent
 by the client.
 
 In the case that a data sequence is *not* acknowledged, the sender must re-send all the data sequences starting
-from the unacknowledged sequence, until the receiver acknowledges them. The same must be done in the case that any
-`OutOfOrder` packets are received, starting from the lowest `OutOfOrder` sequence.
+from the unacknowledged sequence, until the receiver acknowledges them.
 
 ## Receiving Data
 
@@ -90,9 +89,7 @@ When receiving data, packets must be processed in order of their sequence number
 for `ReliableData` packets, as they do not need reassembling, the SOE protocol guarantees to the application data
 it is proxying that the data will be received in order.
 
-As such, if the implementation receives a sequence that is out-of-order, it must either stash it for use later, or
-discard it and send an `OutOfOrder` packet to instruct the sender to re-send it (assuming that in the meantime, the
-missing packets will arrive and can be acknowledged).
+As such, if the implementation receives a sequence that is out-of-order, it must stash it for use later.
 
 `ReliableDataFragment` packets need special attention, in order to reassemble them. The first fragment of a large buffer
 should be identified. This will contain the `CompleteDataLength` field, which indicates the number of sequences/
@@ -109,7 +106,7 @@ through the buffer, reading the variable-length size and the corresponding sub-b
 ### Acknowledging Data
 
 Implementations can either `Acknowledge` each sequence as it arrives, or acknowledge multiple sequences by sending
-an `Acknowledge` packet with the most recent sequence received after some period of time. How this period of time
+an `AcknowledgeAll` packet with the most recent sequence received after some period of time. How this period of time
 is calculated is not entirely understood; in some cases it appears to be an acknowledgement of every Xth sequence
 or after a timeout; in other cases it appears to be entirely time based (e.g. send acknowledgement every 0.5s while
 receiving data).

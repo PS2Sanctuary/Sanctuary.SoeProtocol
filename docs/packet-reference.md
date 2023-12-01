@@ -98,8 +98,9 @@ struct Disconnect
 
 ### Heartbeat (0x06)
 
-Heartbeat packets are used to keep a session alive. They are only sent by the game client, if
-it has not received a packet from the server in ~25-30 seconds. They carry no data.
+Heartbeat packets are used to keep a session alive. They are sent by the game client if
+it has not received a packet from the server in ~25-30 seconds, and the server must
+respond with a heartbeat of its own to keep the connection alive.
 
 ```csharp
 struct Heartbeat
@@ -109,7 +110,7 @@ struct Heartbeat
 
 ### NetStatusRequest (0x07)
 
-It is not entirely clear how these packets are used.
+It is not entirely clear how these packets are used, nor if the structure represented here is correct.
 
 ```csharp
 struct NetStatusRequest
@@ -128,7 +129,7 @@ struct NetStatusRequest
 
 ### NetStatusResponse (0x08)
 
-Is it not entirely clear how these packets are used.
+Is it not entirely clear how these packets are used, nor if the structure represented here is correct.
 
 ```csharp
 struct NetStatusResponse
@@ -170,33 +171,33 @@ struct ReliableDataFragment
 }
 ```
 
-### OutOfOrder (0x11)
+### Acknowledge (0x11)
 
-OutOfOrder packets are sent by a party when they receive a mis-ordered data sequence.
-They indicate to the sender that the packets should be re-sent.
-
-```csharp
-struct OutOfOrder
-{
-    ushort Sequence; // The sequence number of the mis-ordered data packet.
-}
-```
-
-### Acknowledge (0x15)
-
-Acknowledge packets are sent by a party to indicate the most recent data sequence they have received.
+Acknowledge packets are sent by a party to indicate they have received a particular data packet.
 
 ```csharp
 struct Acknowledge
 {
-    ushort Sequence; // The sequence number of the data packet that is being acknowledged.
+    ushort Sequence; // The sequence number of the data packet.
+}
+```
+
+### AcknowledgeAll (0x15)
+
+AcknowledgeAll packets are sent by a party to indicate the most recent data sequence they received,
+thereby preventing the need to send many Acknowledge packets.
+
+```csharp
+struct AcknowledgeAll
+{
+    ushort Sequence; // The sequence number of the most recently received data packet.
 }
 ```
 
 ### UnknownSender (0x1D)
 
 UnknownSender packets are used to indicate that an SOE protocol packet has been received from a remote
-end point for which the receiver does not currently have a running session. The remote party, upon
+endpoint for which the receiver does not currently have a running session. The remote party, upon
 receiving this packet, may either request a remap, start a new session, or terminate.
 
 ```csharp

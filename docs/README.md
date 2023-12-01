@@ -39,7 +39,7 @@ RemapConnection = 0x1E
 
 > **Note**: 'data packets' (ReliableData/ReliableDataFragment/OutOfOrder/Acknowledge) are actually duplicated
 > four times each, using consecutive OP codes. This allows data to be sent on multiple 'channels'.
-> However, only the first channel has been used in any games utilising the SOE protocol thus far.
+> However, to the author's knowledge, only the first channel has been observed in any games utilising the SOE protocol thus far.
 
 ---
 
