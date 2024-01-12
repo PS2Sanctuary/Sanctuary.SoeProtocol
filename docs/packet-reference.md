@@ -35,8 +35,7 @@ struct SessionResponse
 
 MultiPackets are used to wrap many smaller SOE packets before they are sent. This is often utilised in
 the middle of data transmission, where a party wants to send a `ReliableData` packet and simultaneously
-`Acknowledge` data from the other party. Another oft-occurring example is when multiple `OutOfOrder`
-packets need to be sent.
+`Acknowledge` data from the other party.
 
 > **Note**: typically, when a MultiPacket is carrying multiple of the same sub-packet, compression will be used.
 

@@ -31,13 +31,13 @@ NetStatusRequest = 0x07,
 NetStatusResponse = 0x08,
 ReliableData = 0x09,
 ReliableDataFragment = 0x0D,
-OutOfOrder = 0x11,
-Acknowledge = 0x15,
+Acknowledge = 0x11,
+AcknowledgeAll = 0x15,
 UnknownSender = 0x1D,
 RemapConnection = 0x1E
 ```
 
-> **Note**: 'data packets' (ReliableData/ReliableDataFragment/OutOfOrder/Acknowledge) are actually duplicated
+> **Note**: 'data packets' (ReliableData/ReliableDataFragment/Acknowledge/AcknowledgeAll) are actually duplicated
 > four times each, using consecutive OP codes. This allows data to be sent on multiple 'channels'.
 > However, to the author's knowledge, only the first channel has been observed in any games utilising the SOE protocol thus far.
 
@@ -67,8 +67,8 @@ Those packets requiring a session to be utilised are:
 - Heartbeat
 - ReliableData
 - ReliableDataFragment
-- OutOfOrder
 - Acknowledge
+- AcknowledgeAll
 
 All SOE packets are prefixed with an OP code. However, those packets which are sent within the
 context of a session can also include additional data, *except* for when they are bundled within a `MultiPacket`.
