@@ -14,10 +14,10 @@ namespace Sanctuary.SoeProtocol.Services;
 public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
 {
     private readonly Socket _socket;
-    private readonly bool _connectOnReceive;
     private readonly bool _disposeSocket;
 
-    private EndPoint? _remoteEndPoint;
+    private bool _connectOnReceive;
+    private SocketAddress? _remoteEndPoint;
 
     /// <inheritdoc />
     public int Available => _socket.Available;
@@ -78,7 +78,7 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         if (_remoteEndPoint is null)
             throw new InvalidOperationException("The remote endpoint has not been set. Either bind or connect the interface");
 
-        int sent = _socket.SendTo(data, _remoteEndPoint);
+        int sent = _socket.SendTo(data, SocketFlags.None, _remoteEndPoint);
 
         return sent;
     }
@@ -109,7 +109,7 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
         if (!_socket.IsBound)
             throw new InvalidOperationException("Must bind the interface before attempting to receive");
 
-        SocketReceiveFromResult result =  await _socket.ReceiveFromAsync
+        int result = await _socket.ReceiveFromAsync
         (
             receiveTo,
             SocketFlags.None,
@@ -117,24 +117,30 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
             ct
         ).ConfigureAwait(false);
 
-        if (_connectOnReceive && !_socket.Connected)
-            Connect(result.RemoteEndPoint);
+        if (_connectOnReceive)
+            Connect(_remoteEndPoint);
 
-        return result.ReceivedBytes;
+        return result;
     }
 
     /// <inheritdoc />
     public void Bind(EndPoint localEndPoint)
     {
         _socket.Bind(localEndPoint);
-        _remoteEndPoint = localEndPoint;
+        _remoteEndPoint = new SocketAddress(AddressFamily.InterNetworkV6);
     }
 
     /// <inheritdoc />
     public void Connect(EndPoint remoteEndPoint)
     {
         _socket.Connect(remoteEndPoint);
+        Connect(remoteEndPoint.Serialize());
+    }
+
+    private void Connect(SocketAddress remoteEndPoint)
+    {
         _remoteEndPoint = remoteEndPoint;
+        _connectOnReceive = false;
     }
 
     /// <inheritdoc />

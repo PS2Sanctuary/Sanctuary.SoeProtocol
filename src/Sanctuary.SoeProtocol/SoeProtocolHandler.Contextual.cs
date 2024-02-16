@@ -97,9 +97,11 @@ public partial class SoeProtocolHandler
                 TerminateSession(disconnect.Reason, false, true);
                 break;
             }
-            case SoeOpCode.Heartbeat when Mode is SessionMode.Server:
+            case SoeOpCode.Heartbeat:
             {
-                SendContextualPacket(SoeOpCode.Heartbeat, Array.Empty<byte>());
+                if (Mode is SessionMode.Server)
+                    SendContextualPacket(SoeOpCode.Heartbeat, Array.Empty<byte>());
+                // Otherwise ignore, no need to hit the default clause
                 break;
             }
             case SoeOpCode.ReliableData:
