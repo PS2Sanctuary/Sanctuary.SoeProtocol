@@ -6,6 +6,7 @@ using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Xunit.Abstractions;
 
@@ -111,14 +112,16 @@ public class ReliableDataChannelEndToEndTests
             numberOfPacketsToMulti
         );
 
-    [Fact]
-    public void TestAllThePackets()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(8)]
+    public void TestAllThePackets(int multiCount)
     {
         byte[][] packets = new byte[256][];
         for (int i = 1; i <= 256; i++)
             packets[i - 1] = GeneratePacket(i * 256);
 
-        AssertOnPackets(packets, 8);
+        AssertOnPackets(packets, multiCount);
     }
 
     private void AssertOnPackets
@@ -141,9 +144,18 @@ public class ReliableDataChannelEndToEndTests
             outputChannel.EnqueueData(packets[i]);
 
             // If multi-batching is disabled, or we've submitted enough packets to do a multi-dispatch
-            if (numberOfPacketsToMulti <= 0 || (i + 1) % numberOfPacketsToMulti is 0)
-                outputChannel.RunTick(CancellationToken.None);
-            outputChannel.NotifyOfAcknowledgeAll(new AcknowledgeAll());
+            if (numberOfPacketsToMulti > 0 && (i + 1) % numberOfPacketsToMulti is not 0)
+                continue;
+
+            outputChannel.RunTick(CancellationToken.None);
+
+            byte[]? lastPacket = networkInterface.SentData.LastOrDefault();
+            if (lastPacket is null)
+                continue;
+
+            ushort sequence = BinaryPrimitives.ReadUInt16BigEndian(lastPacket.AsSpan(sizeof(SoeOpCode)));
+            _ouputHelper.WriteLine($"Acknowledging sequence {sequence}");
+            outputChannel.NotifyOfAcknowledgeAll(new AcknowledgeAll { Sequence = sequence });
         }
         outputChannel.RunTick(CancellationToken.None);
 
