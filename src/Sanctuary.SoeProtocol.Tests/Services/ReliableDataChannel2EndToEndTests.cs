@@ -12,14 +12,14 @@ using Xunit.Abstractions;
 
 namespace Sanctuary.SoeProtocol.Tests.Services;
 
-public class ReliableDataChannelEndToEndTests
+public class ReliableDataChannel2EndToEndTests
 {
     private const int MAX_DATA_LENGTH = (int)SoeConstants.DefaultUdpLength - sizeof(SoeOpCode) - sizeof(ushort) - SoeConstants.CrcLength;
     private static readonly NativeSpanPool SpanPool = new(512, 16);
 
     private readonly ITestOutputHelper _ouputHelper;
 
-    public ReliableDataChannelEndToEndTests(ITestOutputHelper outputHelper)
+    public ReliableDataChannel2EndToEndTests(ITestOutputHelper outputHelper)
     {
         _ouputHelper = outputHelper;
     }
@@ -133,7 +133,7 @@ public class ReliableDataChannelEndToEndTests
         Queue<byte[]> receiveQueue = new();
         GetHandlers
         (
-            out ReliableDataOutputChannel outputChannel,
+            out ReliableDataOutputChannel2 outputChannel,
             out ReliableDataInputChannel inputChannel,
             out MockNetworkInterface networkInterface,
             receiveQueue
@@ -203,7 +203,7 @@ public class ReliableDataChannelEndToEndTests
 
     private static void GetHandlers
     (
-        out ReliableDataOutputChannel outputChannel,
+        out ReliableDataOutputChannel2 outputChannel,
         out ReliableDataInputChannel inputChannel,
         out MockNetworkInterface networkInterface,
         Queue<byte[]> receiveQueue
@@ -229,7 +229,7 @@ public class ReliableDataChannelEndToEndTests
             new MockApplicationProtocolHandler()
         );
 
-        outputChannel = new ReliableDataOutputChannel(handler, SpanPool, MAX_DATA_LENGTH + sizeof(ushort));
+        outputChannel = new ReliableDataOutputChannel2(handler, SpanPool, MAX_DATA_LENGTH + sizeof(ushort));
         inputChannel = new ReliableDataInputChannel
         (
             handler,
