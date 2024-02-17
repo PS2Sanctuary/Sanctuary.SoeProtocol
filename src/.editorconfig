@@ -18,7 +18,7 @@ csharp_new_line_before_finally = true
 #require members of object intializers to be on separate lines
 csharp_new_line_before_members_in_object_initializers = true
 #require braces to be on a new line for lambdas, types, methods, object_collection_array_initializers, and control_blocks (also known as "Allman" style)
-csharp_new_line_before_open_brace = lambdas, types, methods, object_collection_array_initializers, control_blocks
+csharp_new_line_before_open_brace = all
 
 #Formatting - organize using options
 
@@ -125,9 +125,17 @@ dotnet_style_qualification_for_field = false:suggestion
 dotnet_style_qualification_for_method = false:suggestion
 #prefer properties not to be prefaced with this. or Me. in Visual Basic
 dotnet_style_qualification_for_property = false:suggestion
-insert_final_newline=true
-csharp_style_namespace_declarations=file_scoped:warning
+insert_final_newline = true
+csharp_style_namespace_declarations = file_scoped:warning
+
+# Microsoft .NET properties
+csharp_indent_braces = false
+
+# ReSharper properties
+resharper_csharp_empty_block_style = together_same_line
+resharper_xml_pi_attribute_style = on_single_line
+resharper_xml_space_after_last_pi_attribute = true
 
 [*.{cs,vb}]
-end_of_line=crlf
-dotnet_style_require_accessibility_modifiers=for_non_interface_members:error
+end_of_line = crlf
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:error
