@@ -27,7 +27,6 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
-    /// Holds backed-up data that can't fit into the _dispatchStash, including the true sequence of the data
     private readonly List<(long, StashedOutputPacket)> _dispatchQueue;
     private readonly SemaphoreSlim _packetOutputQueueLock;
 
@@ -39,8 +38,8 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
     private long _totalSequence;
     /// The maximum sequence number that the client knows about
     private long _maxClientSequence;
+    private int _currentDispatchIndex;
 
-    private bool _waitingForAck;
     private long _lastAckAt;
 
     /// <summary>
@@ -103,24 +102,23 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
     public void RunTick(CancellationToken ct)
     {
         if (Stopwatch.GetElapsedTime(_lastAckAt).TotalMilliseconds > ACK_WAIT_MILLISECONDS)
-            _waitingForAck = false;
+            _currentDispatchIndex = 0;
 
-        if (_waitingForAck)
-            return;
-
-        for (int i = 0; i < _sessionParams.MaxQueuedOutgoingReliableDataPackets; i++)
+        int maxOutgoingIndex = Math.Min
+        (
+            _dispatchQueue.Count,
+            _sessionParams.MaxQueuedOutgoingReliableDataPackets + _currentDispatchIndex
+        );
+        while (_currentDispatchIndex < maxOutgoingIndex)
         {
-            if (i >= _dispatchQueue.Count)
-                break;
-
             ct.ThrowIfCancellationRequested();
 
-            StashedOutputPacket packet = _dispatchQueue[i].Item2;
+            StashedOutputPacket packet = _dispatchQueue[_currentDispatchIndex].Item2;
             SoeOpCode opCode = packet.IsFragment ? SoeOpCode.ReliableDataFragment : SoeOpCode.ReliableData;
             _handler.SendContextualPacket(opCode, packet.DataSpan!.UsedSpan);
-        }
 
-        _waitingForAck = true;
+            Interlocked.Increment(ref _currentDispatchIndex);
+        }
     }
 
     /// <summary>
@@ -135,7 +133,10 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
         int index = _dispatchQueue.FindIndex(x => x.Item1 == seq);
         _spanPool.Return(_dispatchQueue[index].Item2.DataSpan!);
         if (index != -1)
+        {
+            Interlocked.Decrement(ref _currentDispatchIndex);
             _dispatchQueue.RemoveAt(index);
+        }
 
         _packetOutputQueueLock.Release();
 
@@ -143,7 +144,6 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
             _maxClientSequence = seq;
 
         _lastAckAt = Stopwatch.GetTimestamp();
-        _waitingForAck = false;
     }
 
     /// <summary>
@@ -158,6 +158,7 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
         while (_dispatchQueue.Count > 0 && _dispatchQueue[0].Item1 <= seq)
         {
             _spanPool.Return(_dispatchQueue[0].Item2.DataSpan!);
+            Interlocked.Decrement(ref _currentDispatchIndex);
             _dispatchQueue.RemoveAt(0);
         }
 
@@ -167,7 +168,6 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
             _maxClientSequence = seq;
 
         _lastAckAt = Stopwatch.GetTimestamp();
-        _waitingForAck = false;
     }
 
     /// <summary>
