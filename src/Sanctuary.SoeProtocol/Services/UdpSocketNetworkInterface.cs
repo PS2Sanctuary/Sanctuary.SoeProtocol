@@ -69,7 +69,7 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
 
         _socket.SendBufferSize = maxDataLength;
         _socket.ReceiveBufferSize = maxDataLength;
-        _socket.Blocking = false;
+        //_socket.Blocking = false;
     }
 
     /// <inheritdoc />
