@@ -23,7 +23,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     private readonly IApplicationProtocolHandler _application;
     private readonly ConcurrentQueue<NativeSpan> _packetQueue;
     private readonly ReliableDataInputChannel _dataInputChannel;
-    private readonly ReliableDataOutputChannel2 _dataOutputChannel;
+    private readonly ReliableDataOutputChannel _dataOutputChannel;
 
     private bool _isDisposed;
     private bool _openSessionOnNextClientPacket;
@@ -84,7 +84,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
         _packetQueue = new ConcurrentQueue<NativeSpan>();
         _contextualSendBuffer = GC.AllocateArray<byte>((int)sessionParameters.UdpLength, true);
         _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, _application.HandleAppData);
-        _dataOutputChannel = new ReliableDataOutputChannel2(this, _spanPool, CalculateMaxDataLength());
+        _dataOutputChannel = new ReliableDataOutputChannel(this, _spanPool, CalculateMaxDataLength());
 
         State = SessionState.Negotiating;
         _application.Initialise(this);
