@@ -131,9 +131,9 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
         _packetOutputQueueLock.Wait();
 
         int index = _dispatchQueue.FindIndex(x => x.Item1 == seq);
-        _spanPool.Return(_dispatchQueue[index].Item2.DataSpan!);
         if (index != -1)
         {
+            _spanPool.Return(_dispatchQueue[index].Item2.DataSpan!);
             Interlocked.Decrement(ref _currentDispatchIndex);
             _dispatchQueue.RemoveAt(index);
         }
