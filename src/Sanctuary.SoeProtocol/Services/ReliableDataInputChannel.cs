@@ -207,7 +207,7 @@ public sealed class ReliableDataInputChannel : IDisposable
 
     /// <summary>
     /// Checks whether the given reliable data is valid for processing, by ensuring
-    /// that it is within the current window and we haven't already processed it.
+    /// that it is within the current window, and we haven't already processed it.
     /// </summary>
     /// <param name="data">The data.</param>
     /// <param name="sequence">The true sequence.</param>
@@ -224,7 +224,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             return true;
 
         // We're receiving data we've already fully processed, so inform the remote about this.
-        // However because data is usually received in clumps, ensure we don't send acks too quickly
+        // However, because data is usually received in clumps, ensure we don't send acks too quickly
         if (Stopwatch.GetElapsedTime(_lastAckAllAt) < MAX_ACK_DELAY)
             SendAckAll((ushort)(_windowStartSequence - 1));
 
@@ -267,7 +267,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             IncrementWindow();
 
         // Copy over any stashed fragments that can be written
-        // directly to the buffer; i.e they equal the current
+        // directly to the buffer; i.e. they equal the current
         // window start sequence and we have space left
         while (_dataBacklog.Current.IsActive && _dataBacklog.Current.Sequence <= _windowStartSequence)
         {
