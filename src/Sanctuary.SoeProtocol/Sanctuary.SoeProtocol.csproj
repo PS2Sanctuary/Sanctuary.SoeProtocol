@@ -5,7 +5,7 @@
         <IsAotCompatible>true</IsAotCompatible>
 
         <!-- Package info -->
-        <Version>1.2.0</Version>
+        <Version>1.2.1</Version>
         <Description>A naive implementation of the SOE Protocol, a game networking layer.</Description>
     </PropertyGroup>
     
