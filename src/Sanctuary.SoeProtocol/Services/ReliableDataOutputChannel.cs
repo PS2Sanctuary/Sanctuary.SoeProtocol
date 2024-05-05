@@ -143,13 +143,14 @@ public sealed class ReliableDataOutputChannel : IDisposable
             ct.ThrowIfCancellationRequested();
 
             int index = GetSequenceIndexInDispatchBuffer(_currentSequence);
+            _currentSequence++;
+
             StashedOutputPacket stashedPacket = _dispatchStash[index];
             if (stashedPacket.DataSpan is null)
                 continue; // Packets ahead of _currentSequence may have been individually acked & cleared
 
             SoeOpCode opCode = stashedPacket.IsFragment ? SoeOpCode.ReliableDataFragment : SoeOpCode.ReliableData;
             _handler.SendContextualPacket(opCode, stashedPacket.DataSpan.UsedSpan);
-            _currentSequence++;
         }
     }
 

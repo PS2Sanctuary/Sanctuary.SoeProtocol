@@ -7,15 +7,10 @@ namespace Sanctuary.SoeProtocol.Tests.Mocks;
 
 public sealed class MockApplicationProtocolHandler : IApplicationProtocolHandler
 {
-    public ApplicationParameters SessionParams { get; }
+    public ApplicationParameters SessionParams { get; } = new(new Rc4KeyState([0, 1, 2, 3, 4]));
     public bool HasBeenInitialized { get; private set; }
     public bool HasSessionOpened { get; private set; }
     public bool HasSessionClosed { get; private set; }
-
-    public MockApplicationProtocolHandler()
-    {
-        SessionParams = new ApplicationParameters(null);
-    }
 
     public void Initialise(ISessionHandler sessionHandler)
         => HasBeenInitialized = true;

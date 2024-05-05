@@ -19,11 +19,13 @@ public class ReliableDataOutputChannelTests : IDisposable
     private static readonly NativeSpanPool SpanPool = new(512, 8);
 
     private readonly MockNetworkInterface _netInterface;
+    private readonly MockApplicationProtocolHandler _handler;
     private readonly ReliableDataOutputChannel _channel;
 
     public ReliableDataOutputChannelTests()
     {
         _netInterface = new MockNetworkInterface();
+        _handler = new MockApplicationProtocolHandler();
 
         SoeProtocolHandler handler = new
         (
@@ -38,7 +40,7 @@ public class ReliableDataOutputChannelTests : IDisposable
             },
             SpanPool,
             _netInterface,
-            new MockApplicationProtocolHandler()
+            _handler
         );
 
         _channel = new ReliableDataOutputChannel(handler, SpanPool, MAX_DATA_LENGTH + sizeof(ushort));
@@ -61,6 +63,25 @@ public class ReliableDataOutputChannelTests : IDisposable
         await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
         _channel.RunTick(CancellationToken.None);
         AssertReceivedPacketsEqualBuffer(_netInterface, packet, true);
+    }
+
+    [Fact]
+    public async Task HandlesAdvanceAcking()
+    {
+        const int fragmentCount = 4;
+
+        const int packetLength = MAX_DATA_LENGTH - 4
+            + MAX_DATA_LENGTH * (fragmentCount - 1);
+        byte[] packet = GeneratePacket(packetLength);
+
+        _channel.EnqueueData(packet);
+        _channel.RunTick(CancellationToken.None);
+        AssertReceivedPacketsEqualBuffer(_netInterface, packet, true);
+
+        _channel.NotifyOfAcknowledge(new Acknowledge(3));
+        await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        _channel.RunTick(CancellationToken.None);
+        AssertReceivedPacketsEqualBuffer(_netInterface, packet.AsSpan()[..^MAX_DATA_LENGTH], true);
     }
 
     [Fact]
@@ -122,9 +143,13 @@ public class ReliableDataOutputChannelTests : IDisposable
         );
     }
 
-    [Fact]
-    public void TestAllTheData()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TestAllTheData(bool useEncryption)
     {
+        _handler.SessionParams.IsEncryptionEnabled = useEncryption;
+
         const int maxPacketLength = 512;
         const int maxNonFragmentDataLength = maxPacketLength - sizeof(ushort);
         ushort sequence = 0;
