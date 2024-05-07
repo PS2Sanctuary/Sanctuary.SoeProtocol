@@ -186,20 +186,18 @@ public static class SoePacketUtils
     /// Decompresses a ZLIB-compressed buffer.
     /// </summary>
     /// <param name="input">The compressed input buffer.</param>
-    /// <param name="pool">A span pool to use temporary elements from.</param>
     /// <returns>A stream containing the decompressed data.</returns>
-    public static MemoryStream Decompress(ReadOnlySpan<byte> input, NativeSpanPool pool)
+    public static unsafe MemoryStream Decompress(ReadOnlySpan<byte> input)
     {
-        // TODO: The efficiency of this method could really be improved
-        NativeSpan span = pool.Rent();
-        span.CopyDataInto(input);
-        using MemoryStream ums = span.ToStream();
-
-        using ZLibStream zs = new(ums, CompressionMode.Decompress);
         MemoryStream output = _msManager.GetStream();
-        zs.CopyTo(output);
 
-        pool.Return(span);
+        fixed (byte* inputPtr = input)
+        {
+            using UnmanagedMemoryStream ums = new(inputPtr, input.Length);
+            using ZLibStream zs = new(ums, CompressionMode.Decompress);
+            zs.CopyTo(output);
+        }
+
         return output;
     }
 

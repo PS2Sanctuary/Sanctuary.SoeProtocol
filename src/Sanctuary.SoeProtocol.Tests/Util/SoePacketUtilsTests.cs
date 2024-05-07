@@ -114,8 +114,7 @@ public class SoePacketUtilsTests
 
         using MemoryStream output = SoePacketUtils.Decompress
         (
-            compressed.GetBuffer().AsSpan(0, (int)compressed.Length),
-            new NativeSpanPool(512, 512)
+            compressed.GetBuffer().AsSpan(0, (int)compressed.Length)
         );
 
         Assert.Equal(data, output.ToArray());

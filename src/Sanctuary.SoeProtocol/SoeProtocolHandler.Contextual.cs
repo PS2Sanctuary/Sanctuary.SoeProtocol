@@ -53,7 +53,7 @@ public partial class SoeProtocolHandler
 
             if (isCompressed)
             {
-                decompressedData = SoePacketUtils.Decompress(packetData, _spanPool);
+                decompressedData = SoePacketUtils.Decompress(packetData);
                 packetData = decompressedData.GetBuffer()
                     .AsSpan(0, (int)decompressedData.Length);
             }
