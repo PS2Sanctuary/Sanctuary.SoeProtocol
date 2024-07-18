@@ -16,7 +16,7 @@ namespace Sanctuary.SoeProtocol;
 /// <summary>
 /// Represents a generic handler for the SOE protocol.
 /// </summary>
-public partial class SoeProtocolHandler : ISessionHandler, IDisposable
+public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisposable
 {
     private readonly NativeSpanPool _spanPool;
     private readonly INetworkWriter _networkWriter;
@@ -46,7 +46,7 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
     /// <inheritdoc />
     public SessionState State { get; private set; }
 
-    /// <inheritdoc />
+    /// <inheritdoc cref="ISoeConnection.SessionId" />
     public uint SessionId { get; private set; }
 
     /// <inheritdoc />
@@ -83,7 +83,14 @@ public partial class SoeProtocolHandler : ISessionHandler, IDisposable
 
         _packetQueue = new ConcurrentQueue<NativeSpan>();
         _contextualSendBuffer = GC.AllocateArray<byte>((int)sessionParameters.UdpLength, true);
-        _dataInputChannel = new ReliableDataInputChannel(this, _spanPool, _application.HandleAppData);
+        _dataInputChannel = new ReliableDataInputChannel
+        (
+            this,
+            SessionParams,
+            ApplicationParams,
+            _spanPool,
+            _application.HandleAppData
+        );
         _dataOutputChannel = new ReliableDataOutputChannel(this, _spanPool, CalculateMaxDataLength());
 
         State = SessionState.Negotiating;

@@ -233,6 +233,8 @@ public class ReliableDataChannel2EndToEndTests
         inputChannel = new ReliableDataInputChannel
         (
             handler,
+            handler.SessionParams,
+            handler.ApplicationParams,
             SpanPool,
             data => receiveQueue.Enqueue(data.ToArray())
         );

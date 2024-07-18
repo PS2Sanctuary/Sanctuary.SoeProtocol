@@ -1,4 +1,5 @@
-﻿using Sanctuary.SoeProtocol.Objects;
+﻿using Sanctuary.SoeProtocol.Abstractions;
+using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
@@ -26,7 +27,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// </summary>
     public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(30);
 
-    private readonly SoeProtocolHandler _handler;
+    private readonly ISoeConnection _handler;
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
@@ -56,18 +57,22 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// Initializes a new instance of the <see cref="ReliableDataInputChannel"/>.
     /// </summary>
     /// <param name="handler">The protocol handler that owns this channel.</param>
+    /// <param name="sessionParams">The session parameters.</param>
+    /// <param name="appParams">The application parameters.</param>
     /// <param name="spanPool">A pool that may be used to stash out-of-order fragments.</param>
     /// <param name="dataHandler">The handler for processed data.</param>
     public ReliableDataInputChannel
     (
-        SoeProtocolHandler handler,
+        ISoeConnection handler,
+        SessionParameters sessionParams,
+        ApplicationParameters appParams,
         NativeSpanPool spanPool,
         DataHandler dataHandler
     )
     {
         _handler = handler;
-        _sessionParams = handler.SessionParams;
-        _applicationParams = handler.ApplicationParams;
+        _sessionParams = sessionParams;
+        _applicationParams = appParams;
         _spanPool = spanPool;
         _dataHandler = dataHandler;
 

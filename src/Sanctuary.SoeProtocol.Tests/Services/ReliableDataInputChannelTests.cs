@@ -41,6 +41,8 @@ public class ReliableDataInputChannelTests : IDisposable
         _channel = new ReliableDataInputChannel
         (
             handler,
+            handler.SessionParams,
+            handler.ApplicationParams,
             SpanPool,
             data => _dataOutputQueue.Enqueue(data.ToArray())
         );

@@ -28,7 +28,7 @@ public interface IApplicationProtocolHandler
 
     /// <summary>
     /// Allows the handler to process app data. This method should not
-    /// perform any long running work.
+    /// perform any long-running work.
     /// </summary>
     /// <param name="data">The application data.</param>
     void HandleAppData(ReadOnlySpan<byte> data);
