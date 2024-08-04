@@ -87,7 +87,7 @@ public class Rc4CipherTests
     /// <summary>
     /// Initializes a new instance of the <see cref="TestVector"/> record.
     /// </summary>
-    /// <param name="Key">The key used to encrypted the <paramref name="PlainText"/>.</param>
+    /// <param name="Key">The key used to encrypt the <paramref name="PlainText"/>.</param>
     /// <param name="PlainText">The plaintext.</param>
     /// <param name="CipherText">The correct cipher for the <paramref name="PlainText"/> when encrypted with the <paramref name="Key"/>.</param>
     public record TestVector(string Key, string PlainText, byte[] CipherText)
