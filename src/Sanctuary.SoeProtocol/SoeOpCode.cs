@@ -57,12 +57,12 @@ public enum SoeOpCode : ushort
     ReliableDataFragment = 0x0D,
 
     /// <summary>
-    /// Used to indicate that a data sequence was received out-of-order.
+    /// Used to acknowledge a single reliable data packet.
     /// </summary>
     Acknowledge = 0x11,
 
     /// <summary>
-    /// Used to acknowledge that a data sequence has been received.
+    /// Used to acknowledge all reliable data packets up to a particular sequence.
     /// </summary>
     AcknowledgeAll = 0x15,
 
