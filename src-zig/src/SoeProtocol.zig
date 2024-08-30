@@ -1,13 +1,20 @@
-const std = @import("std");
+pub const std = @import("std");
 
-const SOE_PROTOCOL_VERSION: u32 = 3;
-const CRC_LENGTH: u8 = 2;
-const DEFAULT_UDP_LENGTH: u32 = 512;
-const DEFAULT_SESSION_HEARTBEAT_AFTER_NS: i64 = std.time.ns_per_s * 25;
-const DEFAULT_SESSION_INACTIVITY_TIMEOUT_NS: i64 = std.time.ns_per_s * 30;
+/// The implemented version of the SOE protocol.
+pub const SOE_PROTOCOL_VERSION: u32 = 3;
+/// The number of bytes used to store the CRC check value of a packet.
+pub const CRC_LENGTH: u8 = 2;
+/// The default maximum packet length.
+pub const DEFAULT_UDP_LENGTH: u32 = 512;
+/// The default timespan after which to send a heartbeat, if no contextual
+/// packets have been received within the interval.
+pub const DEFAULT_SESSION_HEARTBEAT_AFTER_NS: i64 = std.time.ns_per_s * 25;
+/// The default timespan after which to consider a session inactive, if no
+/// contextual packets have been received within the interval.
+pub const DEFAULT_SESSION_INACTIVITY_TIMEOUT_NS: i64 = std.time.ns_per_s * 30;
 
 /// Enumerates the packet OP codes used in the SOE protocol.
-const SoeOpCode = enum(u16) {
+pub const SoeOpCode = enum(u16) {
     /// Used to request the start of a session.
     session_request = 0x01,
     /// Used to confirm the start of a session, and set connection details.
