@@ -55,6 +55,7 @@ pub fn readU32BE(self: *BinaryReader) u32 {
     return value;
 }
 
+/// Reads a null-terminated string, returning a slice over the underlying buffer.
 pub fn readStringNullTerminated(self: *BinaryReader) BinaryReaderError![:0]const u8 {
     // Get the index of the first null-terminator (sentinel) past our offset
     const sentinel = [_]u8{0};
@@ -65,11 +66,36 @@ pub fn readStringNullTerminated(self: *BinaryReader) BinaryReaderError![:0]const
         return BinaryReaderError.StringNotTerminated;
     }
 
-    const finalOffset = self.offset + index.?;
+    const sentinel_offset = self.offset + index.?;
     // Take a slice between our offsets, and imply the presence of a sentinel
-    const value: [:0]const u8 = self.slice[self.offset..finalOffset :0];
+    const value: [:0]const u8 = self.slice[self.offset..sentinel_offset :0];
 
-    self.offset = finalOffset;
+    self.offset = sentinel_offset + 1;
+    return value;
+}
+
+/// Reads a null-terminated string, returning an allocated copy.
+pub fn readStringNullTerminatedWithAlloc(
+    self: *BinaryReader,
+    allocator: std.mem.Allocator,
+) error{ StringNotTerminated, OutOfMemory }![:0]const u8 {
+    // Get the index of the first null-terminator (sentinel) past our offset
+    const sentinel = [_]u8{0};
+    const index = std.mem.indexOf(u8, self.slice[self.offset..], &sentinel);
+
+    // Error out if std.mem.indexOf() could not find the sentinel value
+    if (index == null) {
+        return BinaryReaderError.StringNotTerminated;
+    }
+
+    // Allocate a sentinel slice for the string.
+    const sentinel_offset = self.offset + index.?;
+    const value = try allocator.allocSentinel(u8, sentinel_offset - self.offset, 0);
+
+    // Coerce the allocated value to a non-sentinel slice, and copy the string over, sentinel included
+    @memcpy(value[0 .. value.len + 1], self.slice[self.offset .. sentinel_offset + 1]);
+
+    self.offset = sentinel_offset + 1;
     return value;
 }
 
@@ -107,10 +133,30 @@ test readU32BE {
 }
 
 test readStringNullTerminated {
-    const data = "testString";
+    const data = "test\x00String";
     // Coerce to slice with sentinel included
     var reader = BinaryReader.init(data[0 .. data.len + 1]);
-    try std.testing.expectEqualStrings("testString", try reader.readStringNullTerminated());
+    try std.testing.expectEqualStrings("test", try reader.readStringNullTerminated());
+    try std.testing.expectEqualStrings("String", try reader.readStringNullTerminated());
+
+    // We should error out on data that doesn't have a null-terminator
+    const data2 = [_]u8{ 'A', 'B' };
+    var reader2 = BinaryReader.init(&data2);
+    try std.testing.expectError(BinaryReaderError.StringNotTerminated, reader2.readStringNullTerminated());
+}
+
+test readStringNullTerminatedWithAlloc {
+    const data = "test\x00String";
+    // Coerce to slice with sentinel included
+    var reader = BinaryReader.init(data[0 .. data.len + 1]);
+
+    const result = try reader.readStringNullTerminatedWithAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("test", result);
+
+    const result2 = try reader.readStringNullTerminatedWithAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(result2);
+    try std.testing.expectEqualStrings("String", result2);
 
     // We should error out on data that doesn't have a null-terminator
     const data2 = [_]u8{ 'A', 'B' };
