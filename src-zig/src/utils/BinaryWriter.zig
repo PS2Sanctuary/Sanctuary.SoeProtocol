@@ -51,9 +51,12 @@ pub fn writeU32BE(self: *BinaryWriter, value: u32) void {
     self.writeU8(@truncate(value));
 }
 
+/// Writes a null-terminated string.
 pub fn writeStringNullTerminated(self: *BinaryWriter, value: [:0]const u8) void {
-    // Copy the string slice, including the sentinel, into our buffer
-    std.mem.copyForwards(u8, self.slice[self.offset..], value[0 .. value.len + 1]);
+    @memcpy(
+        self.slice[self.offset .. self.offset + value.len + 1],
+        value[0 .. value.len + 1],
+    );
     self.offset += value.len + 1;
 }
 
