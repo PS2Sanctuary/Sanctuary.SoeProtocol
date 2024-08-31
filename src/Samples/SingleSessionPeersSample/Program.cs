@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Sanctuary.SoeProtocol.Util;
+using System;
 using System.Threading.Tasks;
 
 namespace SingleSessionPeersSample;
@@ -20,6 +22,9 @@ public static class Program
     /// <param name="args">The launch arguments.</param>
     public static async Task Main(string[] args)
     {
+        Test();
+        return;
+
         if (args.Length > 0 && int.TryParse(args[0], out int port))
             Port = port;
 
@@ -33,5 +38,16 @@ public static class Program
             .Build();
 
         await host.RunAsync();
+    }
+
+    public static void Test()
+    {
+        byte[] data = new byte[8];
+        BinaryWriter writer = new(data);
+
+        writer.WriteUInt32BE(ushort.MaxValue + 1);
+        writer.WriteUInt32BE(uint.MaxValue);
+        foreach (byte element in data)
+            Console.Write("0x{0:X2}, ", element);
     }
 }
