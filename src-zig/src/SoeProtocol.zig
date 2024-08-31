@@ -6,12 +6,6 @@ pub const SOE_PROTOCOL_VERSION: u32 = 3;
 pub const CRC_LENGTH: u8 = 2;
 /// The default maximum packet length.
 pub const DEFAULT_UDP_LENGTH: u32 = 512;
-/// The default timespan after which to send a heartbeat, if no contextual
-/// packets have been received within the interval.
-pub const DEFAULT_SESSION_HEARTBEAT_AFTER_NS: i64 = std.time.ns_per_s * 25;
-/// The default timespan after which to consider a session inactive, if no
-/// contextual packets have been received within the interval.
-pub const DEFAULT_SESSION_INACTIVITY_TIMEOUT_NS: i64 = std.time.ns_per_s * 30;
 
 /// Enumerates the packet OP codes used in the SOE protocol.
 pub const SoeOpCode = enum(u16) {
@@ -37,4 +31,40 @@ pub const SoeOpCode = enum(u16) {
     unknown_sender = 0x1D,
     /// Used to request that a session be remapped to another port.
     remap_connection = 0x1E,
+};
+
+/// Bundles parameters used to control a session.
+pub const SessionParams = struct {
+    /// The application protocol being proxied by this session.
+    application_protocol: [:0]u8 = undefined,
+    /// The maximum length of a UDP packet that this party can send or receive.
+    udp_length: u32 = DEFAULT_UDP_LENGTH,
+    /// The maximum length of a UDP packet that the other party can send or receive.
+    remote_udp_length: u32 = 0,
+    /// The seed used to calculate packet CRC hashes.
+    crc_seed: u32 = 0,
+    /// The numer of bytes used to store a packet CRC hash. Must be between 0 and 4, inclusive.
+    crc_length: u8 = CRC_LENGTH,
+    /// Whether compression is enabled for the session.
+    is_compression_enabled: bool = false,
+    /// The maximum number of data fragments that may be queued for either stitching or dispatch.
+    max_queued_incoming_reliable_data_packets: i16 = 400,
+    /// The maximum number of reliable data fragments that may be queued for output.
+    max_queued_outgoing_reliable_data_packets: i16 = 400,
+    /// The maximum number of reliable packets that may be received before sending an acknowledgement.
+    data_ack_window: i16 = 32,
+    /// The timespan in nanoseconds after which to send a heartbeat, if no contextual
+    /// packets have been received within the interval. Set to `0` to disable heartbeating.
+    /// Defaults to 25sec.
+    heartbeat_after_ns: i64 = std.time.ns_per_s * 25,
+    /// The timespan in nanoseconds after which to consider the session inactive, if no
+    /// contextual packets have been received with the interval. Set to `0` to prevent
+    /// a session from being terminated due to inactivity. Defaults to 30sec.
+    inactivity_timeout_ns: i64 = std.time.ns_per_s * 30,
+    /// Whether all data packets should be acknowledged.
+    acknowledge_all_data: bool = false,
+    /// The maximum amount of time that outgoing data should be held, in the hopes of being
+    /// able to bundle multiple small data into a multi-data packet. This is specified in
+    /// nanoseconds. Set to `0` to immediately release outgoing data.
+    max_outgoing_data_queue_time_ms: i32 = 50,
 };
