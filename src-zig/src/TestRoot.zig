@@ -1,3 +1,4 @@
+pub const BinaryPrimitives = @import("utils/BinaryPrimitives.zig");
 pub const BinaryReader = @import("utils/BinaryReader.zig");
 pub const BinarWriter = @import("utils/BinaryWriter.zig");
 pub const Crc32 = @import("utils/Crc32.zig");

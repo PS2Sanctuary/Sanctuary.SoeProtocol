@@ -1,5 +1,7 @@
 /// A sequential writer of primitives to binary data
 const BinaryWriter = @import("BinaryWriter.zig");
+
+const BinaryPrimitives = @import("BinaryPrimitives.zig");
 const std = @import("std");
 
 /// The underlying slice of binary data.
@@ -32,23 +34,20 @@ pub fn writeBool(self: *BinaryWriter, value: bool) void {
 
 /// Writes an unsigned 16-bit integer in big endian form.
 pub fn writeU16BE(self: *BinaryWriter, value: u16) void {
-    self.writeU8(@truncate(value >> 8));
-    self.writeU8(@truncate(value));
+    BinaryPrimitives.writeU16BE(self.slice[self.offset..], value);
+    self.offset += 2;
 }
 
 /// Writes an unsigned 24-bit integer in big endian form.
 pub fn writeU24BE(self: *BinaryWriter, value: u24) void {
-    self.writeU8(@truncate(value >> 16));
-    self.writeU8(@truncate(value >> 8));
-    self.writeU8(@truncate(value));
+    BinaryPrimitives.writeU24BE(self.slice[self.offset..], value);
+    self.offset += 3;
 }
 
 /// Writes an unsigned 32-bit integer in big endian form.
 pub fn writeU32BE(self: *BinaryWriter, value: u32) void {
-    self.writeU8(@truncate(value >> 24));
-    self.writeU8(@truncate(value >> 16));
-    self.writeU8(@truncate(value >> 8));
-    self.writeU8(@truncate(value));
+    BinaryPrimitives.writeU32BE(self.slice[self.offset..], value);
+    self.offset += 4;
 }
 
 /// Writes a null-terminated string.

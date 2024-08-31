@@ -1,5 +1,7 @@
 /// A sequential reader of primitives from binary data
 const BinaryReader = @import("BinaryReader.zig");
+
+const BinaryPrimitives = @import("BinaryPrimitives.zig");
 const std = @import("std");
 
 const BinaryReaderError = error{
@@ -38,20 +40,15 @@ pub fn readBool(self: *BinaryReader) BinaryReaderError!bool {
 
 /// Reads an unsigned 24-bit integer in big endian form.
 pub fn readU24BE(self: *BinaryReader) u24 {
-    var value: u24 = 0;
-    value |= @as(u24, self.readU8()) << 16;
-    value |= @as(u16, self.readU8()) << 8;
-    value |= self.readU8();
+    const value = BinaryPrimitives.readU24BE(self.slice[self.offset..]);
+    self.offset += 3;
     return value;
 }
 
 /// Reads an unsigned 32-bit integer in big endian form.
 pub fn readU32BE(self: *BinaryReader) u32 {
-    var value: u32 = 0;
-    value |= @as(u32, self.readU8()) << 24;
-    value |= @as(u32, self.readU8()) << 16;
-    value |= @as(u16, self.readU8()) << 8;
-    value |= self.readU8();
+    const value = BinaryPrimitives.readU32BE(self.slice[self.offset..]);
+    self.offset += 4;
     return value;
 }
 
