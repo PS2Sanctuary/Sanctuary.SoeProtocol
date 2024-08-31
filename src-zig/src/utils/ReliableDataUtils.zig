@@ -74,6 +74,23 @@ pub fn getVariableLengthSize(length: u32) comptime_int {
     }
 }
 
+pub fn writeVariableLength(dest: []u8, value: u32, offset: *usize) void {
+    if (value < 0xFF) {
+        dest[offset.*] = @truncate(value);
+        offset.* += 1;
+    } else if (value < 0xFFFF) {
+        dest[offset.*] = 0xFF;
+        BinaryPrimitives.writeU16BE(dest[offset.* + 1 ..], @truncate(value));
+        offset.* += 3;
+    } else {
+        dest[offset.*] = 0xFF;
+        dest[offset.* + 1] = 0xFF;
+        dest[offset.* + 2] = 0xFF;
+        BinaryPrimitives.writeU32BE(dest[offset.* + 3 ..], value);
+        offset.* += 7;
+    }
+}
+
 test getTrueIncomingSequence {
     try std.testing.expectEqual(3, getTrueIncomingSequence(3, 0, 10));
 
@@ -119,12 +136,31 @@ test readVariableLength {
     try std.testing.expectEqual(1, offset);
     offset = 0;
 
-    const two_byte_len = [_]u8{ 0xFF, 0xFF, 0xFE };
-    try std.testing.expectEqual(std.math.maxInt(u16) - 1, readVariableLength(&two_byte_len, &offset));
+    const two_byte_len = [_]u8{ 0xFF, 0x00, 0xFF };
+    try std.testing.expectEqual(0xFF, readVariableLength(&two_byte_len, &offset));
     try std.testing.expectEqual(3, offset);
     offset = 0;
 
-    const four_byte_len = [_]u8{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-    try std.testing.expectEqual(std.math.maxInt(u32), readVariableLength(&four_byte_len, &offset));
+    const four_byte_len = [_]u8{ 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF };
+    try std.testing.expectEqual(0xFFFF, readVariableLength(&four_byte_len, &offset));
+    try std.testing.expectEqual(7, offset);
+}
+
+test writeVariableLength {
+    var offset: usize = 0;
+    var buffer = std.mem.zeroes([7]u8);
+
+    writeVariableLength(&buffer, 0xFE, &offset);
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, &buffer);
+    try std.testing.expectEqual(1, offset);
+    offset = 0;
+
+    writeVariableLength(&buffer, 0xFF, &offset);
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00 }, &buffer);
+    try std.testing.expectEqual(3, offset);
+    offset = 0;
+
+    writeVariableLength(&buffer, 0xFFFF, &offset);
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF }, &buffer);
     try std.testing.expectEqual(7, offset);
 }
