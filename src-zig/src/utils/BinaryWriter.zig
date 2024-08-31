@@ -18,6 +18,10 @@ pub fn advance(self: *BinaryWriter, amount: usize) void {
     self.offset += amount;
 }
 
+pub fn getConsumed(self: @This()) []u8 {
+    return self.slice[0..self.offset];
+}
+
 /// Writes a byte value
 pub fn writeU8(self: *BinaryWriter, value: u8) void {
     self.slice[self.offset] = value;

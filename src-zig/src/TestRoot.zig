@@ -4,6 +4,7 @@ pub const BinarWriter = @import("utils/BinaryWriter.zig");
 pub const Crc32 = @import("utils/Crc32.zig");
 pub const Rc4State = @import("utils/Rc4State.zig");
 pub const ReliableDataUtils = @import("utils/ReliableDataUtils.zig");
+pub const SoePacketUtils = @import("utils/SoePacketUtils.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());
