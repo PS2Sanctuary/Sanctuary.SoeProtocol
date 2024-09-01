@@ -3,7 +3,7 @@ const BinaryWriter = @import("BinaryWriter.zig");
 const crc32 = @import("crc32.zig");
 const SessionParams = @import("../soe_protocol.zig").SessionParams;
 const SoeOpCode = @import("../soe_protocol.zig").SoeOpCode;
-const soe_packets = @import("../objects/soe_packets.zig");
+const soe_packets = @import("../soe_packets.zig");
 const std = @import("std");
 
 /// Enumerates the possible errors when validating an SOE packet.

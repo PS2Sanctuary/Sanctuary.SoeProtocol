@@ -1,3 +1,5 @@
+pub const Rc4State = @import("reliable_data/Rc4State.zig");
+pub const soe_packets = @import("soe_packets.zig");
 pub const std = @import("std");
 
 /// The implemented version of the SOE protocol.
@@ -67,4 +69,15 @@ pub const SessionParams = struct {
     /// able to bundle multiple small data into a multi-data packet. This is specified in
     /// nanoseconds. Set to `0` to immediately release outgoing data.
     max_outgoing_data_queue_time_ms: i32 = 50,
+};
+
+/// Parameters used by an application to control the underlying SOE session.
+pub const ApplicationParams = struct {
+    /// Whether the application data should be encrypted.
+    is_encryption_enabled: bool,
+    /// The initial encryption state to use with the session.
+    initial_rc4_state: Rc4State,
+    on_session_opened: fn () void,
+    handle_app_data: fn ([]const u8) void,
+    on_session_closed: fn (soe_packets.DisconnectReason) void,
 };

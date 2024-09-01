@@ -1,7 +1,7 @@
-const BinaryReader = @import("../utils/BinaryReader.zig");
-const BinaryWriter = @import("../utils/BinaryWriter.zig");
-const binary_primitives = @import("../utils/binary_primitives.zig");
-const SoeOpCode = @import("../soe_protocol.zig").SoeOpCode;
+const BinaryReader = @import("utils/BinaryReader.zig");
+const BinaryWriter = @import("utils/BinaryWriter.zig");
+const binary_primitives = @import("utils/binary_primitives.zig");
+const SoeOpCode = @import("soe_protocol.zig").SoeOpCode;
 
 // Note that contextual packets do not write their OP code. This is instead handled by
 // the dispatch pipeline, as their may be additional bytes between the OP and packet data.
