@@ -1,7 +1,7 @@
 const std = @import("std");
 
 /// Stores an RC4 key state and provides a means to transform data using the RC4 algorithm.
-const Rc4State = @import("Rc4State.zig");
+const Rc4State = @This();
 
 /// The number of bytes used to store the key state.
 const RC4_STATE_LENGTH = 256;

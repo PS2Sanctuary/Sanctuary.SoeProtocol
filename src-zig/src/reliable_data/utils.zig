@@ -1,4 +1,4 @@
-const binary_primitives = @import("binary_primitives.zig");
+const binary_primitives = @import("../utils/binary_primitives.zig");
 const std = @import("std");
 
 /// The byte sequence used to indicate that a reliable data packet is carrying multi-data.
