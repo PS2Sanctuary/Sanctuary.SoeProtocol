@@ -94,8 +94,8 @@ pub fn validatePacket(packet_data: []const u8, session_params: SessionParams) So
 }
 
 /// Calculates the minimum length that a packet may be, given its OP code.
-pub fn getPacketMinimumLength(op_code: SoeOpCode, is_compression_enabled: true, crc_length: u8) usize {
-    const contextual_padding = @sizeOf(SoeOpCode) + @intFromBool(is_compression_enabled) + crc_length;
+pub fn getPacketMinimumLength(op_code: SoeOpCode, is_compression_enabled: bool, crc_length: u8) usize {
+    const contextual_padding = @sizeOf(SoeOpCode) + @as(u16, @intFromBool(is_compression_enabled)) + crc_length;
 
     return switch (op_code) {
         .session_request => soe_packets.SessionRequest.MIN_SIZE,
@@ -108,7 +108,6 @@ pub fn getPacketMinimumLength(op_code: SoeOpCode, is_compression_enabled: true, 
         .acknowledge_all => contextual_padding + soe_packets.AcknowledgeAll.SIZE,
         .unknown_sender => soe_packets.UnknownSender.SIZE,
         .remap_connection => soe_packets.RemapConnection.SIZE,
-        else => @panic("Unknown OP code: " ++ @tagName(op_code)),
     };
 }
 
@@ -158,12 +157,14 @@ test appendCrc {
 test validatePacket {
     const session_params = SessionParams{};
 
+    // Ensure we don't validate packets with too short of an OP code
     var packet: []const u8 = &[_]u8{@truncate(@intFromEnum(SoeOpCode.session_request))};
     try std.testing.expectError(
-        SoePacketValidationError.TooShort,
+        SoePacketValidationError.InvalidOpCode,
         validatePacket(packet, session_params),
     );
 
+    // Ensure we don't validate packets with an unknown OP code
     packet = &[_]u8{ 0x00, 0x00, 0x00, 0x04 };
     try std.testing.expectError(
         SoePacketValidationError.InvalidOpCode,
