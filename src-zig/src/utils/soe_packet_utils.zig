@@ -1,9 +1,9 @@
-const BinaryPrimitives = @import("BinaryPrimitives.zig");
+const binary_primitives = @import("binary_primitives.zig");
 const BinaryWriter = @import("BinaryWriter.zig");
-const Crc32 = @import("Crc32.zig");
-const SessionParams = @import("../SoeProtocol.zig").SessionParams;
-const SoeOpCode = @import("../SoeProtocol.zig").SoeOpCode;
-const SoePackets = @import("../objects/SoePackets.zig");
+const crc32 = @import("crc32.zig");
+const SessionParams = @import("../soe_protocol.zig").SessionParams;
+const SoeOpCode = @import("../soe_protocol.zig").SoeOpCode;
+const soe_packets = @import("../objects/soe_packets.zig");
 const std = @import("std");
 
 /// Enumerates the possible errors when validating an SOE packet.
@@ -20,7 +20,7 @@ const SoePacketValidationError = error{
 pub fn readSoeOpCode(buffer: []const u8) error{InvalidOpCode}!SoeOpCode {
     return std.meta.intToEnum(
         SoeOpCode,
-        BinaryPrimitives.readU16BE(buffer),
+        binary_primitives.readU16BE(buffer),
     ) catch {
         return SoePacketValidationError.InvalidOpCode;
     };
@@ -42,7 +42,7 @@ pub fn appendCrc(writer: *BinaryWriter, crc_seed: u32, crc_length: u8) void {
         return;
     }
 
-    const crc_value = Crc32.hash(writer.getConsumed(), crc_seed);
+    const crc_value = crc32.hash(writer.getConsumed(), crc_seed);
     switch (crc_length) {
         1 => writer.writeU8(@truncate(crc_value)),
         2 => writer.writeU16BE(@truncate(crc_value)),
@@ -64,16 +64,16 @@ pub fn validatePacket(packet_data: []const u8, session_params: SessionParams) So
         return op_code;
     }
 
-    const actual_crc = Crc32.hash(
+    const actual_crc = crc32.hash(
         packet_data[0 .. packet_data.len - session_params.crc_length],
         session_params.crc_seed,
     );
 
     const crc_match: bool = switch (session_params.crc_length) {
         1 => @as(u8, @truncate(actual_crc)) == packet_data[packet_data.len - 1],
-        2 => @as(u16, @truncate(actual_crc)) == BinaryPrimitives.readU16BE(packet_data[packet_data.len - 2 ..]),
-        3 => @as(u24, @truncate(actual_crc)) == BinaryPrimitives.readU24BE(packet_data[packet_data.len - 3 ..]),
-        4 => actual_crc == BinaryPrimitives.readU32BE(packet_data[packet_data.len - 4 ..]),
+        2 => @as(u16, @truncate(actual_crc)) == binary_primitives.readU16BE(packet_data[packet_data.len - 2 ..]),
+        3 => @as(u24, @truncate(actual_crc)) == binary_primitives.readU24BE(packet_data[packet_data.len - 3 ..]),
+        4 => actual_crc == binary_primitives.readU32BE(packet_data[packet_data.len - 4 ..]),
         else => @panic("Invalid CRC length. Must be between 0 and 4 inclusive"),
     };
 
@@ -103,9 +103,9 @@ test appendCrc {
         writer.writeU32BE(454653524);
 
         // Hash the value we wrote and get a buffer of it to compare against
-        const expected_crc = Crc32.hash(buffer[0..4], crc_seed);
+        const expected_crc = crc32.hash(buffer[0..4], crc_seed);
         var expected_buffer: [4]u8 = undefined;
-        BinaryPrimitives.writeU32BE(&expected_buffer, expected_crc);
+        binary_primitives.writeU32BE(&expected_buffer, expected_crc);
 
         // Now run the method under test, to append a CRC value to the writer
         appendCrc(&writer, crc_seed, @truncate(crc_length));
@@ -155,7 +155,7 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         // Allocate space for a new acknowledgement packet
         const packet_data = try std.testing.allocator.alloc(
             u8,
-            @sizeOf(SoeOpCode) + SoePackets.Acknowledge.SIZE + crc_length,
+            @sizeOf(SoeOpCode) + soe_packets.Acknowledge.SIZE + crc_length,
         );
         defer std.testing.allocator.free(packet_data);
 
@@ -163,9 +163,9 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         var writer = BinaryWriter.init(packet_data);
         writer.writeU16BE(@intFromEnum(SoeOpCode.acknowledge));
 
-        const ack = SoePackets.Acknowledge{ .sequence = 10 };
+        const ack = soe_packets.Acknowledge{ .sequence = 10 };
         ack.serialize(writer.getRemaining());
-        writer.advance(SoePackets.Acknowledge.SIZE);
+        writer.advance(soe_packets.Acknowledge.SIZE);
 
         appendCrc(&writer, session_params.crc_seed, @truncate(crc_length));
 

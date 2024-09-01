@@ -1,8 +1,8 @@
-/// A sequential reader of primitives from binary data
-const BinaryReader = @import("BinaryReader.zig");
-
-const BinaryPrimitives = @import("BinaryPrimitives.zig");
+const binary_primitives = @import("binary_primitives.zig");
 const std = @import("std");
+
+/// A sequential reader of primitives from binary data
+const BinaryReader = @This();
 
 const BinaryReaderError = error{
     NonBooleanValue,
@@ -10,12 +10,12 @@ const BinaryReaderError = error{
 };
 
 /// The underlying slice of binary data.
-slice: []const u8,
+buffer: []const u8,
 /// The offset into the slice that the reader is at.
 offset: usize = 0,
 
 pub fn init(slice: []const u8) BinaryReader {
-    return BinaryReader{ .slice = slice };
+    return BinaryReader{ .buffer = slice };
 }
 
 /// Advances the offset of the reader by the given amount.
@@ -26,7 +26,7 @@ pub fn advance(self: *BinaryReader, amount: usize) void {
 /// Reads a byte value
 pub fn readU8(self: *BinaryReader) u8 {
     self.offset += 1;
-    return self.slice[self.offset - 1];
+    return self.buffer[self.offset - 1];
 }
 
 /// Reads a boolean value. Zero is treated as false, One as true, and all other values as errors.
@@ -40,14 +40,14 @@ pub fn readBool(self: *BinaryReader) BinaryReaderError!bool {
 
 /// Reads an unsigned 24-bit integer in big endian form.
 pub fn readU24BE(self: *BinaryReader) u24 {
-    const value = BinaryPrimitives.readU24BE(self.slice[self.offset..]);
+    const value = binary_primitives.readU24BE(self.buffer[self.offset..]);
     self.offset += 3;
     return value;
 }
 
 /// Reads an unsigned 32-bit integer in big endian form.
 pub fn readU32BE(self: *BinaryReader) u32 {
-    const value = BinaryPrimitives.readU32BE(self.slice[self.offset..]);
+    const value = binary_primitives.readU32BE(self.buffer[self.offset..]);
     self.offset += 4;
     return value;
 }
@@ -56,7 +56,7 @@ pub fn readU32BE(self: *BinaryReader) u32 {
 pub fn readStringNullTerminated(self: *BinaryReader) BinaryReaderError![:0]const u8 {
     // Get the index of the first null-terminator (sentinel) past our offset
     const sentinel = [_]u8{0};
-    const index = std.mem.indexOf(u8, self.slice[self.offset..], &sentinel);
+    const index = std.mem.indexOf(u8, self.buffer[self.offset..], &sentinel);
 
     // Error out if std.mem.indexOf() could not find the sentinel value
     if (index == null) {
@@ -65,34 +65,27 @@ pub fn readStringNullTerminated(self: *BinaryReader) BinaryReaderError![:0]const
 
     const sentinel_offset = self.offset + index.?;
     // Take a slice between our offsets, and imply the presence of a sentinel
-    const value: [:0]const u8 = self.slice[self.offset..sentinel_offset :0];
+    const value: [:0]const u8 = self.buffer[self.offset..sentinel_offset :0];
 
     self.offset = sentinel_offset + 1;
     return value;
 }
 
+pub const BRStringAllocError = BinaryReaderError || error{OutOfMemory};
+
 /// Reads a null-terminated string, returning an allocated copy.
 pub fn readStringNullTerminatedWithAlloc(
     self: *BinaryReader,
     allocator: std.mem.Allocator,
-) error{ StringNotTerminated, OutOfMemory }![:0]const u8 {
-    // Get the index of the first null-terminator (sentinel) past our offset
-    const sentinel = [_]u8{0};
-    const index = std.mem.indexOf(u8, self.slice[self.offset..], &sentinel);
-
-    // Error out if std.mem.indexOf() could not find the sentinel value
-    if (index == null) {
-        return BinaryReaderError.StringNotTerminated;
-    }
+) BRStringAllocError![:0]const u8 {
+    // Get the string as a slice over the source buffer
+    const string_buffer = try self.readStringNullTerminated();
 
     // Allocate a sentinel slice for the string.
-    const sentinel_offset = self.offset + index.?;
-    const value = try allocator.allocSentinel(u8, sentinel_offset - self.offset, 0);
+    const value = try allocator.allocSentinel(u8, string_buffer.len, 0);
 
-    // Coerce the allocated value to a non-sentinel slice, and copy the string over, sentinel included
-    @memcpy(value[0 .. value.len + 1], self.slice[self.offset .. sentinel_offset + 1]);
-
-    self.offset = sentinel_offset + 1;
+    // Coerce both slices to non-sentinel, and copy the string into the allocated space
+    @memcpy(value[0 .. value.len + 1], string_buffer[0 .. value.len + 1]);
     return value;
 }
 

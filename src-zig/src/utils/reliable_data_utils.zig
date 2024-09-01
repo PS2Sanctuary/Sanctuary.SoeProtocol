@@ -1,4 +1,4 @@
-const BinaryPrimitives = @import("BinaryPrimitives.zig");
+const binary_primitives = @import("binary_primitives.zig");
 const std = @import("std");
 
 /// The byte sequence used to indicate that a reliable data packet is carrying multi-data.
@@ -54,10 +54,10 @@ pub fn readVariableLength(source: []const u8, offset: *usize) u32 {
         value = source[offset.*];
         offset.* += 1;
     } else if (source[offset.* + 1] == 0xFF and source[offset.* + 2] == 0xFF) {
-        value = BinaryPrimitives.readU32BE(source[offset.* + 3 ..]);
+        value = binary_primitives.readU32BE(source[offset.* + 3 ..]);
         offset.* += 7;
     } else {
-        value = BinaryPrimitives.readU16BE(source[offset.* + 1 ..]);
+        value = binary_primitives.readU16BE(source[offset.* + 1 ..]);
         offset.* += 3;
     }
 
@@ -80,13 +80,13 @@ pub fn writeVariableLength(dest: []u8, value: u32, offset: *usize) void {
         offset.* += 1;
     } else if (value < 0xFFFF) {
         dest[offset.*] = 0xFF;
-        BinaryPrimitives.writeU16BE(dest[offset.* + 1 ..], @truncate(value));
+        binary_primitives.writeU16BE(dest[offset.* + 1 ..], @truncate(value));
         offset.* += 3;
     } else {
         dest[offset.*] = 0xFF;
         dest[offset.* + 1] = 0xFF;
         dest[offset.* + 2] = 0xFF;
-        BinaryPrimitives.writeU32BE(dest[offset.* + 3 ..], value);
+        binary_primitives.writeU32BE(dest[offset.* + 3 ..], value);
         offset.* += 7;
     }
 }

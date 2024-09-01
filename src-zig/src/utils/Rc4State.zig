@@ -1,10 +1,7 @@
-// Files import as structs. Therefore, we can import ourself to get our definition,
-// and then define our composition below with explicitly defining the Rc4State struct.
-// Now when imported, the whole file represents the struct. Great for single-entity files!
+const std = @import("std");
 
 /// Stores an RC4 key state and provides a means to transform data using the RC4 algorithm.
 const Rc4State = @import("Rc4State.zig");
-const std = @import("std");
 
 /// The number of bytes used to store the key state.
 const RC4_STATE_LENGTH = 256;

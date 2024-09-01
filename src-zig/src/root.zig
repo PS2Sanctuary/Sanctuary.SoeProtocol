@@ -1,12 +1,12 @@
 const std = @import("std");
-const Crc32 = @import("./utils/Crc32.zig");
+const crc32 = @import("./utils/crc32.zig");
 const testing = std.testing;
 
 pub fn main() void {
     const data = [_]u8{ 0, 1, 2, 3, 4 };
     const seed: u32 = 32;
 
-    const result = Crc32.hash(&data, seed);
+    const result = crc32.hash(&data, seed);
     std.debug.print("{}", .{result});
 }
 

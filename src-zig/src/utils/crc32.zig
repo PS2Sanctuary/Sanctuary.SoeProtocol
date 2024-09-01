@@ -1,11 +1,6 @@
-// Files import as structs. Therefore, we can import ourself to get our definition,
-// and then define our composition below with explicitly defining the Rc4State struct.
-// Now when imported, the whole file represents the struct. Great for single-entity files!
-
-/// Provides a means to hash data using the CRC32
-const Crc32 = @import("Crc32.zig");
 const std = @import("std");
 
+/// Hashes data using a custom variant of the CRC32 algorithm.
 pub fn hash(data: []const u8, seed: u32) u32 {
     const unroll = 4;
     const bytes_at_once = 16 * unroll;

@@ -1,16 +1,16 @@
-/// A sequential writer of primitives to binary data
-const BinaryWriter = @import("BinaryWriter.zig");
-
-const BinaryPrimitives = @import("BinaryPrimitives.zig");
+const binary_primitives = @import("binary_primitives.zig");
 const std = @import("std");
 
+/// A sequential writer of primitives to binary data
+const BinaryWriter = @This();
+
 /// The underlying slice of binary data.
-slice: []u8,
+buffer: []u8,
 /// The offset into the slice that the reader is at.
 offset: usize = 0,
 
 pub fn init(slice: []u8) BinaryWriter {
-    return BinaryWriter{ .slice = slice };
+    return BinaryWriter{ .buffer = slice };
 }
 
 /// Advances the offset of the writer by the given amount.
@@ -19,16 +19,16 @@ pub fn advance(self: *BinaryWriter, amount: usize) void {
 }
 
 pub fn getConsumed(self: @This()) []u8 {
-    return self.slice[0..self.offset];
+    return self.buffer[0..self.offset];
 }
 
 pub fn getRemaining(self: @This()) []u8 {
-    return self.slice[self.offset..];
+    return self.buffer[self.offset..];
 }
 
 /// Writes a byte value
 pub fn writeU8(self: *BinaryWriter, value: u8) void {
-    self.slice[self.offset] = value;
+    self.buffer[self.offset] = value;
     self.offset += @sizeOf(u8);
 }
 
@@ -42,26 +42,26 @@ pub fn writeBool(self: *BinaryWriter, value: bool) void {
 
 /// Writes an unsigned 16-bit integer in big endian form.
 pub fn writeU16BE(self: *BinaryWriter, value: u16) void {
-    BinaryPrimitives.writeU16BE(self.slice[self.offset..], value);
+    binary_primitives.writeU16BE(self.buffer[self.offset..], value);
     self.offset += 2;
 }
 
 /// Writes an unsigned 24-bit integer in big endian form.
 pub fn writeU24BE(self: *BinaryWriter, value: u24) void {
-    BinaryPrimitives.writeU24BE(self.slice[self.offset..], value);
+    binary_primitives.writeU24BE(self.buffer[self.offset..], value);
     self.offset += 3;
 }
 
 /// Writes an unsigned 32-bit integer in big endian form.
 pub fn writeU32BE(self: *BinaryWriter, value: u32) void {
-    BinaryPrimitives.writeU32BE(self.slice[self.offset..], value);
+    binary_primitives.writeU32BE(self.buffer[self.offset..], value);
     self.offset += 4;
 }
 
 /// Writes a null-terminated string.
 pub fn writeStringNullTerminated(self: *BinaryWriter, value: [:0]const u8) void {
     @memcpy(
-        self.slice[self.offset .. self.offset + value.len + 1],
+        self.buffer[self.offset .. self.offset + value.len + 1],
         value[0 .. value.len + 1],
     );
     self.offset += value.len + 1;
