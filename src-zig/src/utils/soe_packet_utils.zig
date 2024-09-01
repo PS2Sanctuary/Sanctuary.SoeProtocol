@@ -18,6 +18,10 @@ const SoePacketValidationError = error{
 
 /// Reads an `SoeOpCode` value from a buffer.
 pub fn readSoeOpCode(buffer: []const u8) error{InvalidOpCode}!SoeOpCode {
+    if (buffer.len < @sizeOf(SoeOpCode)) {
+        return SoePacketValidationError.InvalidOpCode;
+    }
+
     return std.meta.intToEnum(
         SoeOpCode,
         binary_primitives.readU16BE(buffer),
@@ -54,12 +58,21 @@ pub fn appendCrc(writer: *BinaryWriter, crc_seed: u32, crc_length: u8) void {
 
 /// Validates that a buffer 'most likely' contains an SOE protocol packet.
 pub fn validatePacket(packet_data: []const u8, session_params: SessionParams) SoePacketValidationError!SoeOpCode {
-    if (packet_data.len < @sizeOf(SoeOpCode)) {
+    // Firstly, check that we can successfully read the OP code. This will check both the length,
+    // and that the op code value is actually present in our set
+    const op_code = try readSoeOpCode(packet_data);
+
+    // Now check that the packet meets minimum length requirements
+    const min_length = getPacketMinimumLength(
+        op_code,
+        session_params.is_compression_enabled,
+        session_params.crc_length,
+    );
+    if (min_length > packet_data.len) {
         return SoePacketValidationError.TooShort;
     }
 
-    const op_code = try readSoeOpCode(packet_data);
-    // TODO: Add minimum length check
+    // If the packet is contextless, or no CRC check is in place, there won't be a CRC check value!
     if (isContextlessPacket(op_code) or session_params.crc_length == 0) {
         return op_code;
     }
@@ -78,6 +91,25 @@ pub fn validatePacket(packet_data: []const u8, session_params: SessionParams) So
     };
 
     return if (crc_match) op_code else SoePacketValidationError.CrcMismatch;
+}
+
+/// Calculates the minimum length that a packet may be, given its OP code.
+pub fn getPacketMinimumLength(op_code: SoeOpCode, is_compression_enabled: true, crc_length: u8) usize {
+    const contextual_padding = @sizeOf(SoeOpCode) + @intFromBool(is_compression_enabled) + crc_length;
+
+    return switch (op_code) {
+        .session_request => soe_packets.SessionRequest.MIN_SIZE,
+        .session_response => soe_packets.SessionResponse.SIZE,
+        .multi_packet => contextual_padding + 2, // Min length of data-length bytes + first byte of data
+        .disconnect => contextual_padding + soe_packets.Disconnect.SIZE,
+        .heartbeat => contextual_padding,
+        .reliable_data, .reliable_data_fragment => contextual_padding + @sizeOf(u16) + 1, // Sequence + first byte of data
+        .acknowledge => contextual_padding + soe_packets.Acknowledge.SIZE,
+        .acknowledge_all => contextual_padding + soe_packets.AcknowledgeAll.SIZE,
+        .unknown_sender => soe_packets.UnknownSender.SIZE,
+        .remap_connection => soe_packets.RemapConnection.SIZE,
+        else => @panic("Unknown OP code: " ++ @tagName(op_code)),
+    };
 }
 
 test readSoeOpCode {
