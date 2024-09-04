@@ -50,9 +50,9 @@ pub const SessionParams = struct {
     /// Whether compression is enabled for the session.
     is_compression_enabled: bool = false,
     /// The maximum number of data fragments that may be queued for either stitching or dispatch.
-    max_queued_incoming_data_packets: i16 = 400,
+    max_queued_incoming_data_packets: u16 = 400,
     /// The maximum number of reliable data fragments that may be queued for output.
-    max_queued_outgoing_data_packets: i16 = 400,
+    max_queued_outgoing_data_packets: u16 = 400,
     /// The maximum number of reliable packets that may be received before sending an acknowledgement.
     data_ack_window: i16 = 32,
     /// The timespan in nanoseconds after which to send a heartbeat, if no contextual
@@ -76,8 +76,11 @@ pub const ApplicationParams = struct {
     /// Whether the application data should be encrypted.
     is_encryption_enabled: bool,
     /// The initial encryption state to use with the session.
-    initial_rc4_state: Rc4State,
-    on_session_opened: fn () void,
-    handle_app_data: fn ([]const u8) void,
-    on_session_closed: fn (soe_packets.DisconnectReason) void,
+    initial_rc4_state: ?Rc4State,
+    /// A pointer to the object implementing the `handle_app_data`, `on_session_opened`
+    /// and `on_session_closed` methods
+    handler_ptr: *anyopaque,
+    on_session_opened: *const fn (self: *anyopaque) void,
+    handle_app_data: *const fn (self: *anyopaque, data: []const u8) void,
+    on_session_closed: *const fn (self: *anyopaque, disconnect_reason: soe_packets.DisconnectReason) void,
 };
