@@ -189,7 +189,7 @@ fn decryptAndCallHandler(self: *ReliableDataInputChannel, data_ptr: *[]u8) void 
     }
 
     self.input_stats.total_received_bytes += data.len;
-    self._app_params.handle_app_data(self._app_params.handler_ptr, data_ptr.*);
+    self._app_params.handle_app_data(self._app_params.handler_ptr, data);
 }
 
 const InputStats = struct {
@@ -211,38 +211,60 @@ const StashedItem = struct {
 
 pub const tests = struct {
     session_params: SessionParams = .{},
-    app_params: ApplicationParams,
+    app_params: *ApplicationParams,
     last_received_data: []const u8 = undefined,
 
     fn init() !*tests {
         const test_class = try std.testing.allocator.create(tests);
+        test_class.app_params = try std.testing.allocator.create(ApplicationParams);
 
-        test_class.app_params = ApplicationParams{
-            .is_encryption_enabled = true,
-            .initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 }),
-            .handler_ptr = test_class,
-            .handle_app_data = receiveData,
-            .on_session_closed = undefined,
-            .on_session_opened = undefined,
-        };
+        test_class.app_params.is_encryption_enabled = true;
+        test_class.app_params.initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 });
+        test_class.app_params.handler_ptr = test_class;
+        test_class.app_params.handle_app_data = receiveData;
+        test_class.app_params.on_session_closed = undefined;
+        test_class.app_params.on_session_opened = undefined;
 
         return test_class;
     }
 
+    fn deinit(self: *tests) void {
+        std.testing.allocator.destroy(self.app_params);
+        std.testing.allocator.destroy(self);
+    }
+
     test decryptAndCallHandler {
-        var data = [_]u8{ 0, 1, 2, 3, 4 };
+        var expected_data = [_]u8{ 0, 1, 2, 3, 4 };
+        var processed_data = [_]u8{ 0, 1, 2, 3, 4 };
+        var expected_received_len = expected_data.len;
+
         const test_class = try tests.init();
-        defer std.testing.allocator.destroy(test_class);
+        defer test_class.deinit();
 
         // Start with no encryption
         test_class.app_params.is_encryption_enabled = false;
         var channel = try test_class.getChannel();
         defer channel.deinit();
 
-        var data2: []u8 = &data;
-        channel.decryptAndCallHandler(&data2);
-        try std.testing.expectEqual(data.len, channel.input_stats.total_received_bytes);
-        try std.testing.expectEqualSlices(u8, &data, test_class.last_received_data);
+        var input_data: []u8 = &processed_data;
+        channel.decryptAndCallHandler(&input_data);
+        try std.testing.expectEqual(expected_received_len, channel.input_stats.total_received_bytes);
+        try std.testing.expectEqualSlices(u8, &expected_data, test_class.last_received_data);
+
+        // Enable encryption. Our data contains a leading zero, which should get stripped
+        test_class.app_params.is_encryption_enabled = true;
+        var expected_data_2 = [_]u8{ 1, 2, 3, 4 };
+        processed_data = [_]u8{ 0, 1, 2, 3, 4 }; // reset, it may be mutated by decryptAndCallHandler
+        expected_received_len += expected_data_2.len;
+
+        // Let's transform our expected data
+        var my_state = channel._rc4_state.?.copy();
+        my_state.transform(&expected_data_2, &expected_data_2);
+
+        input_data = &processed_data;
+        channel.decryptAndCallHandler(&input_data);
+        try std.testing.expectEqual(expected_received_len, channel.input_stats.total_received_bytes);
+        try std.testing.expectEqualSlices(u8, &expected_data_2, test_class.last_received_data);
     }
 
     fn receiveData(ptr: *anyopaque, data: []const u8) void {
@@ -254,7 +276,7 @@ pub const tests = struct {
         return try ReliableDataInputChannel.init(
             std.testing.allocator,
             &self.session_params,
-            &self.app_params,
+            self.app_params,
             pooling.PooledDataManager.init(
                 std.testing.allocator,
                 self.session_params.udp_length,
