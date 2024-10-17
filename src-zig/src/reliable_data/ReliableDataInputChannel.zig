@@ -214,13 +214,13 @@ pub const tests = struct {
     app_params: ApplicationParams,
     last_received_data: []const u8 = undefined,
 
-    fn init() tests {
-        var test_class = tests{ .app_params = undefined };
+    fn init() !*tests {
+        const test_class = try std.testing.allocator.create(tests);
 
         test_class.app_params = ApplicationParams{
             .is_encryption_enabled = true,
             .initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 }),
-            .handler_ptr = &test_class,
+            .handler_ptr = test_class,
             .handle_app_data = receiveData,
             .on_session_closed = undefined,
             .on_session_opened = undefined,
@@ -231,7 +231,8 @@ pub const tests = struct {
 
     test decryptAndCallHandler {
         var data = [_]u8{ 0, 1, 2, 3, 4 };
-        var test_class = tests.init();
+        const test_class = try tests.init();
+        defer std.testing.allocator.destroy(test_class);
 
         // Start with no encryption
         test_class.app_params.is_encryption_enabled = false;
