@@ -87,7 +87,7 @@ pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) v
 /// Pre-processes reliable data, and stashes it for future processing if required.
 /// Returns `true` if the data may be processed immediately.
 fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: bool) bool {
-    self.input_stats.total_received += 1;
+    self.input_stats.total_received_data += 1;
     var sequence: i64 = undefined;
     var packet_sequence: u16 = undefined;
 
@@ -193,9 +193,14 @@ fn decryptAndCallHandler(self: *ReliableDataInputChannel, data_ptr: *[]u8) void 
 }
 
 const InputStats = struct {
-    total_received: u32 = 0,
+    /// The total number of reliable data packets (incl. fragments) that have been
+    /// received. This count includes duplicate packets.
+    total_received_data: u32 = 0,
+    /// The total number of duplicate sequences that have been received.
     duplicate_count: u32 = 0,
+    /// The total number of sequences that have been received out-of-order.
     out_of_order_count: u32 = 0,
+    /// The total number of data bytes received by the channel
     total_received_bytes: u64 = 0,
     acknowledge_count: u32 = 0,
 };
@@ -233,38 +238,93 @@ pub const tests = struct {
         std.testing.allocator.destroy(self);
     }
 
-    test decryptAndCallHandler {
+    test "decryptAndCallHandler_NoEncryption" {
         var expected_data = [_]u8{ 0, 1, 2, 3, 4 };
         var processed_data = [_]u8{ 0, 1, 2, 3, 4 };
-        var expected_received_len = expected_data.len;
 
         const test_class = try tests.init();
         defer test_class.deinit();
 
-        // Start with no encryption
-        test_class.app_params.is_encryption_enabled = false;
+        // Get a channel and enable encryption
         var channel = try test_class.getChannel();
         defer channel.deinit();
+        test_class.app_params.is_encryption_enabled = false;
 
         var input_data: []u8 = &processed_data;
         channel.decryptAndCallHandler(&input_data);
-        try std.testing.expectEqual(expected_received_len, channel.input_stats.total_received_bytes);
-        try std.testing.expectEqualSlices(u8, &expected_data, test_class.last_received_data);
+        try std.testing.expectEqual(
+            expected_data.len,
+            channel.input_stats.total_received_bytes,
+        );
+        try std.testing.expectEqualSlices(
+            u8,
+            &expected_data,
+            test_class.last_received_data,
+        );
+    }
 
-        // Enable encryption. Our data contains a leading zero, which should get stripped
+    test "decryptAndCallHandler_Encryption" {
+        // The leading zero on our encrypted data should get stripped
+        var expected_data = [_]u8{ 1, 2, 3, 4 };
+        var processed_data = [_]u8{ 0, 1, 2, 3, 4 };
+
+        const test_class = try tests.init();
+        defer test_class.deinit();
+
+        // Get a channel and enable encryption
+        var channel = try test_class.getChannel();
+        defer channel.deinit();
         test_class.app_params.is_encryption_enabled = true;
-        var expected_data_2 = [_]u8{ 1, 2, 3, 4 };
-        processed_data = [_]u8{ 0, 1, 2, 3, 4 }; // reset, it may be mutated by decryptAndCallHandler
-        expected_received_len += expected_data_2.len;
 
         // Let's transform our expected data
         var my_state = channel._rc4_state.?.copy();
-        my_state.transform(&expected_data_2, &expected_data_2);
+        my_state.transform(&expected_data, &expected_data);
 
-        input_data = &processed_data;
+        var input_data: []u8 = &processed_data;
         channel.decryptAndCallHandler(&input_data);
-        try std.testing.expectEqual(expected_received_len, channel.input_stats.total_received_bytes);
-        try std.testing.expectEqualSlices(u8, &expected_data_2, test_class.last_received_data);
+        try std.testing.expectEqual(
+            expected_data.len,
+            channel.input_stats.total_received_bytes,
+        );
+        try std.testing.expectEqualSlices(
+            u8,
+            &expected_data,
+            test_class.last_received_data,
+        );
+    }
+
+    test "decryptAndCallHandler_IncrementsTotalReceivedBytes" {
+        var data_1 = [_]u8{ 0, 1, 2, 3, 4 };
+        var data_2 = [_]u8{ 1, 2, 3, 4 };
+
+        const test_class = try tests.init();
+        defer test_class.deinit();
+
+        var channel = try test_class.getChannel();
+        defer channel.deinit();
+        test_class.app_params.is_encryption_enabled = false;
+
+        var input_data: []u8 = &data_1;
+        channel.decryptAndCallHandler(&input_data);
+        try std.testing.expectEqual(
+            5,
+            channel.input_stats.total_received_bytes,
+        );
+
+        input_data = &data_2;
+        channel.decryptAndCallHandler(&input_data);
+        try std.testing.expectEqual(
+            9,
+            channel.input_stats.total_received_bytes,
+        );
+
+        test_class.app_params.is_encryption_enabled = true;
+        input_data = &data_1;
+        channel.decryptAndCallHandler(&input_data);
+        try std.testing.expectEqual(
+            13,
+            channel.input_stats.total_received_bytes,
+        );
     }
 
     fn receiveData(ptr: *anyopaque, data: []const u8) void {
