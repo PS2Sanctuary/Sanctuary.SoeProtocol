@@ -1,19 +1,30 @@
+const ApplicationParams = @import("./soe_protocol.zig").ApplicationParams;
+const pooling = @import("./pooling.zig");
+const SessionParams = @import("./soe_protocol.zig").SessionParams;
+const SoeSocketHandler = @import("./SoeSocketHandler.zig");
 const std = @import("std");
-const crc32 = @import("./utils/crc32.zig");
-const testing = std.testing;
 
-pub fn main() void {
-    const data = [_]u8{ 0, 1, 2, 3, 4 };
-    const seed: u32 = 32;
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
 
-    const result = crc32.hash(&data, seed);
-    std.debug.print("{}", .{result});
-}
+    const session_params: SessionParams = .{};
+    const app_params: ApplicationParams = .{
+        .initial_rc4_state = undefined,
+        .handle_app_data = undefined,
+        .handler_ptr = undefined,
+        .is_encryption_enabled = false,
+        .on_session_closed = undefined,
+        .on_session_opened = undefined,
+    };
+    const data_pool = pooling.PooledDataManager.init(allocator, 512, 5192);
 
-export fn add(a: i32, b: i32) i32 {
-    return a + b;
-}
+    const handler: SoeSocketHandler = try SoeSocketHandler.init(
+        allocator,
+        &session_params,
+        &app_params,
+        data_pool,
+    );
 
-test "basic add functionality" {
-    try testing.expect(add(3, 7) == 10);
+    std.debug.print("{any}", .{handler._app_params.is_encryption_enabled});
 }
