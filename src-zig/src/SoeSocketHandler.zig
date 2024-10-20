@@ -42,9 +42,25 @@ pub fn init(
 }
 
 pub fn deinit(self: *SoeSocketHandler) void {
+    // Free the socket and related buffers
     self._allocator.free(self._recvBuffer);
-    self._connections.deinit();
+    self._socket.close();
     network.deinit();
+
+    // Free all session connections
+    for (self._connections.valueIterator().items) |session| {
+        session.deinit();
+    }
+    self._connections.deinit();
+}
+
+/// Binds this socket handler to an endpoint, readying it to act as a server.
+pub fn bind(self: *SoeSocketHandler, endpoint: network.EndPoint) !void {
+    self._socket.bind(endpoint);
+}
+
+pub fn connect(self: *SoeSocketHandler, remote: network.EndPoint) !void {
+    self.spawnSessionHandler(remote);
 }
 
 pub fn runTick(self: *SoeSocketHandler) !void {
@@ -52,13 +68,23 @@ pub fn runTick(self: *SoeSocketHandler) !void {
     var conn: ?SoeSessionHandler = self._connections.get(result.sender);
 
     if (conn == null) {
-        conn = SoeSessionHandler.init(
-            self._allocator,
-            self._session_params,
-            self._app_params,
-            self._data_pool,
-        );
+        conn = self.spawnSessionHandler(result.sender);
     }
 
     try conn.?.handlePacket(self._recvBuffer[0..result.numberOfBytes]);
+}
+
+fn spawnSessionHandler(self: *SoeSocketHandler, remote: network.EndPoint) SoeSessionHandler {
+    const handler = SoeSessionHandler.init(
+        remote,
+        self,
+        self._allocator,
+        self._session_params,
+        self._app_params,
+        self._data_pool,
+    );
+
+    self._connections.put(remote, handler);
+
+    return handler;
 }
