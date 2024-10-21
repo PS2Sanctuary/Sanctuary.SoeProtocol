@@ -110,13 +110,13 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
 /// Sends a contextual packet.
 /// <param name="opCode">The OP code of the packet to send.</param>
 /// <param name="packetData">The packet data, not including the OP code.</param>
-pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
+pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) void {
     const extra_bytes: i32 = @sizeOf(soe_protocol.SoeOpCode) +
         @intFromBool(self._session_params.is_compression_enabled) +
         self._session_params.crc_length;
 
     if (packet_data.len + extra_bytes > self._session_params.remote_udp_length) {
-        return error.PacketLargerThanRemoteUdplength;
+        std.debug.panic("packet_data is too long (max len: {d})", .{self._session_params.remote_udp_length - extra_bytes});
     }
 
     var writer = BinaryWriter.init(self._contextual_send_buffer);
