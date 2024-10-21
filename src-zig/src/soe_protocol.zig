@@ -126,4 +126,16 @@ pub const ApplicationParams = struct {
     on_session_opened: *const fn (self: *anyopaque) void,
     handle_app_data: *const fn (self: *anyopaque, data: []const u8) void,
     on_session_closed: *const fn (self: *anyopaque, disconnect_reason: DisconnectReason) void,
+
+    pub fn callOnSessionOpened(self: *const ApplicationParams) void {
+        self.on_session_opened(self.handler_ptr);
+    }
+
+    pub fn callHandleAppData(self: *const ApplicationParams, data: []const u8) void {
+        self.handle_app_data(self.handler_ptr, data);
+    }
+
+    pub fn callOnSessionClosed(self: *const ApplicationParams, reason: DisconnectReason) void {
+        self.on_session_closed(self.handler_ptr, reason);
+    }
 };

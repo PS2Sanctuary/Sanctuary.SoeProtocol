@@ -192,7 +192,7 @@ fn decryptAndCallHandler(self: *ReliableDataInputChannel, data: []u8) void {
     }
 
     self.input_stats.total_received_bytes += my_data.len;
-    self._app_params.handle_app_data(self._app_params.handler_ptr, my_data);
+    self._app_params.callHandleAppData(my_data);
 }
 
 const InputStats = struct {

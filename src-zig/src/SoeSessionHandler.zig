@@ -90,7 +90,7 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
     };
 
     if (self.state == SessionState.waiting_on_client_to_open_session) {
-        // TODO: _application.OnSessionOpened();
+        self._app_params.callOnSessionOpened();
         self.state == SessionState.running;
     }
 
@@ -159,7 +159,7 @@ fn terminateSession(
 
     self.state = SessionState.terminated;
     self.terminated_by_remote = terminated_by_remote;
-    // TODO: _application.OnSessionClosed(reason);
+    self._app_params.callOnSessionClosed(reason);
     // TODO: Deregister from socket handler
 }
 
