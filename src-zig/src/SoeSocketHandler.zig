@@ -17,7 +17,7 @@ _data_pool: pooling.PooledDataManager,
 
 // Internal private fields
 _socket: network.Socket,
-_recvBuffer: []u8,
+_recv_buffer: []u8,
 _connections: std.AutoHashMap(network.EndPoint, SoeSessionHandler),
 
 // Public fields
@@ -36,14 +36,14 @@ pub fn init(
         ._app_params = app_params,
         ._data_pool = data_pool,
         ._socket = try network.Socket.create(network.AddressFamily.ipv4, network.Protocol.udp),
-        ._recvBuffer = try allocator.alloc(u8, session_params.udp_length),
+        ._recv_buffer = try allocator.alloc(u8, session_params.remote_udp_length),
         ._connections = std.AutoHashMap(network.EndPoint, SoeSessionHandler).init(allocator),
     };
 }
 
 pub fn deinit(self: *SoeSocketHandler) void {
     // Free the socket and related buffers
-    self._allocator.free(self._recvBuffer);
+    self._allocator.free(self._recv_buffer);
     self._socket.close();
     network.deinit();
 
@@ -64,14 +64,16 @@ pub fn connect(self: *SoeSocketHandler, remote: network.EndPoint) !void {
 }
 
 pub fn runTick(self: *SoeSocketHandler) !void {
-    const result = try self._socket.receiveFrom(self._recvBuffer);
+    const result = try self._socket.receiveFrom(self._recv_buffer);
     var conn: ?SoeSessionHandler = self._connections.get(result.sender);
 
     if (conn == null) {
         conn = self.spawnSessionHandler(result.sender);
     }
 
-    try conn.?.handlePacket(self._recvBuffer[0..result.numberOfBytes]);
+    try conn.?.handlePacket(self._recv_buffer[0..result.numberOfBytes]);
+
+    // TODO: Tick all sessions
 }
 
 fn spawnSessionHandler(self: *SoeSocketHandler, remote: network.EndPoint) SoeSessionHandler {

@@ -1,5 +1,4 @@
 pub const Rc4State = @import("reliable_data/Rc4State.zig");
-pub const soe_packets = @import("soe_packets.zig");
 pub const std = @import("std");
 
 /// The implemented version of the SOE protocol.
@@ -33,6 +32,50 @@ pub const SoeOpCode = enum(u16) {
     unknown_sender = 0x1D,
     /// Used to request that a session be remapped to another port.
     remap_connection = 0x1E,
+};
+
+/// Enumerates the possible session termination codes.
+pub const DisconnectReason = enum(u16) {
+    /// No reason can be given for the disconnect.
+    none = 0,
+    /// An ICMP error occured, forcing the disconnect.
+    icmp_error = 1,
+    /// The other party has let the session become inactive.
+    timeout = 2,
+    /// An internal use code, used to indicate that the other party has sent a disconnect.
+    other_side_terminated = 3,
+    /// Indicates that the session manager has been disposed of.
+    /// Generally occurs when the server/client is shutting down.
+    manager_deleted = 4,
+    /// An internal use code, indicating a session request attempt has failed.
+    connect_fail = 5,
+    /// The application is terminating the session.
+    application = 6,
+    /// An internal use code, indicating that the session must disconnect
+    /// as the other party is unreachable.
+    unreachable_connection = 7,
+    /// Indicates that the session has been closed because a data sequence
+    /// was not acknowledged quickly enough.
+    unacknowledged_timeout = 8,
+    /// Indicates that a session request has failed (often due to the connecting
+    /// party attempting a reconnection too quickly), and a new attempt should be
+    /// made after a short delay.
+    new_connection_attempt = 9,
+    /// Indicates that the application did not accept a session request.
+    connection_refused = 10,
+    /// Indicates that the proper session negotiation flow has not been observed.
+    connect_error = 11,
+    /// Indicates that a session request has probably been looped back to the sender,
+    /// and it should not continue with the connection attempt.
+    connecting_to_self = 12,
+    /// Indicates that reliable data is being sent too fast to be processed.
+    reliable_overflow = 13,
+    /// Indicates that the session manager has been orphaned by the application.
+    application_released = 14,
+    /// Indicates that a corrupt packet was received.
+    corrupt_packet = 15,
+    /// Indicates that the requested SOE protocol version or application protocol is invalid.
+    protocol_mismatch = 16,
 };
 
 /// Bundles parameters used to control a session.
@@ -82,5 +125,5 @@ pub const ApplicationParams = struct {
     handler_ptr: *anyopaque,
     on_session_opened: *const fn (self: *anyopaque) void,
     handle_app_data: *const fn (self: *anyopaque, data: []const u8) void,
-    on_session_closed: *const fn (self: *anyopaque, disconnect_reason: soe_packets.DisconnectReason) void,
+    on_session_closed: *const fn (self: *anyopaque, disconnect_reason: DisconnectReason) void,
 };
