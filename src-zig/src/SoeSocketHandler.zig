@@ -76,6 +76,11 @@ pub fn runTick(self: *SoeSocketHandler) !void {
     // TODO: Tick all sessions
 }
 
+/// Sends data to the remote endpoint of a session.
+pub fn sendSessionData(self: *SoeSocketHandler, session: SoeSessionHandler, data: []const u8) network.Socket.SendError!usize {
+    return self._socket.sendTo(session.remote, data);
+}
+
 fn spawnSessionHandler(self: *SoeSocketHandler, remote: network.EndPoint) SoeSessionHandler {
     const handler = SoeSessionHandler.init(
         remote,

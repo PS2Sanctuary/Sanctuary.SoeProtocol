@@ -13,7 +13,6 @@ const std = @import("std");
 pub const SoeSessionHandler = @This();
 
 // External private fields
-_remote: network.EndPoint,
 _parent: SoeSocketHandler,
 _allocator: std.mem.Allocator,
 _session_params: *const soe_protocol.SessionParams,
@@ -27,6 +26,7 @@ _last_received_packet_tick: std.time.Instant,
 
 // Public fields
 mode: SessionMode,
+remote: network.EndPoint,
 state: SessionState,
 session_id: u32,
 termination_reason: soe_protocol.DisconnectReason,
@@ -43,7 +43,7 @@ pub fn init(
 ) !SoeSessionHandler {
     return SoeSessionHandler{
         .mode = mode,
-        ._remote = remote,
+        .remote = remote,
         ._parent = parent,
         ._allocator = allocator,
         ._session_params = session_params,
@@ -107,10 +107,10 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
     }
 }
 
-/// Sends a contextual packet.
-/// <param name="opCode">The OP code of the packet to send.</param>
-/// <param name="packetData">The packet data, not including the OP code.</param>
-pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) void {
+/// Sends a contextual packet.\
+/// `op_code`: The OP code of the packet to send.\
+/// `packet_data`: The packet data, not including the OP code.
+pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
     const extra_bytes: i32 = @sizeOf(soe_protocol.SoeOpCode) +
         @intFromBool(self._session_params.is_compression_enabled) +
         self._session_params.crc_length;
@@ -127,14 +127,16 @@ pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeO
     writer.writeBytes(packet_data);
     soe_packet_utils.appendCrc(&writer, self._session_params.crc_seed, self._session_params.crc_length);
 
-    // TODO: _networkWriter.Send(writer.Consumed);
+    self._parent.sendSessionData(self, writer.getConsumed()) catch |err| {
+        std.debug.panic("Failed to send contextual packet due to socket error: {s}", .{err});
+    };
 }
 
 /// Terminates the session. This may be called whenever the session needs to close,
-/// e.g. when the other party has disconnected, or an internal error has occurred.
-/// <param name="reason">The termination reason.</param>
-/// <param name="notifyRemote">Whether to notify the remote party.</param>
-/// <param name="terminatedByRemote">Indicates whether this termination has come from the remote party.</param>
+/// e.g. when the other party has disconnected, or an internal error has occurred.\
+/// `reason`: The termination reason.\
+/// `notify_remote`: Whether to notify the remote party.\
+/// `terminated_by_remote`: Indicates whether this termination has come from the remote party.
 fn terminateSession(
     self: *SoeSessionHandler,
     reason: soe_protocol.DisconnectReason,
