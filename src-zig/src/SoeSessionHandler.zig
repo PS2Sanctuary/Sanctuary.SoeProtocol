@@ -124,7 +124,7 @@ pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeO
     writer.writeU16BE(@intFromEnum(op_code));
     if (self._session_params.is_compression_enabled)
         writer.writeBool(false); // Compression is not implemented at the moment
-    // TODO: writer.WriteBytes(packetData);
+    writer.writeBytes(packet_data);
     soe_packet_utils.appendCrc(&writer, self._session_params.crc_seed, self._session_params.crc_length);
 
     // TODO: _networkWriter.Send(writer.Consumed);

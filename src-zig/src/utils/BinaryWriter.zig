@@ -58,6 +58,11 @@ pub fn writeU32BE(self: *BinaryWriter, value: u32) void {
     self.offset += 4;
 }
 
+pub fn writeBytes(self: *BinaryWriter, value: []const u8) void {
+    @memcpy(self.buffer[self.offset .. self.offset + value.len], value);
+    self.offset += value.len;
+}
+
 /// Writes a null-terminated string.
 pub fn writeStringNullTerminated(self: *BinaryWriter, value: [:0]const u8) void {
     @memcpy(
@@ -115,6 +120,15 @@ test writeU32BE {
 
     try std.testing.expectEqualSlices(u8, &[_]u8{ 0x00, 0x01, 0x00, 0x00 }, data[0..4]);
     try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFF, 0xFF, 0xFF, 0xFF }, data[4..8]);
+}
+
+test writeBytes {
+    var data: [4]u8 = undefined;
+    var writer = BinaryWriter.init(&data);
+    writer.writeBytes(&[_]u8{ 2, 4 });
+    writer.writeBytes(&[_]u8{ 6, 8 });
+
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 2, 4, 6, 8 }, &data);
 }
 
 test writeStringNullTerminated {
