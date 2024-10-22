@@ -1,5 +1,8 @@
 const binary_primitives = @import("../utils/binary_primitives.zig");
 const std = @import("std");
+const zlib = @cImport({
+    @cInclude("zlib.h");
+});
 
 /// The byte sequence used to indicate that a reliable data packet is carrying multi-data.
 pub const MULTI_DATA_INDICATOR = [2]u8{ 0x00, 0x19 };
