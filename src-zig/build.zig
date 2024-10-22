@@ -60,8 +60,8 @@ pub fn build(b: *std.Build) void {
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-    //b.installArtifact(lib);
-    //b.installArtifact(lib_zlib);
+    b.installArtifact(lib);
+    b.installArtifact(lib_zlib);
 
     // ===== zig build test =====
 
