@@ -70,7 +70,7 @@ pub fn runTick(self: *SoeSessionHandler) !void {
     sendHeartbeatIfRequired();
 
     if (std.time.Instant.since(self._last_received_packet_tick) > self._session_params.inactivity_timeout_ns) {
-        terminateSession(soe_protocol.DisconnectReason.timeout, false);
+        self.terminateSession(.timeout, false, false);
     }
 
     self._data_input_channel.runTick();
@@ -81,11 +81,7 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
         packet,
         self._session_params,
     ) catch {
-        self.terminateSession(
-            soe_protocol.DisconnectReason.corrupt_packet,
-            true,
-            false,
-        );
+        self.terminateSession(.corrupt_packet, true, false);
         return;
     };
 
@@ -101,9 +97,9 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
     const is_sessionless: bool = soe_packet_utils.isContextlessPacket(op_code);
 
     if (is_sessionless) {
-        handleContextlessPacket(opCode, packet);
+        self.handleContextlessPacket(op_code, packet);
     } else {
-        handleContextualPacket(opCode, packet[0 .. packet.len - self._session_params.CrcLength]);
+        self.handleContextualPacket(op_code, packet[0 .. packet.len - self._session_params.CrcLength]);
     }
 }
 
@@ -154,7 +150,7 @@ fn terminateSession(
 
     if (notify_remote and self.state == SessionState.running) {
         const disconnect = soe_packets.Disconnect{ .session_id = self.session_id, .reason = reason };
-        var buffer = [soe_packets.Disconnect.SIZE]u8;
+        var buffer: [soe_packets.Disconnect.SIZE]u8 = undefined;
         disconnect.serialize(&buffer);
         self.sendContextualPacket(soe_protocol.SoeOpCode.disconnect, buffer);
     }
@@ -164,6 +160,121 @@ fn terminateSession(
     self._app_params.callOnSessionClosed(reason);
     // TODO: Deregister from socket handler
 }
+
+// ===== Start Contextless Packet Handling =====
+
+/// Sends a session request to the remote. The underlying network writer must be connected,
+/// and the handler must be in client mode, and ready for negotiation.
+fn sendSessionRequest(self: *SoeSessionHandler) void {
+    if (self.state != SessionState.negotiating) {
+        std.debug.panic("Can only send a session request while in the negotiating state", .{});
+    }
+
+    if (self.mode != SessionMode.client) {
+        std.debug.panic("Can only send a session request while in client mode", .{});
+    }
+
+    const session_id: u32 = std.Random.DefaultPrng.random().int(u32);
+    const sreq = soe_packets.SessionRequest{
+        .application_protocol = self._session_params.application_protocol,
+        .session_id = session_id,
+        .soe_protocol_version = soe_protocol.SOE_PROTOCOL_VERSION,
+        .udp_length = self._session_params.udp_length,
+    };
+
+    // Unfortunately we can only guarantee our UDP length here, and not the remote's
+    const packet_size = sreq.getSize();
+    if (packet_size > self._session_params.udp_length) {
+        std.debug.panic("The application_protocol string is too long", .{});
+    }
+
+    var buffer: [packet_size]u8 = undefined;
+    sreq.serialize(buffer, true);
+    self._parent.sendSessionData(self, &buffer);
+}
+
+fn handleContextlessPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet: []u8) void {
+    switch (op_code) {
+        .session_request => handleSessionRequest(packet),
+        .session_response => handleSessionResponse(packet),
+        .unknown_sender => self.terminateSession(.unreachable_connection, false, false),
+        .remap_connection => std.debug.panic("Remap requests must be handled by the SoeSocketHandler"), // TODO: we can request this
+        _ => std.debug.panic("{any} is not a contextless packet", .{op_code}),
+    }
+}
+
+fn handleSessionRequest(self: *SoeSessionHandler, packet: []u8) void {
+    if (self.mode == SessionMode.client) {
+        self.terminateSession(.connecting_to_self, false, false);
+        return;
+    }
+
+    const sreq = soe_packets.SessionRequest.deserialize(packet, false);
+    self._session_params.remote_udp_length = sreq.udp_length;
+    self.session_id = sreq.session_id;
+
+    if (self.state != SessionState.negotiating) {
+        self.terminateSession(.connect_error, true, false);
+        return;
+    }
+
+    const protocols_match: bool = sreq.soe_protocol_version == soe_protocol.SOE_PROTOCOL_VERSION and
+        sreq.application_protocol == self._session_params.application_protocol;
+    if (!protocols_match) {
+        self.terminateSession(.protocol_mismatch, true, false);
+        return;
+    }
+
+    self._session_params.crc_length = soe_protocol.CRC_LENGTH;
+    self._session_params.crc_seed = std.Random.DefaultPrng.random().int(u32);
+
+    // TODO: self._data_output_channel.setMaxDataLength(calculateMaxDataLength());
+
+    const sresp = soe_packets.SessionResponse{
+        .session_id = self.session_id,
+        .crc_length = self._session_params.crc_length,
+        .crc_seed = self._session_params.crc_seed,
+        .is_compression_enabled = self._session_params.is_compression_enabled,
+        .soe_protocol_version = soe_protocol.SOE_PROTOCOL_VERSION,
+        .udp_length = self._session_params.udp_length,
+        .unknown_value_1 = 0,
+    };
+    var buffer: [soe_packets.SessionResponse.SIZE]u8 = undefined;
+    sresp.serialize(&buffer, true);
+    self._parent.sendSessionData(self, &buffer);
+
+    self.state = SessionState.waiting_on_client_to_open_session;
+}
+
+fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) void {
+    if (self.mode == SessionMode.server) {
+        self.terminateSession(.connecting_to_self, false, false);
+        return;
+    }
+
+    const sresp = soe_packets.SessionResponse.deserialize(packet, false);
+    // TODO: We need to ensure we have a unique session params and app params per session handler
+    self._session_params.remote_udp_length = sresp.udp_length;
+    self._session_params.crc_length = sresp.crc_length;
+    self._session_params.crc_seed = sresp.crc_seed;
+    self._session_params.is_compression_enabled = sresp.is_compression_enabled;
+    self.session_id = sresp.session_id;
+    // TODO: self._data_output_channel.setMaxDataLength(calculateMaxDataLength());
+
+    if (self.state != SessionState.negotiating) {
+        self.terminateSession(.connect_error, true, false);
+    }
+
+    if (sresp.soe_protocol_version != soe_protocol.SOE_PROTOCOL_VERSION) {
+        self.terminateSession(.protocol_mismatch, true, false);
+        return;
+    }
+
+    self.state = SessionState.running;
+    self._app_params.callOnSessionOpened();
+}
+
+// ===== End Contextless Packet Handling =====
 
 fn sendHeartbeatIfRequired(self: *SoeSessionHandler) void {
     const maySendHeartbeat = self.mode == SessionMode.client and

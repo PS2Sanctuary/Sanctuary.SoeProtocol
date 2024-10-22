@@ -154,6 +154,10 @@ pub const SessionRequest = struct {
         writer.writeU32BE(self.udp_length);
         writer.writeStringNullTerminated(self.application_protocol);
     }
+
+    pub fn getSize(self: *SessionRequest) usize {
+        return MIN_SIZE + self.application_protocol.len;
+    }
 };
 
 /// Represents a packet used to request an SOE session.
