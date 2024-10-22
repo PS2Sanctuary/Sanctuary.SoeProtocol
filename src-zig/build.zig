@@ -48,41 +48,41 @@ pub fn build(b: *std.Build) void {
     // Add our core components as a static library
     const lib = b.addStaticLibrary(.{
         .name = "soe-protocol",
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/root.zig"),
+        .root_source_file = b.path("src/lib.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    // Add 3rd-party libraries
+    // Link libraries
     lib.linkLibrary(lib_zlib);
-    lib.addIncludePath(b.path("lib/zlib"));
-
-    // Add 3rd-party dependencies as modules
     lib.root_module.addImport("network", b.dependency("network", .{}).module("network"));
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-    b.installArtifact(lib);
-    b.installArtifact(lib_zlib);
+    //b.installArtifact(lib);
+    //b.installArtifact(lib_zlib);
+
+    // ===== zig build test =====
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/test_root.zig"),
+        .root_source_file = b.path("src/lib.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+    // Link libraries
+    lib_unit_tests.linkLibrary(lib_zlib);
+    lib_unit_tests.root_module.addImport("network", b.dependency("network", .{}).module("network"));
 
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
+    // Create an executable artifact, and a build step to execute it ('zig build test')
+    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
+
+    // ===== zig build run =====
 
     // Create a new executable named `soe-protocol-sample` from `src/root.zig`
     const exe = b.addExecutable(.{
@@ -91,10 +91,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    // Link zlib against this executable
-    exe.linkLibrary(lib_zlib);
 
-    // Add a run artifact and step ('zig build run')
+    // Link libraries
+    exe.linkLibrary(lib_zlib);
+    exe.root_module.addImport("network", b.dependency("network", .{}).module("network"));
+
+    // Add an executable artifact, and a build step to execute it ('zig build run')
     const run_exe = b.addRunArtifact(exe);
     const run_step = b.step("run", "Run the sample executable");
     run_step.dependOn(&run_exe.step);
