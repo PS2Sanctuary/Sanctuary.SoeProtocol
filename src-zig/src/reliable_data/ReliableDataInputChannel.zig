@@ -4,6 +4,7 @@ const pooling = @import("../pooling.zig");
 const Rc4State = @import("Rc4State.zig");
 const SessionParams = @import("../soe_protocol.zig").SessionParams;
 const soe_packets = @import("../soe_packets.zig");
+const soe_packet_utils = @import("../utils/soe_packet_utils.zig");
 const std = @import("std");
 const utils = @import("utils.zig");
 
@@ -170,7 +171,7 @@ fn processData(self: *ReliableDataInputChannel, data: []u8) void {
     if (utils.hasMultiData(data)) {
         var offset: usize = 2;
         while (offset < data.len) {
-            const length = utils.readVariableLength(data, &offset);
+            const length = soe_packet_utils.readVariableLength(data, &offset);
             self.decryptAndCallHandler(data[offset .. offset + length]);
             offset += length;
         }

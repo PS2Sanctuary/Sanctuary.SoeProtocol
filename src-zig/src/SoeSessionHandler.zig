@@ -277,6 +277,82 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) void {
 
 // ===== End Contextless Packet Handling =====
 
+// ===== Start Contextual Packet Handling =====
+
+fn handleContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) void {
+    // TODO: MemoryStream? decompressedData = null;
+
+    if (self._session_params.is_compression_enabled) {
+        const is_compressed: bool = packet_data[0] > 0;
+        packet_data = packet_data[1..];
+
+        if (is_compressed) {
+            // decompressedData = SoePacketUtils.Decompress(packetData);
+            // packetData = decompressedData.GetBuffer()
+            //     .AsSpan(0, (int)decompressedData.Length);
+        }
+    }
+
+    self.handleContextualPacketInternal(op_code, packet_data);
+    //decompressedData?.Dispose();
+}
+
+fn handleContextualPacketInternal(
+    self: *SoeSessionHandler,
+    op_code: soe_protocol.SoeOpCode,
+    packet_data: []u8,
+) void {
+    switch (op_code) {
+        .multi_packet => {
+            var offset: usize = 0;
+            while (offset < packet_data.len) {
+                const sub_packet_len: i32 = soe_packet_utils.readVariableLength(packet_data, &offset);
+                if (sub_packet_len < @sizeOf(soe_protocol.SoeOpCode) or sub_packet_len > packet_data.len - offset) {
+                    self.terminateSession(.corrupt_packet, true, false);
+                    return;
+                }
+
+                const sub_packet_op_code = soe_packet_utils.readSoeOpCode(packet_data[offset..]) catch {
+                    self.terminateSession(.corrupt_packet, true, false);
+                    return;
+                };
+
+                self.handleContextualPacketInternal(
+                    sub_packet_op_code,
+                    packet_data[offset + @sizeOf(soe_protocol.SoeOpCode) .. offset + sub_packet_len],
+                );
+
+                offset += sub_packet_len;
+            }
+        },
+        .disconnect => {
+            const disconnect = soe_packets.Disconnect.deserialize(packet_data);
+            self.terminateSession(disconnect.reason, false, true);
+        },
+        .heartbeat => {
+            if (self.mode == SessionMode.server)
+                self.sendContextualPacket(.Heartbeat, [0]u8);
+        },
+        .reliable_data => {
+            self._data_input_channel.handleReliableData(packet_data);
+        },
+        .reliable_data_fragment => {
+            self._data_input_channel.handleReliableDataFragment(packet_data);
+        },
+        .acknowledge => {
+            //const ack = soe_packets.Acknowledge.deserialize(packet_data);
+            // TODO: _dataOutputChannel.NotifyOfAcknowledge(ack);
+        },
+        .acknowledge_all => {
+            //const ackAll = soe_packets.AcknowledgeAll.deserialize(packet_data);
+            // TODO: _dataOutputChannel.NotifyOfAcknowledgeAll(ackAll);
+        },
+        _ => {
+            std.debug.panic("The contextual handler does not support {any} packets", .{op_code});
+        },
+    }
+}
+
 fn sendHeartbeatIfRequired(self: *SoeSessionHandler) void {
     const maySendHeartbeat = self.mode == SessionMode.client and
         self.state == SessionState.running and
@@ -287,6 +363,8 @@ fn sendHeartbeatIfRequired(self: *SoeSessionHandler) void {
         self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, [0]u8);
     }
 }
+
+// ===== End Contextual Packet Handling =====
 
 pub const SessionMode = enum { client, server };
 
