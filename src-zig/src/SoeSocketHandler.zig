@@ -65,13 +65,17 @@ pub fn connect(self: *SoeSocketHandler, remote: network.EndPoint) !void {
 
 pub fn runTick(self: *SoeSocketHandler) !void {
     const result = try self._socket.receiveFrom(self._recv_buffer);
-    var conn: ?SoeSessionHandler = self._connections.get(result.sender);
 
-    if (conn == null) {
-        conn = self.spawnSessionHandler(result.sender);
+    if (result.numberOfBytes > 0) {
+        var conn: ?SoeSessionHandler = self._connections.get(result.sender);
+
+        if (conn == null) {
+            // TODO: Check for remap request
+            conn = self.spawnSessionHandler(result.sender);
+        }
+
+        try conn.?.handlePacket(self._recv_buffer[0..result.numberOfBytes]);
     }
-
-    try conn.?.handlePacket(self._recv_buffer[0..result.numberOfBytes]);
 
     // TODO: Tick all sessions
 }
@@ -81,7 +85,15 @@ pub fn sendSessionData(self: *SoeSocketHandler, session: SoeSessionHandler, data
     return self._socket.sendTo(session.remote, data);
 }
 
+/// Terminates and removes a session from the connection list.
+pub fn terminateSession(self: *SoeSocketHandler, session: SoeSessionHandler) void {
+    session.terminateSession(.application, true, false);
+    self._connections.remove(session.remote);
+}
+
 fn spawnSessionHandler(self: *SoeSocketHandler, remote: network.EndPoint) SoeSessionHandler {
+    // TODO: We need to ensure we have a unique session params and app params per session handler
+
     const handler = SoeSessionHandler.init(
         remote,
         self,

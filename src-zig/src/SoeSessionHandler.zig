@@ -133,7 +133,7 @@ pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeO
 /// `reason`: The termination reason.\
 /// `notify_remote`: Whether to notify the remote party.\
 /// `terminated_by_remote`: Indicates whether this termination has come from the remote party.
-fn terminateSession(
+pub fn terminateSession(
     self: *SoeSessionHandler,
     reason: soe_protocol.DisconnectReason,
     notify_remote: bool,
@@ -158,7 +158,9 @@ fn terminateSession(
     self.state = SessionState.terminated;
     self.terminated_by_remote = terminated_by_remote;
     self._app_params.callOnSessionClosed(reason);
-    // TODO: Deregister from socket handler
+
+    // Remove ourselves from the socket handler
+    self._parent.terminateSession(self);
 }
 
 // ===== Start Contextless Packet Handling =====
@@ -253,7 +255,6 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) void {
     }
 
     const sresp = soe_packets.SessionResponse.deserialize(packet, false);
-    // TODO: We need to ensure we have a unique session params and app params per session handler
     self._session_params.remote_udp_length = sresp.udp_length;
     self._session_params.crc_length = sresp.crc_length;
     self._session_params.crc_seed = sresp.crc_seed;
