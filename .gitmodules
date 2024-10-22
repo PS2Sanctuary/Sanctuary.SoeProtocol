@@ -1,0 +1,3 @@
+[submodule "src-zig/lib/zlib-ng"]
+	path = src-zig/lib/zlib-ng
+	url = https://github.com/zlib-ng/zlib-ng.git

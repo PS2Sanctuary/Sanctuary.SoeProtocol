@@ -15,6 +15,55 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const zlibng = b.addStaticLibrary(.{
+        .name = "zlib-ng",
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    zlibng.addConfigHeader(createZlibNgConfigHeader(b, "gzread.c"));
+    zlibng.addConfigHeader(createZlibNgConfigHeader(b, "zlib_name_mangling.h"));
+    zlibng.addConfigHeader(createZlibNgConfigHeader(b, "zlib_name_mangling-ng.h"));
+    zlibng.addConfigHeader(createZlibNgConfigHeader(b, "zconf.h"));
+    zlibng.addConfigHeader(createZlibNgConfigHeader(b, "zconf-ng.h"));
+    zlibng.addConfigHeader(createZlibNgConfigHeader(b, "zlib.h"));
+    zlibng.addConfigHeader(createZlibNgConfigHeader(b, "zlib-ng.h"));
+    zlibng.addCSourceFiles(
+        .{
+            .files = &.{
+                "lib/zlib-ng/adler32.c",
+                "lib/zlib-ng/compress.c",
+                "lib/zlib-ng/cpu_features.c",
+                "lib/zlib-ng/crc32_braid_comb.c",
+                "lib/zlib-ng/crc32.c",
+                "lib/zlib-ng/deflate_fast.c",
+                "lib/zlib-ng/deflate_huff.c",
+                "lib/zlib-ng/deflate_medium.c",
+                "lib/zlib-ng/deflate_quick.c",
+                "lib/zlib-ng/deflate_rle.c",
+                "lib/zlib-ng/deflate_slow.c",
+                "lib/zlib-ng/deflate_stored.c",
+                "lib/zlib-ng/deflate.c",
+                "lib/zlib-ng/functable.c",
+                "lib/zlib-ng/gzlib.c",
+                "lib/zlib-ng/gzread.c",
+                "lib/zlib-ng/gzwrite.c",
+                "lib/zlib-ng/infback.c",
+                "lib/zlib-ng/inflate.c",
+                "lib/zlib-ng/inftrees.c",
+                "lib/zlib-ng/insert_string_roll.c",
+                "lib/zlib-ng/insert_string.c",
+                "lib/zlib-ng/trees.c",
+                "lib/zlib-ng/uncompr.c",
+                "lib/zlib-ng/zutil.c",
+            },
+            .flags = &.{"-std=c11"},
+        },
+    );
+    zlibng.addIncludePath(.{ .src_path = .{ .owner = b, .sub_path = "lib/zlib-ng" } });
+    //zlibng.installConfigHeader(zlibng_config_header_zlibng);
+    //zlibng.installHeader(.{ .src_path = .{ .owner = b, .sub_path = "zlib.h" } }, "lib/zlib-ng/zlib.h.in");
+
     const lib = b.addStaticLibrary(.{
         .name = "soe-protocol",
         // In this case the main source file is merely a path, however, in more
@@ -23,6 +72,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    lib.linkLibrary(zlibng);
 
     // Add 3rd-party dependencies as modules
     lib.root_module.addImport("network", b.dependency("network", .{}).module("network"));
@@ -47,4 +97,23 @@ pub fn build(b: *std.Build) void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
+}
+
+fn createZlibNgConfigHeader(b: *std.Build, comptime header_file: []const u8) *std.Build.Step.ConfigHeader {
+    return b.addConfigHeader(
+        .{
+            .include_path = header_file,
+            .style = .{
+                .cmake = .{
+                    .src_path = .{
+                        .owner = b,
+                        .sub_path = "lib/zlib-ng/" ++ header_file ++ ".in",
+                    },
+                },
+            },
+        },
+        .{
+            .ZLIB_SYMBOL_PREFIX = "",
+        },
+    );
 }
