@@ -5,6 +5,9 @@ const SessionParams = @import("../soe_protocol.zig").SessionParams;
 const SoeOpCode = @import("../soe_protocol.zig").SoeOpCode;
 const soe_packets = @import("../soe_packets.zig");
 const std = @import("std");
+const zlib = @cImport({
+    @cInclude("zlib.h");
+});
 
 /// Enumerates the possible errors when validating an SOE packet.
 const SoePacketValidationError = error{
