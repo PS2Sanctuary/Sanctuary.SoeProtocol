@@ -16,7 +16,7 @@
     // internet connectivity.
     .dependencies = .{
         .network = .{
-            .url = "https://github.com/MasterQ32/zig-network/archive/805ce63eec48373ec497542f18f19d7c484b9b2e.tar.gz",
+            .url = "https://github.com/ikskuh/zig-network/archive/805ce63eec48373ec497542f18f19d7c484b9b2e.tar.gz",
             .hash = "122007f014c736cee735f1fe71660e39aa9f8c9351deab2e35c4dd9ab69d37d8db46",
         },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
