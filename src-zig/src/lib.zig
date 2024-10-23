@@ -11,6 +11,7 @@ pub const soe_packets = @import("soe_packets.zig");
 pub const soe_protocol = @import("soe_protocol.zig");
 pub const SoeSessionHandler = @import("SoeSessionHandler.zig");
 pub const SoeSocketHandler = @import("SoeSocketHandler.zig");
+pub const zlib = @import("utils/zlib.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

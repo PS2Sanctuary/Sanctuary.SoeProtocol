@@ -2,12 +2,11 @@ const binary_primitives = @import("binary_primitives.zig");
 const BinaryWriter = @import("BinaryWriter.zig");
 const crc32 = @import("crc32.zig");
 const SessionParams = @import("../soe_protocol.zig").SessionParams;
-const SoeOpCode = @import("../soe_protocol.zig").SoeOpCode;
 const soe_packets = @import("../soe_packets.zig");
+const SoeOpCode = @import("../soe_protocol.zig").SoeOpCode;
+const SoeSessionHandler = @import("../SoeSessionHandler.zig");
 const std = @import("std");
-const zlib = @cImport({
-    @cInclude("zlib.h");
-});
+const zlib = @import("zlib.zig");
 
 /// Enumerates the possible errors when validating an SOE packet.
 const SoePacketValidationError = error{
@@ -156,6 +155,14 @@ pub fn writeVariableLength(dest: []u8, value: u32, offset: *usize) void {
         binary_primitives.writeU32BE(dest[offset.* + 3 ..], value);
         offset.* += 7;
     }
+}
+
+pub fn decompress(handler: SoeSessionHandler, input: []const u8) !std.ArrayList(u8) {
+    return zlib.decompress(
+        handler._allocator,
+        handler._session_params.remote_udp_length * 3,
+        input,
+    );
 }
 
 test readSoeOpCode {
