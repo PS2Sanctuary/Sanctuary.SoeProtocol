@@ -99,7 +99,12 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
     if (is_sessionless) {
         self.handleContextlessPacket(op_code, packet);
     } else {
-        self.handleContextualPacket(op_code, packet[0 .. packet.len - self._session_params.CrcLength]);
+        self.handleContextualPacket(
+            op_code,
+            packet[0 .. packet.len - self._session_params.CrcLength],
+        ) catch {
+            self.terminateSession(.corrupt_packet, true, false);
+        };
     }
 }
 
@@ -200,8 +205,8 @@ fn handleContextlessPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOp
         .session_request => handleSessionRequest(packet),
         .session_response => handleSessionResponse(packet),
         .unknown_sender => self.terminateSession(.unreachable_connection, false, false),
-        .remap_connection => std.debug.panic("Remap requests must be handled by the SoeSocketHandler"), // TODO: we can request this
-        _ => std.debug.panic("{any} is not a contextless packet", .{op_code}),
+        .remap_connection => std.debug.panic("Remap requests must be handled by the SoeSocketHandler", .{}), // TODO: we can request this
+        _ => std.debug.panic("The contextless handler does not support {any} packets", .{op_code}),
     }
 }
 
@@ -346,8 +351,8 @@ fn handleContextualPacketInternal(
             // TODO: _dataOutputChannel.NotifyOfAcknowledge(ack);
         },
         .acknowledge_all => {
-            //const ackAll = soe_packets.AcknowledgeAll.deserialize(packet_data);
-            // TODO: _dataOutputChannel.NotifyOfAcknowledgeAll(ackAll);
+            //const ack_all = soe_packets.AcknowledgeAll.deserialize(packet_data);
+            // TODO: _dataOutputChannel.NotifyOfAcknowledgeAll(ack_all);
         },
         _ => {
             std.debug.panic("The contextual handler does not support {any} packets", .{op_code});
