@@ -64,10 +64,10 @@ fn deflate(input_path: []const u8, output_path: []const u8) !void {
             .{zlib.zError(z_result)},
         );
     }
+    defer z_result = zlib.deflateEnd(&stream);
 
     while (flush != zlib.Z_FINISH) {
         stream.avail_in = @truncate(in_reader.read(&in_buffer) catch |err| {
-            z_result = zlib.deflateEnd(&stream);
             std.debug.panic("Input read failed: {any}", .{err});
         });
 
@@ -85,11 +85,9 @@ fn deflate(input_path: []const u8, output_path: []const u8) !void {
 
             const deflated_len = CHUNK_SIZE - stream.avail_out;
             const amount_written = out_writer.write(out_buffer[0..deflated_len]) catch |err| {
-                z_result = zlib.deflateEnd(&stream);
                 std.debug.panic("Output write failed: {any}", .{err});
             };
             if (amount_written != deflated_len) {
-                z_result = zlib.deflateEnd(&stream);
                 std.debug.panic(
                     "Output write did not commit enough bytes ({d} out of {d} expected)",
                     .{ amount_written, deflated_len },
@@ -100,7 +98,6 @@ fn deflate(input_path: []const u8, output_path: []const u8) !void {
     }
 
     std.debug.assert(z_result == zlib.Z_STREAM_END); // The stream should be complete
-    z_result = zlib.deflateEnd(&stream);
 }
 
 fn inflate(input_path: []const u8, output_path: []const u8) !void {
@@ -129,11 +126,11 @@ fn inflate(input_path: []const u8, output_path: []const u8) !void {
             .{zlib.zError(z_result)},
         );
     }
+    defer z_result = zlib.inflateEnd(&stream);
 
     // Decompress until inflate stream ends
     while (z_result != zlib.Z_STREAM_END) {
         stream.avail_in = @truncate(in_reader.read(&in_buffer) catch |err| {
-            z_result = zlib.inflateEnd(&stream);
             std.debug.panic("Input read failed: {any}", .{err});
         });
         if (stream.avail_in == 0) {
@@ -151,17 +148,14 @@ fn inflate(input_path: []const u8, output_path: []const u8) !void {
             std.debug.assert(z_result != zlib.Z_STREAM_ERROR); // Ensure the state isn't clobbered
 
             if (z_result == zlib.Z_NEED_DICT or z_result == zlib.Z_DATA_ERROR or z_result == zlib.Z_MEM_ERROR) {
-                _ = zlib.inflateEnd(&stream);
                 std.debug.panic("Inflate failed with return value {s}", .{zlib.zError(z_result)});
             }
 
             const inflated_len = CHUNK_SIZE - stream.avail_out;
             const amount_written = out_writer.write(out_buffer[0..inflated_len]) catch |err| {
-                z_result = zlib.inflateEnd(&stream);
                 std.debug.panic("Output write failed: {any}", .{err});
             };
             if (amount_written != inflated_len) {
-                z_result = zlib.inflateEnd(&stream);
                 std.debug.panic(
                     "Output write did not commit enough bytes ({d} out of {d} expected)",
                     .{ amount_written, inflated_len },
@@ -169,7 +163,4 @@ fn inflate(input_path: []const u8, output_path: []const u8) !void {
             }
         }
     }
-
-    // Cleanup
-    z_result = zlib.inflateEnd(&stream);
 }
