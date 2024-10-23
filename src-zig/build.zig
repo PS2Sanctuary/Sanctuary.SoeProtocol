@@ -44,6 +44,7 @@ pub fn build(b: *std.Build) void {
             .flags = &.{"-std=c89"},
         },
     );
+    //lib_zlib.installHeader(b.path("lib/zlib/zlib.h"), "zlib.h");
 
     // Add our core components as a static library
     const lib = b.addStaticLibrary(.{
@@ -94,6 +95,7 @@ pub fn build(b: *std.Build) void {
 
     // Link libraries
     exe.linkLibrary(lib_zlib);
+    //exe.addIncludePath(b.path("lib/zlib/zlib.h"));
     exe.root_module.addImport("network", b.dependency("network", .{}).module("network"));
 
     // Add an executable artifact, and a build step to execute it ('zig build run')

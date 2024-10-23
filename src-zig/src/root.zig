@@ -28,21 +28,24 @@ pub fn main() !void {
         @panic("failed to initialize deflater");
     }
 
-    // Decompress until deflate stream ends
-    while (true) {
-        // TODO: Read in the first chunk to the `in` buffer, setting the amount read
-        strm.avail_in = fread(in, 1, CHUNK, source);
-        if (ferror(source)) {
-            zlib.deflateEnd(&strm);
-            std.debug.panic("input read failed. Zlib error number: {d}", zlib.Z_ERRNO);
-        }
+    const input = try std.fs.createFileAbsolute("~/deflated.bin", .{ .read = true });
+    const output = try std.fs.createFileAbsolute("~/inflated.out");
+
+    // Decompress until inflate stream ends
+    while (ret != zlib.Z_STREAM_END) {
+        strm.avail_in = @truncate(input.read(&in) catch {
+            std.debug.print("input read failed. Zlib error number: {d}", zlib.Z_ERRNO);
+            zlib.deflatedEnd(&strm);
+            return;
+        });
         if (strm.avail_in == 0) {
             break;
         }
         strm.next_in = in;
 
-        // run inflate() on input until output buffer not full
-        while (true) {
+        // Run inflate() on input until the output buffer has space leftover post-inflate
+        strm.avail_out = 0;
+        while (strm.avail_out == 0) {
             strm.avail_out = CHUNK;
             strm.next_out = out;
 
@@ -57,21 +60,18 @@ pub fn main() !void {
             }
 
             have = CHUNK - strm.avail_out;
-            // TODO: write output
-            if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
+            const amount_written = output.write(out[0..have]) catch {
                 zlib.inflateEnd(&strm);
-                std.debug.panic("output write failed. Zlib error number: {d}", zlib.Z_ERRNO);
-            }
-
-            if (strm.avail_out != 0) {
-                break;
+                std.debug.print("output write failed. Zlib error number: {d}", zlib.Z_ERRNO);
+                return;
+            };
+            if (amount_written != have) {
+                zlib.inflateEnd(&strm);
+                std.debug.print("output write failed. Zlib error number: {d}", zlib.Z_ERRNO);
+                return;
             }
         }
         std.debug.assert(strm.avail_in == 0); // All input should have been used
-
-        if (ret == zlib.Z_STREAM_END) {
-            break;
-        }
     }
 
     // Cleanup
