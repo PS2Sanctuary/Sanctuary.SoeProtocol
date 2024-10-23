@@ -84,13 +84,12 @@ test decompress {
     };
     const expected = "this is a file 2\n";
 
-    var output = try decompress(
+    const output = try decompress(
         std.testing.allocator,
         expected.len,
         &deflated,
     );
 
-    const slice = try output.toOwnedSlice();
-    try std.testing.expectEqualSlices(u8, expected, slice);
-    std.testing.allocator.free(slice);
+    try std.testing.expectEqualSlices(u8, expected, output.items);
+    output.deinit();
 }

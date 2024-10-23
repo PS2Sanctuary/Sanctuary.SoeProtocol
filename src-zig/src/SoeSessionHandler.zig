@@ -279,22 +279,24 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) void {
 
 // ===== Start Contextual Packet Handling =====
 
-fn handleContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) void {
-    // TODO: MemoryStream? decompressedData = null;
+fn handleContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
+    const decompressed: ?std.ArrayList(u8) = null;
 
     if (self._session_params.is_compression_enabled) {
         const is_compressed: bool = packet_data[0] > 0;
         packet_data = packet_data[1..];
 
         if (is_compressed) {
-            // decompressedData = SoePacketUtils.Decompress(packetData);
-            // packetData = decompressedData.GetBuffer()
-            //     .AsSpan(0, (int)decompressedData.Length);
+            decompressed = try soe_packet_utils.decompress(self, packet_data);
+            packet_data = decompressed.?.items;
         }
     }
 
     self.handleContextualPacketInternal(op_code, packet_data);
-    //decompressedData?.Dispose();
+
+    if (decompressed) |decom_value| {
+        decom_value.deinit();
+    }
 }
 
 fn handleContextualPacketInternal(
