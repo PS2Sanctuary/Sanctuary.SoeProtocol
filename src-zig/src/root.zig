@@ -10,72 +10,8 @@ const zlib = @cImport({
 pub fn main() !void {
     std.debug.print("zlib version: {s}\n", .{zlib.ZLIB_VERSION});
 
-    const CHUNK = 16384;
-    var ret: i32 = undefined;
-    var have: u8 = undefined;
-    var strm: zlib.z_stream = undefined;
-    var in: [CHUNK]u8 = undefined;
-    var out: [CHUNK]u8 = undefined;
-
-    // Allocate inflate state
-    strm.zalloc = zlib.Z_NULL;
-    strm.zfree = zlib.Z_NULL;
-    strm.@"opaque" = zlib.Z_NULL;
-    strm.avail_in = 0;
-    strm.next_in = zlib.Z_NULL;
-    ret = zlib.inflateInit(&strm);
-    if (ret != zlib.Z_OK) {
-        @panic("failed to initialize deflater");
-    }
-
-    const input = try std.fs.createFileAbsolute("~/deflated.bin", .{ .read = true });
-    const output = try std.fs.createFileAbsolute("~/inflated.out");
-
-    // Decompress until inflate stream ends
-    while (ret != zlib.Z_STREAM_END) {
-        strm.avail_in = @truncate(input.read(&in) catch {
-            std.debug.print("input read failed. Zlib error number: {d}", zlib.Z_ERRNO);
-            zlib.deflatedEnd(&strm);
-            return;
-        });
-        if (strm.avail_in == 0) {
-            break;
-        }
-        strm.next_in = in;
-
-        // Run inflate() on input until the output buffer has space leftover post-inflate
-        strm.avail_out = 0;
-        while (strm.avail_out == 0) {
-            strm.avail_out = CHUNK;
-            strm.next_out = out;
-
-            ret = zlib.inflate(&strm, zlib.Z_NO_FLUSH);
-            std.debug.assert(ret != zlib.Z_STREAM_ERROR); // Check state not clobbered
-
-            switch (ret) {
-                zlib.Z_NEED_DICT or zlib.Z_DATA_ERROR or zlib.Z_MEM_ERROR => {
-                    zlib.inflateEnd(&strm);
-                    std.debug.panic("Inflate failed with return value {d}", ret);
-                },
-            }
-
-            have = CHUNK - strm.avail_out;
-            const amount_written = output.write(out[0..have]) catch {
-                zlib.inflateEnd(&strm);
-                std.debug.print("output write failed. Zlib error number: {d}", zlib.Z_ERRNO);
-                return;
-            };
-            if (amount_written != have) {
-                zlib.inflateEnd(&strm);
-                std.debug.print("output write failed. Zlib error number: {d}", zlib.Z_ERRNO);
-                return;
-            }
-        }
-        std.debug.assert(strm.avail_in == 0); // All input should have been used
-    }
-
-    // Cleanup
-    zlib.inflateEnd(&strm);
+    try deflate("/home/carls/input.txt", "/home/carls/deflated.bin");
+    try inflate("/home/carls/deflated.bin", "/home/carls/inflated.txt");
 
     return;
 
@@ -101,4 +37,139 @@ pub fn main() !void {
     // );
 
     // std.debug.print("{any}", .{handler._app_params.is_encryption_enabled});
+}
+
+fn deflate(input_path: []const u8, output_path: []const u8) !void {
+    const CHUNK_SIZE = 16384;
+
+    var flush: i32 = undefined;
+    var in_buffer: [CHUNK_SIZE]u8 = undefined;
+    var out_buffer: [CHUNK_SIZE]u8 = undefined;
+    var stream: zlib.z_stream = .{
+        .zalloc = null,
+        .zfree = null,
+        .@"opaque" = null,
+    };
+
+    const in_file = try std.fs.openFileAbsolute(input_path, .{ .mode = .read_only });
+    const out_file = try std.fs.createFileAbsolute(output_path, .{});
+    const in_reader = in_file.reader();
+    const out_writer = out_file.writer();
+
+    // Initialize the deflate state.
+    var z_result = zlib.deflateInit(&stream, zlib.Z_DEFAULT_COMPRESSION);
+    if (z_result != zlib.Z_OK) {
+        std.debug.panic(
+            "Failed to initialize deflate state. Error code: {s}",
+            .{zlib.zError(z_result)},
+        );
+    }
+
+    while (flush != zlib.Z_FINISH) {
+        stream.avail_in = @truncate(in_reader.read(&in_buffer) catch |err| {
+            z_result = zlib.deflateEnd(&stream);
+            std.debug.panic("Input read failed: {any}", .{err});
+        });
+
+        flush = if (stream.avail_in == 0) zlib.Z_FINISH else zlib.Z_NO_FLUSH;
+        stream.next_in = &in_buffer;
+
+        // Run deflate() on input until the output buffer has space leftover post-deflate
+        stream.avail_out = 0;
+        while (stream.avail_out == 0) {
+            stream.avail_out = CHUNK_SIZE;
+            stream.next_out = &out_buffer;
+
+            z_result = zlib.deflate(&stream, flush); // This method doesn't have a 'bad' result
+            std.debug.assert(z_result != zlib.Z_STREAM_ERROR); // Ensure the state isn't clobbered
+
+            const deflated_len = CHUNK_SIZE - stream.avail_out;
+            const amount_written = out_writer.write(out_buffer[0..deflated_len]) catch |err| {
+                z_result = zlib.deflateEnd(&stream);
+                std.debug.panic("Output write failed: {any}", .{err});
+            };
+            if (amount_written != deflated_len) {
+                z_result = zlib.deflateEnd(&stream);
+                std.debug.panic(
+                    "Output write did not commit enough bytes ({d} out of {d} expected)",
+                    .{ amount_written, deflated_len },
+                );
+            }
+        }
+        std.debug.assert(stream.avail_in == 0); // All input should have been used
+    }
+
+    std.debug.assert(z_result == zlib.Z_STREAM_END); // The stream should be complete
+    z_result = zlib.deflateEnd(&stream);
+}
+
+fn inflate(input_path: []const u8, output_path: []const u8) !void {
+    const CHUNK_SIZE = 16384;
+
+    var in_buffer: [CHUNK_SIZE]u8 = undefined;
+    var out_buffer: [CHUNK_SIZE]u8 = undefined;
+    var stream: zlib.z_stream = .{
+        .zalloc = null,
+        .zfree = null,
+        .@"opaque" = null,
+        .avail_in = 0,
+        .next_in = null,
+    };
+
+    const in_file = try std.fs.openFileAbsolute(input_path, .{ .mode = .read_only });
+    const out_file = try std.fs.createFileAbsolute(output_path, .{});
+    const in_reader = in_file.reader();
+    const out_writer = out_file.writer();
+
+    // Initialize the inflate state
+    var z_result = zlib.inflateInit(&stream);
+    if (z_result != zlib.Z_OK) {
+        std.debug.panic(
+            "Failed to initialize inflate state. Error code: {s}",
+            .{zlib.zError(z_result)},
+        );
+    }
+
+    // Decompress until inflate stream ends
+    while (z_result != zlib.Z_STREAM_END) {
+        stream.avail_in = @truncate(in_reader.read(&in_buffer) catch |err| {
+            z_result = zlib.inflateEnd(&stream);
+            std.debug.panic("Input read failed: {any}", .{err});
+        });
+        if (stream.avail_in == 0) {
+            break;
+        }
+        stream.next_in = &in_buffer;
+
+        // Run inflate() on input until the output buffer has space leftover post-inflate
+        stream.avail_out = 0;
+        while (stream.avail_out == 0) {
+            stream.avail_out = CHUNK_SIZE;
+            stream.next_out = &out_buffer;
+
+            z_result = zlib.inflate(&stream, zlib.Z_NO_FLUSH);
+            std.debug.assert(z_result != zlib.Z_STREAM_ERROR); // Ensure the state isn't clobbered
+
+            if (z_result == zlib.Z_NEED_DICT or z_result == zlib.Z_DATA_ERROR or z_result == zlib.Z_MEM_ERROR) {
+                _ = zlib.inflateEnd(&stream);
+                std.debug.panic("Inflate failed with return value {s}", .{zlib.zError(z_result)});
+            }
+
+            const inflated_len = CHUNK_SIZE - stream.avail_out;
+            const amount_written = out_writer.write(out_buffer[0..inflated_len]) catch |err| {
+                z_result = zlib.inflateEnd(&stream);
+                std.debug.panic("Output write failed: {any}", .{err});
+            };
+            if (amount_written != inflated_len) {
+                z_result = zlib.inflateEnd(&stream);
+                std.debug.panic(
+                    "Output write did not commit enough bytes ({d} out of {d} expected)",
+                    .{ amount_written, inflated_len },
+                );
+            }
+        }
+    }
+
+    // Cleanup
+    z_result = zlib.inflateEnd(&stream);
 }
