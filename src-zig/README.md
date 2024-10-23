@@ -4,6 +4,12 @@ A Zig version of the PS2Sanctuary SOE Protocol libraries.
 
 ## Building & Testing
 
+Ensure all submodules are initialised:
+
+```sh
+git submodule update --init
+```
+
 #### Build
 
 ```sh
