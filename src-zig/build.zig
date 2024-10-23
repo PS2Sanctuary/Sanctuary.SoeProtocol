@@ -76,6 +76,7 @@ pub fn build(b: *std.Build) void {
 
     // Link libraries
     lib_unit_tests.linkLibrary(lib_zlib);
+    lib_unit_tests.addIncludePath(b.path("lib/zlib"));
     lib_unit_tests.root_module.addImport("network", b.dependency("network", .{}).module("network"));
 
     // Create an executable artifact, and a build step to execute it ('zig build test')
@@ -95,7 +96,7 @@ pub fn build(b: *std.Build) void {
 
     // Link libraries
     exe.linkLibrary(lib_zlib);
-    //exe.addIncludePath(b.path("lib/zlib/zlib.h"));
+    exe.addIncludePath(b.path("lib/zlib"));
     exe.root_module.addImport("network", b.dependency("network", .{}).module("network"));
 
     // Add an executable artifact, and a build step to execute it ('zig build run')
