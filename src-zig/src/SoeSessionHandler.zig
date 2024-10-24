@@ -8,6 +8,7 @@ const soe_packet_utils = @import("./utils/soe_packet_utils.zig");
 const soe_protocol = @import("./soe_protocol.zig");
 const SoeSocketHandler = @import("./SoeSocketHandler.zig");
 const std = @import("std");
+const zlib = @import("utils/zlib.zig");
 
 /// Manages an individual SOE session.
 pub const SoeSessionHandler = @This();
@@ -292,7 +293,11 @@ fn handleContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpC
         packet_data = packet_data[1..];
 
         if (is_compressed) {
-            decompressed = try soe_packet_utils.decompress(self, packet_data);
+            decompressed = zlib.decompress(
+                self._allocator,
+                self._session_params.remote_udp_length * 3,
+                packet_data,
+            );
             packet_data = decompressed.?.items;
         }
     }
