@@ -43,8 +43,8 @@ pub fn init(
 
 pub fn deinit(self: *SoeSocketHandler) void {
     // Free the socket and related buffers
-    self._allocator.free(self._recv_buffer);
     self._socket.close();
+    self._allocator.free(self._recv_buffer);
     network.deinit();
 
     // Free all session connections
@@ -77,7 +77,9 @@ pub fn runTick(self: *SoeSocketHandler) !void {
         try conn.?.handlePacket(self._recv_buffer[0..result.numberOfBytes]);
     }
 
-    // TODO: Tick all sessions
+    for (self._connections.valueIterator().items) |conn| {
+        conn.runTick();
+    }
 }
 
 /// Sends data to the remote endpoint of a session.
