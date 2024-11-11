@@ -93,7 +93,11 @@ pub const UdpSocket = struct {
 test parseAddressWithPort {
     const address = try parseAddressWithPort("127.0.0.1:5000");
     // 0x1388 = port 5000
-    try std.testing.expectEqualSlices(u8, &[14]u8{ 0x13, 0x88, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 }, &address.any.data);
+    try std.testing.expectEqualSlices(
+        u8,
+        &[14]u8{ 0x13, 0x88, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 },
+        &address.any.data,
+    );
 }
 
 test resolveHostToAddress {
@@ -102,8 +106,23 @@ test resolveHostToAddress {
         "localhost",
         5000,
     );
-    // 0x1388 = port 5000
-    try std.testing.expectEqualSlices(u8, &[14]u8{ 0x13, 0x88, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 }, &address.any.data);
+
+    // Some systems resolve to IPv6 by default
+    if (address.any.family == posix.AF.INET6) {
+        // 0x1388 = port 5000
+        try std.testing.expectEqualSlices(
+            u8,
+            &[14]u8{ 0x13, 0x88, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+            &address.any.data,
+        );
+    } else {
+        // 0x1388 = port 5000
+        try std.testing.expectEqualSlices(
+            u8,
+            &[14]u8{ 0x13, 0x88, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 },
+            &address.any.data,
+        );
+    }
 }
 
 test "testUdpRoundTrip" {
