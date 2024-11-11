@@ -20,7 +20,7 @@ pub fn parseAddressWithPort(value: []const u8) !std.net.Address {
 }
 
 /// Resolves a hostname to the first associated IP address.
-pub fn resolveHostToAddress(allocator: std.mem.ALlocator, hostname: []const u8, port: u16) !std.net.Address {
+pub fn resolveHostToAddress(allocator: std.mem.Allocator, hostname: []const u8, port: u16) !std.net.Address {
     const address_list = try std.net.getAddressList(
         allocator,
         hostname,
@@ -37,26 +37,15 @@ pub const UdpSocket = struct {
     pub fn init(socket_buffer_len: i32) !UdpSocket {
         const socket = try posix.socket(
             posix.AF.INET,
-            posix.SOCK.DGRAM,
+            posix.SOCK.DGRAM | posix.SOCK.NONBLOCK,
             posix.IPPROTO.UDP,
         );
 
         // Set the length of the send and receive buffer
         // https://huge-man-linux.net/man2extras/man2freebsd/getsockopt.html
         const len_bytes: []const u8 = std.mem.asBytes(&socket_buffer_len);
-        posix.setsockopt(socket, posix.SOL.SOCKET, posix.SO.SNDBUF, len_bytes);
-        posix.setsockopt(socket, posix.SOL.SOCKET, posix.SO.RCVBUF, len_bytes);
-
-        // Set non-blocking mode
-        // https://stackoverflow.com/questions/1150635/unix-nonblocking-i-o-o-nonblock-vs-fionbio
-        // https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-ioctlsocket
-        // TODO: This may not be needed, seems like posix.socket() initialise in non-blocking mode by default
-        // if (builtin.os.tag == .windows) {
-        //     std.os.windows.ws2_32.ioctlsocket(UdpSocket, std.os.windows.ws2_32.FIONBIO, 1);
-        // } else {
-        //     const flags: i32 = posix.fcntl(socket, posix.F.GETFL, 0);
-        //     posix.fcntl(socket, posix.F.SETFL, flags | posix.O.NONBLOCK);
-        // }
+        try posix.setsockopt(socket, posix.SOL.SOCKET, posix.SO.SNDBUF, len_bytes);
+        try posix.setsockopt(socket, posix.SOL.SOCKET, posix.SO.RCVBUF, len_bytes);
 
         return UdpSocket{
             ._socket = socket,
@@ -72,22 +61,68 @@ pub const UdpSocket = struct {
     pub fn bind(self: *UdpSocket, endpoint: std.net.Address) posix.BindError!void {
         try posix.bind(
             self._socket,
-            endpoint.any,
+            &endpoint.any,
             endpoint.getOsSockLen(),
         );
     }
 
-    pub fn sendTo(self: *UdpSocket, endpoint: std.net.Address, buffer: []const u8) posix.SendError!usize {
+    pub fn sendTo(self: *const UdpSocket, endpoint: std.net.Address, buffer: []const u8) posix.SendToError!usize {
         return posix.sendto(
             self._socket,
             buffer,
             0,
-            endpoint.any,
+            &endpoint.any,
             endpoint.getOsSockLen(),
         );
     }
 
-    // pub fn receiveFrom(self: *UdpSocket) void {
-    //     // TODO
-    // }
+    pub fn receiveFrom(self: *UdpSocket, buffer: []u8) posix.RecvFromError!usize {
+        var other_addr: posix.sockaddr = undefined;
+        var other_addrlen: posix.socklen_t = @sizeOf(posix.sockaddr);
+
+        return posix.recvfrom(
+            self._socket,
+            buffer,
+            0,
+            &other_addr,
+            &other_addrlen,
+        );
+    }
 };
+
+test parseAddressWithPort {
+    const address = try parseAddressWithPort("127.0.0.1:5000");
+    // 0x1388 = port 5000
+    try std.testing.expectEqualSlices(u8, &[14]u8{ 0x13, 0x88, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 }, &address.any.data);
+}
+
+test resolveHostToAddress {
+    const address = try resolveHostToAddress(
+        std.testing.allocator,
+        "localhost",
+        5000,
+    );
+    // 0x1388 = port 5000
+    try std.testing.expectEqualSlices(u8, &[14]u8{ 0x13, 0x88, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 }, &address.any.data);
+}
+
+test "testUdpRoundTrip" {
+    var receive_socket = try UdpSocket.init(512);
+    const send_socket = try UdpSocket.init(512);
+    const receive_endpoint = try parseAddress("127.0.0.1", 46897);
+
+    const expected = [_]u8{ 1, 2, 3, 4, 5 };
+    const actual: []u8 = try std.testing.allocator.alloc(u8, 512);
+    defer std.testing.allocator.free(actual);
+
+    try std.testing.expectError(
+        posix.RecvFromError.WouldBlock,
+        receive_socket.receiveFrom(actual),
+    );
+
+    try receive_socket.bind(receive_endpoint);
+    _ = try send_socket.sendTo(receive_endpoint, &expected);
+    const recv_len = try receive_socket.receiveFrom(actual);
+
+    try std.testing.expectEqualSlices(u8, &expected, actual[0..recv_len]);
+}
