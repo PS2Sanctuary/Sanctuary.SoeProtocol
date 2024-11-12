@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "test",
+            "type": "shell",
+            "command": "zig",
+            "args": [
+                "build" // builds the test binary, as per build.zig
+            ]
+            // "args": [
+            //     "test", // Zig test command
+            //     "-femit-bin=zig-out/bin/test_root", // Emit a binary for our test file
+            //     "--test-no-exec", // Skip test execution (otherwise it happens twice!)
+            //     "src/lib.zig"
+            // ]
+        }
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            //"type": "cppvsdbg", // Use on windows
+            "type": "lldb", // Use on linux
+            "request": "launch",
+            "name": "Debug Test Binary",
+            //"program": "${workspaceFolder}/zig-out/bin/test_root",
+            "program": "${workspaceFolder}/zig-out/bin/test",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "test" // See tasks.json
+        },
+    ]
+}

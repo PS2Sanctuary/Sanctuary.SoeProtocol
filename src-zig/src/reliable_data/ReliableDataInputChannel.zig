@@ -31,7 +31,7 @@ _current_buffer: ?[]u8 = null,
 _running_data_len: usize = 0,
 _expected_data_len: usize = 0,
 _last_ack_all_seq: i64 = -1,
-_last_ack_all_time: std.time.Instant = 0,
+_last_ack_all_time: std.time.Instant,
 
 // Public fields
 input_stats: InputStats = InputStats{},
@@ -59,6 +59,7 @@ pub fn init(
             StashedItem,
             session_params.*.max_queued_incoming_data_packets,
         ),
+        ._last_ack_all_time = try std.time.Instant.now(),
     };
 }
 

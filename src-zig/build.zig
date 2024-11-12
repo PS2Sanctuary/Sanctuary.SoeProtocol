@@ -68,19 +68,21 @@ pub fn build(b: *std.Build) void {
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
-    const lib_unit_tests = b.addTest(.{
+    const test_units = b.addTest(.{
         .root_source_file = b.path("src/lib.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     // Link libraries
-    lib_unit_tests.linkLibrary(lib_zlib);
-    lib_unit_tests.addIncludePath(b.path("lib/zlib"));
-    lib_unit_tests.root_module.addImport("network", b.dependency("network", .{}).module("network"));
+    test_units.linkLibrary(lib_zlib);
+    test_units.addIncludePath(b.path("lib/zlib"));
+    test_units.root_module.addImport("network", b.dependency("network", .{}).module("network"));
+    // Mark the test binary to be installed when the "install" step is invoked
+    b.installArtifact(test_units);
 
     // Create an executable artifact, and a build step to execute it ('zig build test')
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+    const run_lib_unit_tests = b.addRunArtifact(test_units);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
 
