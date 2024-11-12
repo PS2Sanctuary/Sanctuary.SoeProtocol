@@ -85,10 +85,10 @@ pub fn handleReliableData(self: *ReliableDataInputChannel, data: []u8) void {
     }
 
     self.processData(data);
-    // TODO: consumed any stashed fragments
+    self.consumeStashedDataFragments();
 }
 
-/// handles a reliable data fragment.
+/// Handles a reliable data fragment.
 pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !void {
     if (!self.preprocessData(data, true)) {
         return;
@@ -96,13 +96,12 @@ pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !
 
     // At this point we know this fragment can be written directly to the buffer
     // as it is next in the sequence.
-    try writeImmediateFragmentToBuffer(data);
+    try self.writeImmediateFragmentToBuffer(data);
 
     // Attempt to process the current buffer now, as the stashed fragments may belong to a new buffer
-    // ConsumeStashedDataFragments will attempt to process the current buffer as it releases stashes
-    // TODO
-    //tryProcessCurrentBuffer();
-    //consumeStashedDataFragments();
+    // consumeStashedDataFragments will attempt to process the current buffer as it releases stashes
+    self.tryProcessCurrentBuffer();
+    self.consumeStashedDataFragments();
 }
 
 /// Pre-processes reliable data, and stashes it for future processing if required.
@@ -193,9 +192,12 @@ fn isValidReliableData(
 /// of the full data packet) and a new `_current_buffer` will be alloc'ed to this len.
 fn writeImmediateFragmentToBuffer(self: *ReliableDataInputChannel, buffer: []const u8) !void {
     if (self._current_buffer) |current_buffer| {
+        // If a current data buffer exists, copy the fragment into the buffer
         @memcpy(current_buffer[self._running_data_len..], buffer);
         self._running_data_len += buffer.len;
     } else {
+        // Otherwise, create a new buffer by assuming this is a master fragment and reading
+        // the length
         self._expected_data_len = binary_primitives.readU32BE(buffer);
         self._current_buffer = try self._allocator.alloc(u8, self._expected_data_len);
         self._running_data_len = buffer.len - @sizeOf(u32);
@@ -203,6 +205,44 @@ fn writeImmediateFragmentToBuffer(self: *ReliableDataInputChannel, buffer: []con
             self._current_buffer.?[0..self._running_data_len],
             buffer[@sizeOf(u32)..],
         );
+    }
+}
+
+fn tryProcessCurrentBuffer(self: *ReliableDataInputChannel) void {
+    if (self._current_buffer == null or self._running_data_len < self._expected_data_len) {
+        return;
+    }
+
+    // Process the buffer, free it, and reset fields
+    self.processData(self._current_buffer);
+    self._allocator.free(self._current_buffer);
+    self._current_buffer = null;
+    self._running_data_len = 0;
+    self._expected_data_len = 0;
+}
+
+fn consumeStashedDataFragments(self: *ReliableDataInputChannel) void {
+    // Grab the stash index of our current window start sequence
+    var stash_spot = self._window_start_sequence % self._session_params.max_queued_incoming_data_packets;
+    var stashed_item = self._stash[stash_spot];
+
+    // Iterate through the stash until we reach an empty slot
+    while (stashed_item.data != null) {
+        if (stashed_item.is_fragment) {
+            self.processData(stashed_item.data);
+        } else {
+            self.writeImmediateFragmentToBuffer(stashed_item.data);
+            self.tryProcessCurrentBuffer();
+        }
+
+        // Release our stash reference
+        stashed_item.data.releaseRef();
+        stashed_item.data = null;
+
+        // Increment the window
+        self._window_start_sequence += 1;
+        stash_spot = self._window_start_sequence % self._session_params.max_queued_incoming_data_packets;
+        stashed_item = self._stash[stash_spot];
     }
 }
 
