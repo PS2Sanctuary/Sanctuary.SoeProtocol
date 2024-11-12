@@ -70,7 +70,8 @@ pub fn deinit(self: *SoeSessionHandler) void {
 pub fn runTick(self: *SoeSessionHandler) !void {
     sendHeartbeatIfRequired();
 
-    if (std.time.Instant.since(self._last_received_packet_tick) > self._session_params.inactivity_timeout_ns) {
+    const now = try std.time.Instant.now();
+    if (now.since(self._last_received_packet_tick) > self._session_params.inactivity_timeout_ns) {
         self.terminateSession(.timeout, false, false);
     }
 
@@ -366,10 +367,12 @@ fn handleContextualPacketInternal(
 }
 
 fn sendHeartbeatIfRequired(self: *SoeSessionHandler) void {
+    const now = try std.time.Instant.now();
+
     const maySendHeartbeat = self.mode == SessionMode.client and
         self.state == SessionState.running and
         self._session_params.heartbeat_after_ns != 0 and
-        std.time.Instant.since(self._last_received_packet_tick) > self._session_params.heartbeat_after_ns;
+        now.since(self._last_received_packet_tick) > self._session_params.heartbeat_after_ns;
 
     if (maySendHeartbeat) {
         self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, [0]u8);

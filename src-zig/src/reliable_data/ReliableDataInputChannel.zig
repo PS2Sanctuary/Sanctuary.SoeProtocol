@@ -30,6 +30,8 @@ _buffered_ack_all: ?soe_packets.AcknowledgeAll = null,
 _current_buffer: ?[]u8 = null,
 _running_data_len: usize = 0,
 _expected_data_len: usize = 0,
+_last_ack_all_seq: i64 = -1,
+_last_ack_all_time: std.time.Instant = 0,
 
 // Public fields
 input_stats: InputStats = InputStats{},
@@ -68,14 +70,33 @@ pub fn deinit(self: *ReliableDataInputChannel) void {
     }
 }
 
+/// Runs a single tick of operations for the ReliableDataInputChannel. This includes
+/// acknowledging processed data packets.
 pub fn runTick(self: *ReliableDataInputChannel) void {
     if (self._buffered_ack_all) |ack_all| {
-        const buffer: [soe_packets.AcknowledgeAll.SIZE]u8 = undefined;
-        ack_all.serialize(buffer);
-        self._session_handler.sendContextualPacket(.acknowledge_all, buffer);
+        self.sendAckAll(ack_all);
+        self._buffered_ack_all = null;
     }
 
-    // TODO: send an ack if necessary
+    const to_ack = self._window_start_sequence - 1;
+
+    // No need to perform an ack all if we're acking everything individually
+    // or we've already acked up to the current window start sequence
+    if (self._session_params.acknowledge_all_data or to_ack <= self._last_ack_all_seq) {
+        return;
+    }
+
+    const now = try std.time.Instant.now();
+    // ack if:
+    // - at least 30ms have passed since the last ack time and
+    // - our seq to ack is greater than the last ack seq + half of the ack window
+    const need_ack = now.since(self._last_ack_all_time) > 30 * std.time.ns_per_ms or
+        to_ack >= self._last_ack_all_seq + self._session_params.data_ack_window / 2;
+
+    if (need_ack) {
+        const ack_all = soe_packets.AcknowledgeAll{ .sequence = to_ack };
+        self.sendAckAll(ack_all);
+    }
 }
 
 /// Handles reliable data.
@@ -104,6 +125,17 @@ pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !
     self.consumeStashedDataFragments();
 }
 
+fn sendAckAll(self: *ReliableDataInputChannel, ack_all: soe_packets.AcknowledgeAll) !void {
+    // Serialize and send the packet
+    const buffer: [soe_packets.AcknowledgeAll.SIZE]u8 = undefined;
+    ack_all.serialize(buffer);
+    try self._session_handler.sendContextualPacket(.acknowledge_all, buffer);
+
+    // Update our last ack sequence and time
+    self._last_ack_all_seq = ack_all.sequence;
+    self._last_ack_all_time = try std.time.Instant.now();
+}
+
 /// Pre-processes reliable data, and stashes it for future processing if required.
 /// Returns `true` if the data may be processed immediately.
 fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: bool) bool {
@@ -122,7 +154,7 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
         const ack = soe_packets.Acknowledge{ .sequence = sequence };
         const buffer: [soe_packets.Acknowledge.SIZE]u8 = undefined;
         ack.serialize(buffer);
-        self._session_handler.sendContextualPacket(.acknowledge, buffer);
+        try self._session_handler.sendContextualPacket(.acknowledge, buffer);
     }
 
     // Remove the sequence bytes
