@@ -2,9 +2,10 @@ const ApplicationParams = @import("../soe_protocol.zig").ApplicationParams;
 const binary_primitives = @import("../utils/binary_primitives.zig");
 const pooling = @import("../pooling.zig");
 const Rc4State = @import("Rc4State.zig");
-const SessionParams = @import("../soe_protocol.zig").SessionParams;
 const soe_packets = @import("../soe_packets.zig");
 const soe_packet_utils = @import("../utils/soe_packet_utils.zig");
+const soe_protocol = @import("../soe_protocol.zig");
+const SoeSessionHandler = @import("../SoeSessionHandler.zig");
 const std = @import("std");
 const utils = @import("utils.zig");
 
@@ -15,8 +16,9 @@ pub const ReliableDataInputChannel = @This();
 const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 30;
 
 // External private fields
+_session_handler: *const SoeSessionHandler,
 _allocator: std.mem.Allocator,
-_session_params: *const SessionParams,
+_session_params: *const soe_protocol.SessionParams,
 _app_params: *const ApplicationParams,
 _data_pool: pooling.PooledDataManager,
 
@@ -24,14 +26,18 @@ _data_pool: pooling.PooledDataManager,
 _rc4_state: ?Rc4State,
 _stash: []StashedItem,
 _window_start_sequence: i64 = 0,
-_buffered_ack_all: ?soe_packets.AcknowledgeAll = undefined,
+_buffered_ack_all: ?soe_packets.AcknowledgeAll = null,
+_current_buffer: ?[]u8 = null,
+_running_data_len: usize = 0,
+_expected_data_len: usize = 0,
 
 // Public fields
 input_stats: InputStats = InputStats{},
 
 pub fn init(
+    session_handler: *const SoeSessionHandler,
     allocator: std.mem.Allocator,
-    session_params: *const SessionParams,
+    session_params: *const soe_protocol.SessionParams,
     app_params: *const ApplicationParams,
     data_pool: pooling.PooledDataManager,
 ) !ReliableDataInputChannel {
@@ -41,6 +47,7 @@ pub fn init(
     }
 
     return ReliableDataInputChannel{
+        ._session_handler = session_handler,
         ._allocator = allocator,
         ._session_params = session_params,
         ._app_params = app_params,
@@ -55,12 +62,17 @@ pub fn init(
 
 pub fn deinit(self: *ReliableDataInputChannel) void {
     self._allocator.free(self._stash);
+
+    if (self._current_buffer) |current_buffer| {
+        self._allocator.free(current_buffer);
+    }
 }
 
 pub fn runTick(self: *ReliableDataInputChannel) void {
     if (self._buffered_ack_all) |ack_all| {
-        std.debug.print(ack_all.sequence); // Just here for compilation
-        // TODO: First off, we should send any waiting ack alls
+        const buffer: [soe_packets.AcknowledgeAll.SIZE]u8 = undefined;
+        ack_all.serialize(buffer);
+        self._session_handler.sendContextualPacket(.acknowledge_all, buffer);
     }
 
     // TODO: send an ack if necessary
@@ -77,12 +89,20 @@ pub fn handleReliableData(self: *ReliableDataInputChannel, data: []u8) void {
 }
 
 /// handles a reliable data fragment.
-pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) void {
+pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !void {
     if (!self.preprocessData(data, true)) {
         return;
     }
 
-    // TODO: Write fragment to the buffer, try and process the current buffer, consume any stashed fragments
+    // At this point we know this fragment can be written directly to the buffer
+    // as it is next in the sequence.
+    try writeImmediateFragmentToBuffer(data);
+
+    // Attempt to process the current buffer now, as the stashed fragments may belong to a new buffer
+    // ConsumeStashedDataFragments will attempt to process the current buffer as it releases stashes
+    // TODO
+    //tryProcessCurrentBuffer();
+    //consumeStashedDataFragments();
 }
 
 /// Pre-processes reliable data, and stashes it for future processing if required.
@@ -101,8 +121,9 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
     // Ack this data if we are in ack-all mode or it is ahead of our expectations
     if (self._session_params.acknowledge_all_data || ahead) {
         const ack = soe_packets.Acknowledge{ .sequence = sequence };
-        std.debug.print(ack.sequence); // Just here for compilation
-        // TODO: Ack this single packet
+        const buffer: [soe_packets.Acknowledge.SIZE]u8 = undefined;
+        ack.serialize(buffer);
+        self._session_handler.sendContextualPacket(.acknowledge, buffer);
     }
 
     // Remove the sequence bytes
@@ -167,6 +188,24 @@ fn isValidReliableData(
     return false;
 }
 
+/// Writes a fragment to the `_current_buffer`. If the `_current_buffer` is not allocated,
+/// the fragment in the `buffer` will be assumed to be a master fragment (i.e. has the len
+/// of the full data packet) and a new `_current_buffer` will be alloc'ed to this len.
+fn writeImmediateFragmentToBuffer(self: *ReliableDataInputChannel, buffer: []const u8) !void {
+    if (self._current_buffer) |current_buffer| {
+        @memcpy(current_buffer[self._running_data_len..], buffer);
+        self._running_data_len += buffer.len;
+    } else {
+        self._expected_data_len = binary_primitives.readU32BE(buffer);
+        self._current_buffer = try self._allocator.alloc(u8, self._expected_data_len);
+        self._running_data_len = buffer.len - @sizeOf(u32);
+        @memcpy(
+            self._current_buffer.?[0..self._running_data_len],
+            buffer[@sizeOf(u32)..],
+        );
+    }
+}
+
 fn processData(self: *ReliableDataInputChannel, data: []u8) void {
     if (utils.hasMultiData(data)) {
         var offset: usize = 2;
@@ -219,7 +258,7 @@ const StashedItem = struct {
 // =====
 
 pub const tests = struct {
-    session_params: SessionParams = .{},
+    session_params: soe_protocol.SessionParams = .{},
     app_params: *ApplicationParams,
     last_received_data: []const u8 = undefined,
     received_data_queue: std.ArrayList([]const u8),
@@ -368,6 +407,26 @@ pub const tests = struct {
         );
     }
 
+    test writeImmediateFragmentToBuffer {
+        const data_1 = [_]u8{ 0, 0, 0, 9, 0, 1, 2, 3, 4 };
+        const data_2 = [_]u8{ 1, 2, 3, 4 };
+
+        const test_class = try tests.init();
+        defer test_class.deinit();
+        var channel = try test_class.getChannel();
+        defer channel.deinit();
+
+        try channel.writeImmediateFragmentToBuffer(&data_1);
+        try std.testing.expectEqual(9, channel._expected_data_len);
+        try std.testing.expectEqual(5, channel._running_data_len);
+        try std.testing.expectEqualSlices(u8, data_1[4..], channel._current_buffer.?[0..5]);
+
+        try channel.writeImmediateFragmentToBuffer(&data_2);
+        try std.testing.expectEqual(9, channel._expected_data_len);
+        try std.testing.expectEqual(9, channel._running_data_len);
+        try std.testing.expectEqualSlices(u8, data_1[4..] ++ data_2, channel._current_buffer.?);
+    }
+
     fn receiveData(ptr: *anyopaque, data: []const u8) void {
         const self: *tests = @ptrCast(@alignCast(ptr));
         self.last_received_data = data;
@@ -376,6 +435,7 @@ pub const tests = struct {
 
     fn getChannel(self: tests) !ReliableDataInputChannel {
         return try ReliableDataInputChannel.init(
+            undefined,
             std.testing.allocator,
             &self.session_params,
             self.app_params,
