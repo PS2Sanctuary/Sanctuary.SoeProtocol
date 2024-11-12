@@ -56,7 +56,6 @@ pub fn build(b: *std.Build) void {
 
     // Link libraries
     lib.linkLibrary(lib_zlib);
-    lib.root_module.addImport("network", b.dependency("network", .{}).module("network"));
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -77,7 +76,6 @@ pub fn build(b: *std.Build) void {
     // Link libraries
     test_units.linkLibrary(lib_zlib);
     test_units.addIncludePath(b.path("lib/zlib"));
-    test_units.root_module.addImport("network", b.dependency("network", .{}).module("network"));
     // Mark the test binary to be installed when the "install" step is invoked
     b.installArtifact(test_units);
 
@@ -99,7 +97,6 @@ pub fn build(b: *std.Build) void {
     // Link libraries
     exe.linkLibrary(lib_zlib);
     exe.addIncludePath(b.path("lib/zlib"));
-    exe.root_module.addImport("network", b.dependency("network", .{}).module("network"));
 
     // Add an executable artifact, and a build step to execute it ('zig build run')
     const run_exe = b.addRunArtifact(exe);

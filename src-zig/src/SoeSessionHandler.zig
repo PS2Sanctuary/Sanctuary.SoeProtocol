@@ -1,6 +1,5 @@
 const binary_primitives = @import("./utils/binary_primitives.zig");
 const BinaryWriter = @import("./utils/BinaryWriter.zig");
-const network = @import("network");
 const pooling = @import("./pooling.zig");
 const ReliableDataInputChannel = @import("./reliable_data/ReliableDataInputChannel.zig");
 const soe_packets = @import("./soe_packets.zig");
@@ -8,6 +7,7 @@ const soe_packet_utils = @import("./utils/soe_packet_utils.zig");
 const soe_protocol = @import("./soe_protocol.zig");
 const SoeSocketHandler = @import("./SoeSocketHandler.zig");
 const std = @import("std");
+const udp_socket = @import("utils/udp_socket.zig");
 const zlib = @import("utils/zlib.zig");
 
 /// Manages an individual SOE session.
@@ -27,7 +27,7 @@ _last_received_packet_tick: std.time.Instant,
 
 // Public fields
 mode: SessionMode,
-remote: network.EndPoint,
+remote: std.net.Address,
 state: SessionState,
 session_id: u32,
 termination_reason: soe_protocol.DisconnectReason,
@@ -35,7 +35,7 @@ terminated_by_remote: bool,
 
 pub fn init(
     mode: SessionMode,
-    remote: network.EndPoint,
+    remote: std.net.Address,
     parent: SoeSocketHandler,
     allocator: std.mem.Allocator,
     session_params: *const soe_protocol.SessionParams,
