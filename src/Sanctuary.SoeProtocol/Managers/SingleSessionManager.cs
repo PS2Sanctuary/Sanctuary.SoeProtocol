@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
 using Sanctuary.SoeProtocol.Abstractions;
-using Sanctuary.SoeProtocol.Abstractions.Services;
 using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Util;
@@ -65,8 +64,7 @@ public sealed class SingleSessionManager : IDisposable
     /// <exception cref="ObjectDisposedException">Thrown if the client has been disposed.</exception>
     public async Task RunAsync(CancellationToken ct)
     {
-        if (_isDisposed)
-            throw new ObjectDisposedException(nameof(SingleSessionManager));
+        ObjectDisposedException.ThrowIf(_isDisposed, typeof(SingleSessionManager));
 
         await Task.Yield();
 
@@ -141,7 +139,7 @@ public sealed class SingleSessionManager : IDisposable
         );
     }
 
-    private async Task RunReceiveLoopAsync(INetworkReader networkReader, CancellationToken ct)
+    private async Task RunReceiveLoopAsync(UdpSocketNetworkInterface networkReader, CancellationToken ct)
     {
         if (_protocolHandler is null)
             throw new InvalidOperationException("Cannot run the receive loop while the protocol handler is null");

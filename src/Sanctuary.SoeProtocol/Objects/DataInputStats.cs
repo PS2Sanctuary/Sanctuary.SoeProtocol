@@ -24,7 +24,7 @@ public class DataInputStats
     /// The total number of bytes received.
     /// </summary>
     /// <remarks>
-    /// This value only includes the raw data count (i.e not multi-data indicators, encryption padding, etc).
+    /// This value only includes the raw data count (i.e. not multi-data indicators, encryption padding, etc.).
     /// </remarks>
     public long TotalReceivedBytes { get; set; }
 

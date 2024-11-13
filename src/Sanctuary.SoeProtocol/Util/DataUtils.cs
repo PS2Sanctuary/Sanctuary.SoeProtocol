@@ -35,7 +35,7 @@ public static class DataUtils
         // can never be more than slightly less than the max value of a ushort
 
         // Zero-out the lower two bytes of our last known sequence and
-        // and insert the packet sequence in that space
+        // insert the packet sequence in that space
         long sequence = packetSequence | (currentSequence & (long.MaxValue ^ ushort.MaxValue));
 
         // If the sequence we obtain is larger than our possible window, we must have wrapped back
