@@ -4,7 +4,7 @@ const std = @import("std");
 
 /// Parses an IP address.
 pub fn parseAddress(ip_address: []const u8, port: u16) !std.net.Address {
-    return try std.net.Address.resolveIp(ip_address, port);
+    return try std.net.Address.parseIp(ip_address, port);
 }
 
 /// Parses an IP address with a port suffix.

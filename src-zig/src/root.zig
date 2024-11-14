@@ -35,7 +35,7 @@ pub fn main() !void {
         data_pool,
     );
 
-    const address = try std.net.Address.resolveIp("localhost", 12345);
+    const address = try std.net.Address.parseIp("127.0.0.1", 12345);
     _ = try handler.connect(address);
 
     while (true) {
