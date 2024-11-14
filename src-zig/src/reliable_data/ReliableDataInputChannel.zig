@@ -43,9 +43,19 @@ pub fn init(
     app_params: *const ApplicationParams,
     data_pool: pooling.PooledDataManager,
 ) !ReliableDataInputChannel {
+    // Take a copy of the RC4 state
     var my_rc4_state: ?Rc4State = null;
     if (app_params.initial_rc4_state) |state| {
         my_rc4_state = state.copy();
+    }
+
+    // Pre-fill the stash
+    var stash = try allocator.alloc(
+        StashedItem,
+        @intCast(session_params.*.max_queued_incoming_data_packets),
+    );
+    for (0..stash.len) |i| {
+        stash[i] = StashedItem{ .data = null, .is_fragment = false };
     }
 
     return ReliableDataInputChannel{
@@ -55,10 +65,7 @@ pub fn init(
         ._app_params = app_params,
         ._data_pool = data_pool,
         ._rc4_state = my_rc4_state,
-        ._stash = try allocator.alloc(
-            StashedItem,
-            @intCast(session_params.*.max_queued_incoming_data_packets),
-        ),
+        ._stash = stash,
         ._last_ack_all_time = try std.time.Instant.now(),
     };
 }
@@ -280,7 +287,7 @@ fn consumeStashedDataFragments(self: *ReliableDataInputChannel) void {
         }
 
         // Release our stash reference
-        stashed_item.data.releaseRef();
+        pooled_data.releaseRef();
         stashed_item.data = null;
 
         // Increment the window
@@ -333,8 +340,8 @@ const InputStats = struct {
 };
 
 const StashedItem = struct {
-    data: ?*pooling.PooledData,
-    is_fragment: bool,
+    data: ?*pooling.PooledData = null,
+    is_fragment: bool = false,
 };
 
 // =====
@@ -342,7 +349,7 @@ const StashedItem = struct {
 // =====
 
 pub const tests = struct {
-    session_params: soe_protocol.SessionParams = soe_protocol.SessionParams{},
+    session_params: soe_protocol.SessionParams,
     app_params: *ApplicationParams,
     last_received_data: []const u8 = undefined,
     received_data_queue: std.ArrayList([]const u8),
@@ -350,6 +357,7 @@ pub const tests = struct {
     fn init() !*tests {
         const test_class = try std.testing.allocator.create(tests);
         test_class.received_data_queue = std.ArrayList([]const u8).init(std.testing.allocator);
+        test_class.session_params = soe_protocol.SessionParams{};
 
         test_class.app_params = try std.testing.allocator.create(ApplicationParams);
         test_class.app_params.is_encryption_enabled = false;
