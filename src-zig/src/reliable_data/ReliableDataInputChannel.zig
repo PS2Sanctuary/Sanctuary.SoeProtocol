@@ -64,7 +64,7 @@ pub fn init(
 }
 
 pub fn deinit(self: *ReliableDataInputChannel) void {
-    for (self._stash) |element| {
+    for (self._stash) |*element| {
         if (element.data) |data| {
             data.releaseRef();
             element.data = null;

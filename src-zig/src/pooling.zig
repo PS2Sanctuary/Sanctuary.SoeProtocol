@@ -27,11 +27,7 @@ pub const PooledDataManager = struct {
 
     pub fn deinit(self: @This()) void {
         for (self._pool.items) |element| {
-            element._manager = null;
-            element._ref_count = 0;
-            self._allocator.free(element.data);
-            element.data = null;
-            self._allocator.destroy(element);
+            releaseItem(self, element);
         }
         self._pool.deinit();
     }
@@ -59,17 +55,20 @@ pub const PooledDataManager = struct {
     }
 
     /// Returns a `PooledData` instance to the pool. This method is called from `PooledData.releaseRef()`.
-    fn put(self: @This(), item: *PooledData) void {
+    fn put(self: *PooledDataManager, item: *PooledData) void {
         // Can we append to the pool without going over the max size?
         if (self._pool.items.len < self._max_pool_size) {
-            self._pool.append(item);
-            return;
+            self._pool.append(item) catch {
+                releaseItem(self, item);
+            };
+        } else {
+            // Otherwise, free the item
+            releaseItem(self, item);
         }
+    }
 
-        // Otherwise, free the item
+    fn releaseItem(self: *PooledDataManager, item: *PooledData) void {
         self._allocator.free(item.data);
-        item.data = null;
-        item._manager = null;
         item._ref_count = 0;
         self._allocator.destroy(item);
     }
@@ -87,12 +86,12 @@ pub const PooledData = struct {
     data_len: usize,
 
     /// Indicates that the calling scope is holding a reference to this `PooledData` instance.
-    pub fn takeRef(self: @This()) void {
+    pub fn takeRef(self: *PooledData) void {
         self._ref_count += 1;
     }
 
     /// Indicates that the calling scope is releasing a reference to this `PooledData` instance.
-    pub fn releaseRef(self: @This()) void {
+    pub fn releaseRef(self: *PooledData) void {
         self._ref_count -= 1;
 
         // It should just be the manager holding a ref on us. Let's return to the pool
