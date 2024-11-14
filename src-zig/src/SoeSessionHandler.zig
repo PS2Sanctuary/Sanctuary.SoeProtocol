@@ -13,10 +13,13 @@ const zlib = @import("utils/zlib.zig");
 /// Manages an individual SOE session.
 pub const SoeSessionHandler = @This();
 
+// Internal static fields
+const _random = std.Random.DefaultPrng.init(234029380);
+
 // External private fields
 _parent: *SoeSocketHandler,
 _allocator: std.mem.Allocator,
-_session_params: *const soe_protocol.SessionParams,
+_session_params: *soe_protocol.SessionParams,
 _app_params: *const soe_protocol.ApplicationParams,
 _data_pool: pooling.PooledDataManager,
 
@@ -38,7 +41,7 @@ pub fn init(
     remote: std.net.Address,
     parent: *SoeSocketHandler,
     allocator: std.mem.Allocator,
-    session_params: *const soe_protocol.SessionParams,
+    session_params: *soe_protocol.SessionParams,
     app_params: *const soe_protocol.ApplicationParams,
     data_pool: pooling.PooledDataManager,
 ) !*SoeSessionHandler {
@@ -107,11 +110,13 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
     const is_sessionless: bool = soe_packet_utils.isContextlessPacket(op_code);
 
     if (is_sessionless) {
-        try self.handleContextlessPacket(op_code, my_packet);
+        self.handleContextlessPacket(op_code, my_packet) catch {
+            try self.terminateSession(.corrupt_packet, true, false);
+        };
     } else {
-        try self.handleContextualPacket(
+        self.handleContextualPacket(
             op_code,
-            my_packet[0 .. my_packet.len - self._session_params.CrcLength],
+            my_packet[0 .. my_packet.len - self._session_params.crc_length],
         ) catch {
             try self.terminateSession(.corrupt_packet, true, false);
         };
@@ -121,7 +126,7 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
 /// Sends a contextual packet.\
 /// `op_code`: The OP code of the packet to send.\
 /// `packet_data`: The packet data, not including the OP code.
-pub fn sendContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
+pub fn sendContextualPacket(self: *const SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
     const extra_bytes: u32 = @sizeOf(soe_protocol.SoeOpCode) +
         @as(u32, @intFromBool(self._session_params.is_compression_enabled)) +
         @as(u32, self._session_params.crc_length);
@@ -171,7 +176,12 @@ pub fn terminateSession(
         const disconnect = soe_packets.Disconnect{ .session_id = self.session_id, .reason = reason };
         var buffer: [soe_packets.Disconnect.SIZE]u8 = undefined;
         disconnect.serialize(&buffer);
-        _ = try self.sendContextualPacket(soe_protocol.SoeOpCode.disconnect, &buffer);
+        _ = self.sendContextualPacket(soe_protocol.SoeOpCode.disconnect, &buffer) catch |err| {
+            // It's not good that we errored, but it could be a termination because of network issues
+            // In any case, we need to finalise the termination rather than failing here. Remote
+            // notification is only a nicety; it should timeout eventually
+            std.debug.print("Failed to send disconnect packet: {}", err);
+        };
     }
 
     self.state = SessionState.terminated;
@@ -215,11 +225,11 @@ fn sendSessionRequest(self: *SoeSessionHandler) void {
 
 fn handleContextlessPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet: []u8) !void {
     switch (op_code) {
-        .session_request => try handleSessionRequest(packet),
-        .session_response => try handleSessionResponse(packet),
+        .session_request => try self.handleSessionRequest(packet),
+        .session_response => try self.handleSessionResponse(packet),
         .unknown_sender => try self.terminateSession(.unreachable_connection, false, false),
         .remap_connection => std.debug.panic("Remap requests must be handled by the SoeSocketHandler", .{}), // TODO: we can request this
-        _ => std.debug.panic("The contextless handler does not support {any} packets", .{op_code}),
+        else => std.debug.panic("The contextless handler does not support {any} packets", .{op_code}),
     }
 }
 
@@ -229,7 +239,7 @@ fn handleSessionRequest(self: *SoeSessionHandler, packet: []u8) !void {
         return;
     }
 
-    const sreq = soe_packets.SessionRequest.deserialize(packet, false);
+    const sreq = try soe_packets.SessionRequest.deserialize(packet, false);
     self._session_params.remote_udp_length = sreq.udp_length;
     self.session_id = sreq.session_id;
 
@@ -239,14 +249,14 @@ fn handleSessionRequest(self: *SoeSessionHandler, packet: []u8) !void {
     }
 
     const protocols_match: bool = sreq.soe_protocol_version == soe_protocol.SOE_PROTOCOL_VERSION and
-        sreq.application_protocol == self._session_params.application_protocol;
+        std.mem.eql(u8, sreq.application_protocol, self._session_params.application_protocol);
     if (!protocols_match) {
         try self.terminateSession(.protocol_mismatch, true, false);
         return;
     }
 
     self._session_params.crc_length = soe_protocol.CRC_LENGTH;
-    self._session_params.crc_seed = std.Random.DefaultPrng.random().int(u32);
+    self._session_params.crc_seed = @truncate(_random.next());
 
     // TODO: self._data_output_channel.setMaxDataLength(calculateMaxDataLength());
 
@@ -261,7 +271,7 @@ fn handleSessionRequest(self: *SoeSessionHandler, packet: []u8) !void {
     };
     var buffer: [soe_packets.SessionResponse.SIZE]u8 = undefined;
     sresp.serialize(&buffer, true);
-    self._parent.sendSessionData(self, &buffer);
+    _ = try self._parent.sendSessionData(self, &buffer);
 
     self.state = SessionState.waiting_on_client_to_open_session;
 }
@@ -272,7 +282,8 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
         return;
     }
 
-    const sresp = soe_packets.SessionResponse.deserialize(packet, false);
+    // Error on deserialization bubbles up and will cause a corrupt_packet termination
+    const sresp = try soe_packets.SessionResponse.deserialize(packet, false);
     self._session_params.remote_udp_length = sresp.udp_length;
     self._session_params.crc_length = sresp.crc_length;
     self._session_params.crc_seed = sresp.crc_seed;
@@ -298,23 +309,24 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
 // ===== Start Contextual Packet Handling =====
 
 fn handleContextualPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
-    const decompressed: ?std.ArrayList(u8) = null;
+    var decompressed: ?std.ArrayList(u8) = null;
+    var my_data = packet_data;
 
     if (self._session_params.is_compression_enabled) {
-        const is_compressed: bool = packet_data[0] > 0;
-        packet_data = packet_data[1..];
+        const is_compressed: bool = my_data[0] > 0;
+        my_data = my_data[1..];
 
         if (is_compressed) {
-            decompressed = zlib.decompress(
+            decompressed = try zlib.decompress(
                 self._allocator,
                 self._session_params.remote_udp_length * 3,
-                packet_data,
+                my_data,
             );
-            packet_data = decompressed.?.items;
+            my_data = decompressed.?.items;
         }
     }
 
-    try self.handleContextualPacketInternal(op_code, packet_data);
+    try self.handleContextualPacketInternal(op_code, my_data);
 
     if (decompressed) |decom_value| {
         decom_value.deinit();
@@ -330,7 +342,7 @@ fn handleContextualPacketInternal(
         .multi_packet => {
             var offset: usize = 0;
             while (offset < packet_data.len) {
-                const sub_packet_len: i32 = soe_packet_utils.readVariableLength(packet_data, &offset);
+                const sub_packet_len: u32 = soe_packet_utils.readVariableLength(packet_data, &offset);
                 if (sub_packet_len < @sizeOf(soe_protocol.SoeOpCode) or sub_packet_len > packet_data.len - offset) {
                     try self.terminateSession(.corrupt_packet, true, false);
                     return;
@@ -341,7 +353,7 @@ fn handleContextualPacketInternal(
                     return;
                 };
 
-                self.handleContextualPacketInternal(
+                try self.handleContextualPacketInternal(
                     sub_packet_op_code,
                     packet_data[offset + @sizeOf(soe_protocol.SoeOpCode) .. offset + sub_packet_len],
                 );
@@ -354,14 +366,15 @@ fn handleContextualPacketInternal(
             try self.terminateSession(disconnect.reason, false, true);
         },
         .heartbeat => {
-            if (self.mode == SessionMode.server)
-                self.sendContextualPacket(.Heartbeat, [0]u8);
+            if (self.mode == SessionMode.server) {
+                try self.sendContextualPacket(.heartbeat, &[0]u8{});
+            }
         },
         .reliable_data => {
             self._data_input_channel.handleReliableData(packet_data);
         },
         .reliable_data_fragment => {
-            self._data_input_channel.handleReliableDataFragment(packet_data);
+            try self._data_input_channel.handleReliableDataFragment(packet_data);
         },
         .acknowledge => {
             //const ack = soe_packets.Acknowledge.deserialize(packet_data);
@@ -371,7 +384,7 @@ fn handleContextualPacketInternal(
             //const ack_all = soe_packets.AcknowledgeAll.deserialize(packet_data);
             // TODO: _dataOutputChannel.NotifyOfAcknowledgeAll(ack_all);
         },
-        _ => {
+        else => {
             std.debug.panic("The contextual handler does not support {any} packets", .{op_code});
         },
     }

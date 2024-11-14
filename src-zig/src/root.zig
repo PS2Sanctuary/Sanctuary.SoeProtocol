@@ -12,7 +12,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     var app_data_handler = AppDataHandler{};
-    const session_params: soe_protocol.SessionParams = .{
+    var session_params: soe_protocol.SessionParams = .{
         .application_protocol = "Ping_1",
     };
     const app_params: ApplicationParams = .{

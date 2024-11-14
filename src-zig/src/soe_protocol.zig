@@ -91,9 +91,9 @@ pub const SessionParams = struct {
     /// Whether compression is enabled for the session.
     is_compression_enabled: bool = false,
     /// The maximum number of data fragments that may be queued for either stitching or dispatch.
-    max_queued_incoming_data_packets: u16 = 400,
+    max_queued_incoming_data_packets: i16 = 400,
     /// The maximum number of reliable data fragments that may be queued for output.
-    max_queued_outgoing_data_packets: u16 = 400,
+    max_queued_outgoing_data_packets: i16 = 400,
     /// The maximum number of reliable packets that may be received before sending an acknowledgement.
     data_ack_window: i16 = 32,
     /// The timespan in nanoseconds after which to send a heartbeat, if no contextual

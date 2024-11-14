@@ -6,7 +6,7 @@ pub const PooledDataManager = struct {
     _mutex: Mutex = .{},
 
     _allocator: std.mem.Allocator,
-    _pool: std.ArrayList(PooledData),
+    _pool: std.ArrayList(*PooledData),
     _max_pool_size: usize,
 
     /// The length of data stored by each item in the pool.
@@ -19,7 +19,7 @@ pub const PooledDataManager = struct {
     ) PooledDataManager {
         return PooledDataManager{
             ._allocator = allocator,
-            ._pool = std.ArrayList(PooledData).init(allocator),
+            ._pool = std.ArrayList(*PooledData).init(allocator),
             ._max_pool_size = max_pool_size,
             .data_length = data_length,
         };
@@ -31,12 +31,13 @@ pub const PooledDataManager = struct {
             element._ref_count = 0;
             self._allocator.free(element.data);
             element.data = null;
+            self._allocator.destroy(element);
         }
         self._pool.deinit();
     }
 
     /// Get a `PooledData` instance.
-    pub fn get(self: @This()) PooledData {
+    pub fn get(self: @This()) !*PooledData {
         // Lock while we try to retrieve from the pool. We don't want to return the same item
         // to two callers at once
         self._mutex.lock();
@@ -49,17 +50,16 @@ pub const PooledDataManager = struct {
         }
 
         // Couldn't get one. Make a new one and add it to the pool
-        var new_item = PooledData{
-            ._manager = self,
-            ._data = self._allocator.alloc(u8, self.data_length),
-        };
+        var new_item = try self._allocator.create(PooledData);
+        new_item._manager = self;
+        new_item._data = self._allocator.alloc(u8, self.data_length);
         new_item.takeRef();
         self._pool.append(new_item);
         return new_item;
     }
 
     /// Returns a `PooledData` instance to the pool. This method is called from `PooledData.releaseRef()`.
-    fn put(self: @This(), item: PooledData) void {
+    fn put(self: @This(), item: *PooledData) void {
         // Can we append to the pool without going over the max size?
         if (self._pool.items.len < self._max_pool_size) {
             self._pool.append(item);
@@ -71,6 +71,7 @@ pub const PooledDataManager = struct {
         item.data = null;
         item._manager = null;
         item._ref_count = 0;
+        self._allocator.destroy(item);
     }
 };
 
@@ -81,7 +82,7 @@ pub const PooledData = struct {
     _ref_count: i16,
 
     /// The data. Do not re-assign this field.
-    data: *[]u8,
+    data: []u8,
     /// The actual length of the data stored in `data`
     data_len: usize,
 

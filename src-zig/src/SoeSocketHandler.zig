@@ -11,7 +11,7 @@ pub const SoeSocketHandler = @This();
 
 // External private fields
 _allocator: std.mem.Allocator,
-_session_params: *const soe_protocol.SessionParams,
+_session_params: *soe_protocol.SessionParams,
 _app_params: *const soe_protocol.ApplicationParams,
 _data_pool: pooling.PooledDataManager,
 
@@ -24,7 +24,7 @@ _connections: std.AutoHashMap(std.net.Address, *SoeSessionHandler),
 
 pub fn init(
     allocator: std.mem.Allocator,
-    session_params: *const soe_protocol.SessionParams,
+    session_params: *soe_protocol.SessionParams,
     app_params: *const soe_protocol.ApplicationParams,
     data_pool: pooling.PooledDataManager,
 ) !SoeSocketHandler {
@@ -86,7 +86,7 @@ pub fn runTick(self: *SoeSocketHandler) !void {
 }
 
 /// Sends data to the remote endpoint of a session.
-pub fn sendSessionData(self: *SoeSocketHandler, session: *SoeSessionHandler, data: []const u8) !usize {
+pub fn sendSessionData(self: *const SoeSocketHandler, session: *const SoeSessionHandler, data: []const u8) !usize {
     return try self._socket.sendTo(session.remote, data);
 }
 

@@ -152,7 +152,7 @@ test "testUdpRoundTrip" {
 
     try receive_socket.bind(receive_endpoint);
     _ = try send_socket.sendTo(receive_endpoint, &expected);
-    const recv_len = try receive_socket.receiveFrom(actual);
+    const recv_data = try receive_socket.receiveFrom(actual);
 
-    try std.testing.expectEqualSlices(u8, &expected, actual[0..recv_len]);
+    try std.testing.expectEqualSlices(u8, &expected, actual[0..recv_data.received_len]);
 }

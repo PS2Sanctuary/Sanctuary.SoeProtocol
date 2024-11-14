@@ -57,13 +57,20 @@ pub fn init(
         ._rc4_state = my_rc4_state,
         ._stash = try allocator.alloc(
             StashedItem,
-            session_params.*.max_queued_incoming_data_packets,
+            @intCast(session_params.*.max_queued_incoming_data_packets),
         ),
         ._last_ack_all_time = try std.time.Instant.now(),
     };
 }
 
 pub fn deinit(self: *ReliableDataInputChannel) void {
+    for (self._stash) |element| {
+        if (element.data) |data| {
+            data.releaseRef();
+            element.data = null;
+        }
+    }
+
     self._allocator.free(self._stash);
 
     if (self._current_buffer) |current_buffer| {
@@ -102,23 +109,27 @@ pub fn runTick(self: *ReliableDataInputChannel) void {
 
 /// Handles reliable data.
 pub fn handleReliableData(self: *ReliableDataInputChannel, data: []u8) void {
-    if (!self.preprocessData(data, false)) {
+    var my_data = data;
+
+    if (!self.preprocessData(&my_data, false)) {
         return;
     }
 
-    self.processData(data);
+    self.processData(my_data);
     self.consumeStashedDataFragments();
 }
 
 /// Handles a reliable data fragment.
 pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !void {
-    if (!self.preprocessData(data, true)) {
+    var my_data = data;
+
+    if (!self.preprocessData(&my_data, true)) {
         return;
     }
 
     // At this point we know this fragment can be written directly to the buffer
     // as it is next in the sequence.
-    try self.writeImmediateFragmentToBuffer(data);
+    try self.writeImmediateFragmentToBuffer(my_data);
 
     // Attempt to process the current buffer now, as the stashed fragments may belong to a new buffer
     // consumeStashedDataFragments will attempt to process the current buffer as it releases stashes
@@ -151,10 +162,10 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
     const ahead = sequence != self._window_start_sequence;
 
     // Ack this data if we are in ack-all mode or it is ahead of our expectations
-    if (self._session_params.acknowledge_all_data || ahead) {
-        const ack = soe_packets.Acknowledge{ .sequence = sequence };
-        const buffer: [soe_packets.Acknowledge.SIZE]u8 = undefined;
-        ack.serialize(buffer);
+    if (self._session_params.acknowledge_all_data or ahead) {
+        const ack = soe_packets.Acknowledge{ .sequence = packet_sequence };
+        var buffer: [soe_packets.Acknowledge.SIZE]u8 = undefined;
+        ack.serialize(&buffer);
         try self._session_handler.sendContextualPacket(.acknowledge, buffer);
     }
 
@@ -178,13 +189,13 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
     }
 
     // Create some pooled data and copy our packet in
-    var pool_item = self._data_pool.get();
+    var pool_item = try self._data_pool.get();
     pool_item.takeRef();
     @memcpy(pool_item.data, data);
 
     // Update our stash item
     stash_item.is_fragment = is_fragment;
-    stash_item.data.* = pool_item;
+    stash_item.data = pool_item;
     return false;
 }
 
@@ -195,22 +206,22 @@ fn isValidReliableData(
     self: *ReliableDataInputChannel,
     data: []const u8,
     sequence: *i64,
-    packet_sequence: i16,
+    packet_sequence: *u16,
 ) bool {
     packet_sequence.* = binary_primitives.readU16BE(data);
     sequence.* = utils.getTrueIncomingSequence(
-        packet_sequence,
+        packet_sequence.*,
         self._window_start_sequence,
         self._session_params.max_queued_incoming_data_packets,
     );
 
     // If this is too far ahead of our window, just drop it
-    if (sequence > self._window_start_sequence + self._session_params.max_queued_incoming_data_packets) {
+    if (sequence.* > self._window_start_sequence + self._session_params.max_queued_incoming_data_packets) {
         return false;
     }
 
     // Great, we're inside the window
-    if (sequence >= self._window_start_sequence) {
+    if (sequence.* >= self._window_start_sequence) {
         return true;
     }
 
@@ -247,8 +258,8 @@ fn tryProcessCurrentBuffer(self: *ReliableDataInputChannel) void {
     }
 
     // Process the buffer, free it, and reset fields
-    self.processData(self._current_buffer);
-    self._allocator.free(self._current_buffer);
+    self.processData(self._current_buffer.?);
+    self._allocator.free(self._current_buffer.?);
     self._current_buffer = null;
     self._running_data_len = 0;
     self._expected_data_len = 0;
@@ -256,15 +267,15 @@ fn tryProcessCurrentBuffer(self: *ReliableDataInputChannel) void {
 
 fn consumeStashedDataFragments(self: *ReliableDataInputChannel) void {
     // Grab the stash index of our current window start sequence
-    var stash_spot = self._window_start_sequence % self._session_params.max_queued_incoming_data_packets;
+    var stash_spot: usize = @intCast(@mod(self._window_start_sequence, self._session_params.max_queued_incoming_data_packets));
     var stashed_item = self._stash[stash_spot];
 
     // Iterate through the stash until we reach an empty slot
-    while (stashed_item.data != null) {
+    while (stashed_item.data) |pooled_data| {
         if (stashed_item.is_fragment) {
-            self.processData(stashed_item.data);
+            self.processData(pooled_data.getSlice());
         } else {
-            self.writeImmediateFragmentToBuffer(stashed_item.data);
+            self.writeImmediateFragmentToBuffer(pooled_data.getSlice());
             self.tryProcessCurrentBuffer();
         }
 
@@ -274,7 +285,7 @@ fn consumeStashedDataFragments(self: *ReliableDataInputChannel) void {
 
         // Increment the window
         self._window_start_sequence += 1;
-        stash_spot = self._window_start_sequence % self._session_params.max_queued_incoming_data_packets;
+        stash_spot = @intCast(@mod(self._window_start_sequence, self._session_params.max_queued_incoming_data_packets));
         stashed_item = self._stash[stash_spot];
     }
 }
@@ -322,7 +333,7 @@ const InputStats = struct {
 };
 
 const StashedItem = struct {
-    data: *pooling.PooledData,
+    data: ?*pooling.PooledData,
     is_fragment: bool,
 };
 
@@ -331,7 +342,7 @@ const StashedItem = struct {
 // =====
 
 pub const tests = struct {
-    session_params: soe_protocol.SessionParams = .{},
+    session_params: soe_protocol.SessionParams = soe_protocol.SessionParams{},
     app_params: *ApplicationParams,
     last_received_data: []const u8 = undefined,
     received_data_queue: std.ArrayList([]const u8),

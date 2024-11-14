@@ -122,12 +122,12 @@ pub const SessionRequest = struct {
     /// The maximum length of a UDP packet that the sender can receive.
     udp_length: u32,
     /// The application protocol that the sender wishes to transport.
-    application_protocol: [:0]u8,
+    application_protocol: [:0]const u8,
 
     /// Deserializes a new `SessionRequest` instance from the data in the `buffer`.
     /// Note that the created object is only valid for the lifetime of the `buffer`,
     /// as the `application_protocol` string is not allocated on the heap.
-    pub fn deserialize(buffer: []const u8, has_op_code: bool) SessionRequest {
+    pub fn deserialize(buffer: []const u8, has_op_code: bool) !SessionRequest {
         var reader = BinaryReader.init(buffer);
 
         if (has_op_code) {
@@ -138,7 +138,7 @@ pub const SessionRequest = struct {
             .soe_protocol_version = reader.readU32BE(),
             .session_id = reader.readU32BE(),
             .udp_length = reader.readU32BE(),
-            .application_protocol = reader.readStringNullTerminated(),
+            .application_protocol = try reader.readStringNullTerminated(),
         };
     }
 
@@ -188,7 +188,7 @@ pub const SessionResponse = struct {
     /// The version of the SOE protocol that the packet sender is using.
     soe_protocol_version: u32,
 
-    pub fn deserialize(buffer: []const u8, has_op_code: bool) SessionResponse {
+    pub fn deserialize(buffer: []const u8, has_op_code: bool) !SessionResponse {
         var reader = BinaryReader.init(buffer);
 
         if (has_op_code) {
@@ -199,7 +199,7 @@ pub const SessionResponse = struct {
             .session_id = reader.readU32BE(),
             .crc_seed = reader.readU32BE(),
             .crc_length = reader.readU8(),
-            .is_compression_enabled = reader.readBool(),
+            .is_compression_enabled = try reader.readBool(),
             .unknown_value_1 = reader.readU8(),
             .udp_length = reader.readU32BE(),
             .soe_protocol_version = reader.readU32BE(),
