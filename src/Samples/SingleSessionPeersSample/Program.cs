@@ -1,8 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Sanctuary.SoeProtocol.Util;
-using System;
-using System.Threading.Tasks;
 
 namespace SingleSessionPeersSample;
 
@@ -20,20 +17,17 @@ public static class Program
     /// The entry point of the program.
     /// </summary>
     /// <param name="args">The launch arguments.</param>
-    public static async Task Main(string[] args)
+    public static void Main(string[] args)
     {
         if (args.Length > 0 && int.TryParse(args[0], out int port))
             Port = port;
 
-        IHost host = Host.CreateDefaultBuilder(args)
-            .ConfigureServices(services =>
-            {
-                services.AddTransient<PingApplication>();
-                services.AddHostedService<ClientWorker>();
-                services.AddHostedService<ServerWorker>();
-            })
-            .Build();
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
-        await host.RunAsync();
+        builder.Services.AddTransient<PingApplication>();
+        builder.Services.AddHostedService<ClientWorker>();
+        builder.Services.AddHostedService<ServerWorker>();
+
+        builder.Build().Run();
     }
 }
