@@ -18,7 +18,7 @@ _data_pool: pooling.PooledDataManager,
 // Internal private fields
 _socket: udp_socket.UdpSocket,
 _recv_buffer: []u8,
-_connections: std.AutoHashMap(std.net.Address, *SoeSessionHandler),
+_connections: std.AutoHashMap(std.posix.sockaddr, *SoeSessionHandler),
 
 // Public fields
 
@@ -37,7 +37,7 @@ pub fn init(
         ._data_pool = data_pool,
         ._socket = try udp_socket.UdpSocket.init(max_socket_len),
         ._recv_buffer = try allocator.alloc(u8, @intCast(session_params.remote_udp_length)),
-        ._connections = std.AutoHashMap(std.net.Address, *SoeSessionHandler).init(allocator),
+        ._connections = std.AutoHashMap(std.posix.sockaddr, *SoeSessionHandler).init(allocator),
     };
 }
 
@@ -67,7 +67,7 @@ pub fn runTick(self: *SoeSocketHandler) !void {
     const result = try self._socket.receiveFrom(self._recv_buffer);
 
     if (result.received_len > 0) {
-        var conn: ?*SoeSessionHandler = self._connections.get(result.sender);
+        var conn: ?*SoeSessionHandler = self._connections.get(result.sender.any);
 
         if (conn == null) {
             // TODO: Check for remap request
@@ -79,7 +79,7 @@ pub fn runTick(self: *SoeSocketHandler) !void {
             conn.?.terminateSession(.application_released, true, false) catch {
                 // This is fine. We're getting rid of it anyway
             };
-            _ = self._connections.remove(conn.?.remote);
+            _ = self._connections.remove(conn.?.remote.any);
             conn.?.deinit();
         };
     }
@@ -89,14 +89,14 @@ pub fn runTick(self: *SoeSocketHandler) !void {
         var conn = iterator.items[i];
 
         if (conn.termination_reason != .none) {
-            _ = self._connections.remove(conn.remote);
+            _ = self._connections.remove(conn.remote.any);
         } else {
             conn.runTick() catch |err| {
                 std.debug.print("Failed to run tick of session handler with error {any}", .{err});
                 conn.terminateSession(.application_released, true, false) catch {
                     // This is fine. We're getting rid of it anyway
                 };
-                _ = self._connections.remove(conn.remote);
+                _ = self._connections.remove(conn.remote.any);
                 conn.deinit();
             };
         }
@@ -125,7 +125,7 @@ fn spawnSessionHandler(
         self._data_pool,
     );
 
-    try self._connections.put(remote, handler);
+    try self._connections.put(remote.any, handler);
 
     return handler;
 }
