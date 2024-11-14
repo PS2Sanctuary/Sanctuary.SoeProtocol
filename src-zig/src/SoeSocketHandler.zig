@@ -75,7 +75,7 @@ pub fn runTick(self: *SoeSocketHandler) !void {
         }
 
         conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
-            std.debug.print("Failed to run tick of session handler with error {any}", err);
+            std.debug.print("Failed to run tick of session handler with error {any}", .{err});
             conn.?.terminateSession(.application_released, true, false) catch {
                 // This is fine. We're getting rid of it anyway
             };
@@ -92,7 +92,7 @@ pub fn runTick(self: *SoeSocketHandler) !void {
             _ = self._connections.remove(conn.remote);
         } else {
             conn.runTick() catch |err| {
-                std.debug.print("Failed to run tick of session handler with error {any}", err);
+                std.debug.print("Failed to run tick of session handler with error {any}", .{err});
                 conn.terminateSession(.application_released, true, false) catch {
                     // This is fine. We're getting rid of it anyway
                 };
