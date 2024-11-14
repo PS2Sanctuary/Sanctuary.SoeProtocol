@@ -145,12 +145,13 @@ test "testUdpRoundTrip" {
     const actual: []u8 = try std.testing.allocator.alloc(u8, 512);
     defer std.testing.allocator.free(actual);
 
+    try receive_socket.bind(receive_endpoint);
+
     try std.testing.expectError(
         posix.RecvFromError.WouldBlock,
         receive_socket.receiveFrom(actual),
     );
 
-    try receive_socket.bind(receive_endpoint);
     _ = try send_socket.sendTo(receive_endpoint, &expected);
     const recv_data = try receive_socket.receiveFrom(actual);
 
