@@ -33,7 +33,7 @@ pub const PooledDataManager = struct {
     }
 
     /// Get a `PooledData` instance.
-    pub fn get(self: @This()) !*PooledData {
+    pub fn get(self: *PooledDataManager) !*PooledData {
         // Lock while we try to retrieve from the pool. We don't want to return the same item
         // to two callers at once
         self._mutex.lock();
@@ -48,9 +48,9 @@ pub const PooledDataManager = struct {
         // Couldn't get one. Make a new one and add it to the pool
         var new_item = try self._allocator.create(PooledData);
         new_item._manager = self;
-        new_item._data = self._allocator.alloc(u8, self.data_length);
+        new_item.data = try self._allocator.alloc(u8, self.data_length);
         new_item.takeRef();
-        self._pool.append(new_item);
+        try self._pool.append(new_item);
         return new_item;
     }
 

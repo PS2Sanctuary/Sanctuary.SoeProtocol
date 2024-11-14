@@ -87,9 +87,9 @@ pub fn deinit(self: *ReliableDataInputChannel) void {
 
 /// Runs a single tick of operations for the ReliableDataInputChannel. This includes
 /// acknowledging processed data packets.
-pub fn runTick(self: *ReliableDataInputChannel) void {
+pub fn runTick(self: *ReliableDataInputChannel) !void {
     if (self._buffered_ack_all) |ack_all| {
-        self.sendAckAll(ack_all);
+        try self.sendAckAll(ack_all);
         self._buffered_ack_all = null;
     }
 
@@ -115,22 +115,22 @@ pub fn runTick(self: *ReliableDataInputChannel) void {
 }
 
 /// Handles reliable data.
-pub fn handleReliableData(self: *ReliableDataInputChannel, data: []u8) void {
+pub fn handleReliableData(self: *ReliableDataInputChannel, data: []u8) !void {
     var my_data = data;
 
-    if (!self.preprocessData(&my_data, false)) {
+    if (!try self.preprocessData(&my_data, false)) {
         return;
     }
 
     self.processData(my_data);
-    self.consumeStashedDataFragments();
+    try self.consumeStashedDataFragments();
 }
 
 /// Handles a reliable data fragment.
 pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !void {
     var my_data = data;
 
-    if (!self.preprocessData(&my_data, true)) {
+    if (!try self.preprocessData(&my_data, true)) {
         return;
     }
 
@@ -141,14 +141,14 @@ pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !
     // Attempt to process the current buffer now, as the stashed fragments may belong to a new buffer
     // consumeStashedDataFragments will attempt to process the current buffer as it releases stashes
     self.tryProcessCurrentBuffer();
-    self.consumeStashedDataFragments();
+    try self.consumeStashedDataFragments();
 }
 
 fn sendAckAll(self: *ReliableDataInputChannel, ack_all: soe_packets.AcknowledgeAll) !void {
     // Serialize and send the packet
-    const buffer: [soe_packets.AcknowledgeAll.SIZE]u8 = undefined;
-    ack_all.serialize(buffer);
-    try self._session_handler.sendContextualPacket(.acknowledge_all, buffer);
+    var buffer: [soe_packets.AcknowledgeAll.SIZE]u8 = undefined;
+    ack_all.serialize(&buffer);
+    try self._session_handler.sendContextualPacket(.acknowledge_all, &buffer);
 
     // Update our last ack sequence and time
     self._last_ack_all_seq = ack_all.sequence;
@@ -157,7 +157,7 @@ fn sendAckAll(self: *ReliableDataInputChannel, ack_all: soe_packets.AcknowledgeA
 
 /// Pre-processes reliable data, and stashes it for future processing if required.
 /// Returns `true` if the data may be processed immediately.
-fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: bool) bool {
+fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: bool) !bool {
     self.input_stats.total_received_data += 1;
     var sequence: i64 = undefined;
     var packet_sequence: u16 = undefined;
@@ -173,7 +173,7 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
         const ack = soe_packets.Acknowledge{ .sequence = packet_sequence };
         var buffer: [soe_packets.Acknowledge.SIZE]u8 = undefined;
         ack.serialize(&buffer);
-        try self._session_handler.sendContextualPacket(.acknowledge, buffer);
+        try self._session_handler.sendContextualPacket(.acknowledge, &buffer);
     }
 
     // Remove the sequence bytes
@@ -186,7 +186,7 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
 
     // We've received this data out-of-order, so stash it
     self.input_stats.out_of_order_count += 1;
-    const stash_spot = sequence % self._session_params.max_queued_incoming_data_packets;
+    const stash_spot: usize = @intCast(@mod(sequence, self._session_params.max_queued_incoming_data_packets));
 
     // Grab our stash item. We may have already stashed this packet ahead of time, so check for that
     var stash_item = self._stash[stash_spot];
@@ -198,7 +198,7 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
     // Create some pooled data and copy our packet in
     var pool_item = try self._data_pool.get();
     pool_item.takeRef();
-    @memcpy(pool_item.data, data);
+    @memcpy(pool_item.data, data.*);
 
     // Update our stash item
     stash_item.is_fragment = is_fragment;
@@ -272,7 +272,7 @@ fn tryProcessCurrentBuffer(self: *ReliableDataInputChannel) void {
     self._expected_data_len = 0;
 }
 
-fn consumeStashedDataFragments(self: *ReliableDataInputChannel) void {
+fn consumeStashedDataFragments(self: *ReliableDataInputChannel) !void {
     // Grab the stash index of our current window start sequence
     var stash_spot: usize = @intCast(@mod(self._window_start_sequence, self._session_params.max_queued_incoming_data_packets));
     var stashed_item = self._stash[stash_spot];
@@ -282,7 +282,7 @@ fn consumeStashedDataFragments(self: *ReliableDataInputChannel) void {
         if (stashed_item.is_fragment) {
             self.processData(pooled_data.getSlice());
         } else {
-            self.writeImmediateFragmentToBuffer(pooled_data.getSlice());
+            try self.writeImmediateFragmentToBuffer(pooled_data.getSlice());
             self.tryProcessCurrentBuffer();
         }
 

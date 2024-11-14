@@ -14,7 +14,7 @@ const zlib = @import("utils/zlib.zig");
 pub const SoeSessionHandler = @This();
 
 // Internal static fields
-const _random = std.Random.DefaultPrng.init(234029380);
+var _random = std.Random.DefaultPrng.init(234029380);
 
 // External private fields
 _parent: *SoeSocketHandler,
@@ -33,7 +33,7 @@ mode: SessionMode,
 remote: std.net.Address,
 state: SessionState,
 session_id: u32 = undefined,
-termination_reason: soe_protocol.DisconnectReason = undefined,
+termination_reason: soe_protocol.DisconnectReason = .none,
 terminated_by_remote: bool = false,
 
 pub fn init(
@@ -77,14 +77,14 @@ pub fn deinit(self: *SoeSessionHandler) void {
 }
 
 pub fn runTick(self: *SoeSessionHandler) !void {
-    sendHeartbeatIfRequired();
+    try self.sendHeartbeatIfRequired();
 
     const now = try std.time.Instant.now();
     if (now.since(self._last_received_packet_tick) > self._session_params.inactivity_timeout_ns) {
         try self.terminateSession(.timeout, false, false);
     }
 
-    self._data_input_channel.runTick();
+    try self._data_input_channel.runTick();
 }
 
 pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
@@ -148,7 +148,7 @@ pub fn sendContextualPacket(self: *const SoeSessionHandler, op_code: soe_protoco
     );
 
     _ = self._parent.sendSessionData(self, writer.getConsumed()) catch |err| {
-        std.debug.panic("Failed to send contextual packet due to socket error: {s}", .{err});
+        std.debug.panic("Failed to send contextual packet due to socket error: {any}", .{err});
     };
 }
 
@@ -371,7 +371,7 @@ fn handleContextualPacketInternal(
             }
         },
         .reliable_data => {
-            self._data_input_channel.handleReliableData(packet_data);
+            try self._data_input_channel.handleReliableData(packet_data);
         },
         .reliable_data_fragment => {
             try self._data_input_channel.handleReliableDataFragment(packet_data);
@@ -390,7 +390,7 @@ fn handleContextualPacketInternal(
     }
 }
 
-fn sendHeartbeatIfRequired(self: *SoeSessionHandler) void {
+fn sendHeartbeatIfRequired(self: *SoeSessionHandler) !void {
     const now = try std.time.Instant.now();
 
     const maySendHeartbeat = self.mode == SessionMode.client and
@@ -399,7 +399,7 @@ fn sendHeartbeatIfRequired(self: *SoeSessionHandler) void {
         now.since(self._last_received_packet_tick) > self._session_params.heartbeat_after_ns;
 
     if (maySendHeartbeat) {
-        self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, [0]u8);
+        try self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, &[0]u8{});
     }
 }
 

@@ -36,6 +36,8 @@ pub const SoeOpCode = enum(u16) {
 
 /// Enumerates the possible session termination codes.
 pub const DisconnectReason = enum(u16) {
+    /// No termination has occured yet.
+    none = 0,
     /// An ICMP error occured, forcing the disconnect.
     icmp_error = 1,
     /// The other party has let the session become inactive.
