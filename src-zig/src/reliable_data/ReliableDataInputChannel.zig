@@ -15,25 +15,30 @@ pub const ReliableDataInputChannel = @This();
 /// Gets the maximum length of time that data may go un-acknowledged.
 const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 30;
 
-// External private fields
+// === External private fields ===
 _session_handler: *const SoeSessionHandler,
 _allocator: std.mem.Allocator,
 _session_params: *const soe_protocol.SessionParams,
 _app_params: *const ApplicationParams,
 _data_pool: pooling.PooledDataManager,
 
-// Internal private fields
+// === Internal private fields ===
 _rc4_state: ?Rc4State,
 _stash: []StashedItem,
+/// The next reliable data sequence that we expect to receive.
 _window_start_sequence: i64 = 0,
 _buffered_ack_all: ?soe_packets.AcknowledgeAll = null,
+/// Stores fragments that compose the current piece of reliable data.
 _current_buffer: ?[]u8 = null,
+/// The current length of the data that has been received into the `_current_buffer`.
 _running_data_len: usize = 0,
+/// The expected length of the data that should be received into the `_current_buffer`.
 _expected_data_len: usize = 0,
+/// The last reliable data sequence that we acknowledged.
 _last_ack_all_seq: i64 = -1,
 _last_ack_all_time: std.time.Instant,
 
-// Public fields
+// === Public fields ===
 input_stats: InputStats = InputStats{},
 
 pub fn init(
@@ -106,11 +111,12 @@ pub fn runTick(self: *ReliableDataInputChannel) !void {
     // - at least 30ms have passed since the last ack time and
     // - our seq to ack is greater than the last ack seq + half of the ack window
     const need_ack = now.since(self._last_ack_all_time) > 30 * std.time.ns_per_ms or
-        to_ack >= self._last_ack_all_seq + self._session_params.data_ack_window / 2;
+        to_ack >= self._last_ack_all_seq + @divExact(self._session_params.data_ack_window, 2);
 
     if (need_ack) {
-        const ack_all = soe_packets.AcknowledgeAll{ .sequence = to_ack };
-        self.sendAckAll(ack_all);
+        const reliable_ack_seq: u64 = @bitCast(to_ack);
+        const ack_all = soe_packets.AcknowledgeAll{ .sequence = @truncate(reliable_ack_seq) };
+        try self.sendAckAll(ack_all);
     }
 }
 
@@ -234,7 +240,8 @@ fn isValidReliableData(
 
     // We've already seen this packet. Ack all and mark as duplicate
     self.input_stats.duplicate_count += 1;
-    self._buffered_ack_all = soe_packets.AcknowledgeAll{ .sequence = self._window_start_sequence - 1 };
+    const reliable_ack_seq: u64 = @bitCast(self._window_start_sequence - 1);
+    self._buffered_ack_all = soe_packets.AcknowledgeAll{ .sequence = @truncate(reliable_ack_seq) };
     return false;
 }
 
