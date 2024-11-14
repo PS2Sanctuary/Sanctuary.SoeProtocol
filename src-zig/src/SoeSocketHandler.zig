@@ -47,8 +47,9 @@ pub fn deinit(self: *SoeSocketHandler) void {
     self._allocator.free(self._recv_buffer);
 
     // Free all session connections
-    for (self._connections.valueIterator().items) |session| {
-        session.deinit();
+    const iterator = self._connections.valueIterator();
+    for (0..iterator.len) |i| {
+        iterator.items[i].deinit();
     }
     self._connections.deinit();
 }
@@ -73,14 +74,31 @@ pub fn runTick(self: *SoeSocketHandler) !void {
             conn = try self.spawnSessionHandler(result.sender, .server);
         }
 
-        try conn.?.handlePacket(self._recv_buffer[0..result.received_len]);
+        conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
+            std.debug.print("Failed to run tick of session handler with error {any}", err);
+            conn.?.terminateSession(.application_released, true, false) catch {
+                // This is fine. We're getting rid of it anyway
+            };
+            _ = self._connections.remove(conn.?.remote);
+            conn.?.deinit();
+        };
     }
 
-    for (self._connections.valueIterator().items) |conn| {
-        if (conn.termination_reason != undefined) {
-            self._connections.remove(conn.remote);
+    const iterator = self._connections.valueIterator();
+    for (0..iterator.len) |i| {
+        var conn = iterator.items[i];
+
+        if (conn.termination_reason != .none) {
+            _ = self._connections.remove(conn.remote);
         } else {
-            conn.runTick();
+            conn.runTick() catch |err| {
+                std.debug.print("Failed to run tick of session handler with error {any}", err);
+                conn.terminateSession(.application_released, true, false) catch {
+                    // This is fine. We're getting rid of it anyway
+                };
+                _ = self._connections.remove(conn.remote);
+                conn.deinit();
+            };
         }
     }
 }
