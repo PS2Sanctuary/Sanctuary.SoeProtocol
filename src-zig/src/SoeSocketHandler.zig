@@ -18,7 +18,7 @@ _data_pool: pooling.PooledDataManager,
 // Internal private fields
 _socket: udp_socket.UdpSocket,
 _recv_buffer: []u8,
-_connections: std.AutoHashMap(std.net.Address, SoeSessionHandler),
+_connections: std.AutoHashMap(std.net.Address, *SoeSessionHandler),
 
 // Public fields
 
@@ -28,7 +28,7 @@ pub fn init(
     app_params: *const soe_protocol.ApplicationParams,
     data_pool: pooling.PooledDataManager,
 ) !SoeSocketHandler {
-    const max_socket_len = std.math.maxInt(session_params.udp_length, session_params.remote_udp_length) * 64;
+    const max_socket_len: i32 = @as(i32, @intCast(@max(session_params.udp_length, session_params.remote_udp_length))) * 64;
 
     return SoeSocketHandler{
         ._allocator = allocator,
@@ -36,8 +36,8 @@ pub fn init(
         ._app_params = app_params,
         ._data_pool = data_pool,
         ._socket = try udp_socket.UdpSocket.init(max_socket_len),
-        ._recv_buffer = try allocator.alloc(u8, session_params.remote_udp_length),
-        ._connections = std.AutoHashMap(std.net.Address, SoeSessionHandler).init(allocator),
+        ._recv_buffer = try allocator.alloc(u8, @intCast(session_params.remote_udp_length)),
+        ._connections = std.AutoHashMap(std.net.Address, *SoeSessionHandler).init(allocator),
     };
 }
 
@@ -58,44 +58,47 @@ pub fn bind(self: *SoeSocketHandler, endpoint: std.net.Address) !void {
     self._socket.bind(endpoint);
 }
 
-pub fn connect(self: *SoeSocketHandler, remote: std.net.Address) !void {
-    self.spawnSessionHandler(remote);
+pub fn connect(self: *SoeSocketHandler, remote: std.net.Address) !*SoeSessionHandler {
+    return try self.spawnSessionHandler(remote, .client);
 }
 
 pub fn runTick(self: *SoeSocketHandler) !void {
     const result = try self._socket.receiveFrom(self._recv_buffer);
 
-    if (result.numberOfBytes > 0) {
-        var conn: ?SoeSessionHandler = self._connections.get(result.sender);
+    if (result.received_len > 0) {
+        var conn: ?*SoeSessionHandler = self._connections.get(result.sender);
 
         if (conn == null) {
             // TODO: Check for remap request
-            conn = self.spawnSessionHandler(result.sender);
+            conn = try self.spawnSessionHandler(result.sender, .server);
         }
 
-        try conn.?.handlePacket(self._recv_buffer[0..result.numberOfBytes]);
+        try conn.?.handlePacket(self._recv_buffer[0..result.received_len]);
     }
 
     for (self._connections.valueIterator().items) |conn| {
-        conn.runTick();
+        if (conn.termination_reason != undefined) {
+            self._connections.remove(conn.remote);
+        } else {
+            conn.runTick();
+        }
     }
 }
 
 /// Sends data to the remote endpoint of a session.
-pub fn sendSessionData(self: *SoeSocketHandler, session: SoeSessionHandler, data: []const u8) !usize {
-    return self._socket.sendTo(session.remote, data);
+pub fn sendSessionData(self: *SoeSocketHandler, session: *SoeSessionHandler, data: []const u8) !usize {
+    return try self._socket.sendTo(session.remote, data);
 }
 
-/// Terminates and removes a session from the connection list.
-pub fn terminateSession(self: *SoeSocketHandler, session: SoeSessionHandler) void {
-    session.terminateSession(.application, true, false);
-    self._connections.remove(session.remote);
-}
-
-fn spawnSessionHandler(self: *SoeSocketHandler, remote: std.net.Address) SoeSessionHandler {
+fn spawnSessionHandler(
+    self: *SoeSocketHandler,
+    remote: std.net.Address,
+    mode: SoeSessionHandler.SessionMode,
+) !*SoeSessionHandler {
     // TODO: We need to ensure we have a unique session params and app params per session handler
 
-    const handler = SoeSessionHandler.init(
+    const handler = try SoeSessionHandler.init(
+        mode,
         remote,
         self,
         self._allocator,
@@ -104,7 +107,7 @@ fn spawnSessionHandler(self: *SoeSocketHandler, remote: std.net.Address) SoeSess
         self._data_pool,
     );
 
-    self._connections.put(remote, handler);
+    try self._connections.put(remote, handler);
 
     return handler;
 }

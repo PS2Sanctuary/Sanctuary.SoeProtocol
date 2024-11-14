@@ -31,6 +31,11 @@ pub fn resolveHostToAddress(allocator: std.mem.Allocator, hostname: []const u8, 
     return address_list.addrs[0];
 }
 
+pub const ReceiveFrom = struct {
+    received_len: usize,
+    sender: std.net.Address,
+};
+
 pub const UdpSocket = struct {
     _socket: posix.socket_t,
 
@@ -76,17 +81,23 @@ pub const UdpSocket = struct {
         );
     }
 
-    pub fn receiveFrom(self: *UdpSocket, buffer: []u8) posix.RecvFromError!usize {
+    pub fn receiveFrom(self: *UdpSocket, buffer: []u8) posix.RecvFromError!ReceiveFrom {
         var other_addr: posix.sockaddr = undefined;
         var other_addrlen: posix.socklen_t = @sizeOf(posix.sockaddr);
 
-        return posix.recvfrom(
+        const rec_len = try posix.recvfrom(
             self._socket,
             buffer,
             0,
             &other_addr,
             &other_addrlen,
         );
+        const sender = std.net.Address.initPosix(@alignCast(&other_addr));
+
+        return ReceiveFrom{
+            .received_len = rec_len,
+            .sender = sender,
+        };
     }
 };
 
