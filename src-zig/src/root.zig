@@ -35,6 +35,8 @@ pub fn main() !void {
         data_pool,
     );
 
+    const bind_addr = try std.net.Address.parseIp("127.0.0.1", 0);
+    try handler.bind(bind_addr);
     const address = try std.net.Address.parseIp("127.0.0.1", 12345);
     _ = try handler.connect(address);
 

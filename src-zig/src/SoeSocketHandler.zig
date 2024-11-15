@@ -56,7 +56,7 @@ pub fn deinit(self: *SoeSocketHandler) void {
 
 /// Binds this socket handler to an endpoint, readying it to act as a server.
 pub fn bind(self: *SoeSocketHandler, endpoint: std.net.Address) !void {
-    self._socket.bind(endpoint);
+    try self._socket.bind(endpoint);
 }
 
 pub fn connect(self: *SoeSocketHandler, remote: std.net.Address) !*SoeSessionHandler {
@@ -64,25 +64,7 @@ pub fn connect(self: *SoeSocketHandler, remote: std.net.Address) !*SoeSessionHan
 }
 
 pub fn runTick(self: *SoeSocketHandler) !void {
-    const result = try self._socket.receiveFrom(self._recv_buffer);
-
-    if (result.received_len > 0) {
-        var conn: ?*SoeSessionHandler = self._connections.get(result.sender.any);
-
-        if (conn == null) {
-            // TODO: Check for remap request
-            conn = try self.spawnSessionHandler(result.sender, .server);
-        }
-
-        conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
-            std.debug.print("Failed to run tick of session handler with error {any}", .{err});
-            conn.?.terminateSession(.application_released, true, false) catch {
-                // This is fine. We're getting rid of it anyway
-            };
-            _ = self._connections.remove(conn.?.remote.any);
-            conn.?.deinit();
-        };
-    }
+    try self.processOneFromSocket();
 
     const iterator = self._connections.valueIterator();
     for (0..iterator.len) |i| {
@@ -106,6 +88,34 @@ pub fn runTick(self: *SoeSocketHandler) !void {
 /// Sends data to the remote endpoint of a session.
 pub fn sendSessionData(self: *const SoeSocketHandler, session: *const SoeSessionHandler, data: []const u8) !usize {
     return try self._socket.sendTo(session.remote, data);
+}
+
+fn processOneFromSocket(self: *SoeSocketHandler) !void {
+    const result = self._socket.receiveFrom(self._recv_buffer) catch |err| {
+        if (err == std.posix.RecvFromError.WouldBlock) {
+            return;
+        } else {
+            return err;
+        }
+    };
+
+    if (result.received_len > 0) {
+        var conn: ?*SoeSessionHandler = self._connections.get(result.sender.any);
+
+        if (conn == null) {
+            // TODO: Check for remap request
+            conn = try self.spawnSessionHandler(result.sender, .server);
+        }
+
+        conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
+            std.debug.print("Failed to run tick of session handler with error {any}", .{err});
+            conn.?.terminateSession(.application_released, true, false) catch {
+                // This is fine. We're getting rid of it anyway
+            };
+            _ = self._connections.remove(conn.?.remote.any);
+            conn.?.deinit();
+        };
+    }
 }
 
 fn spawnSessionHandler(
