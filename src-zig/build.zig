@@ -86,9 +86,9 @@ pub fn build(b: *std.Build) void {
 
     // ===== zig build run =====
 
-    // Create a new executable named `soe-protocol-sample` from `src/root.zig`
+    // Create a new executable named `root` from `src/root.zig`
     const exe = b.addExecutable(.{
-        .name = "soe-protocol-sample",
+        .name = "root",
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -97,6 +97,8 @@ pub fn build(b: *std.Build) void {
     // Link libraries
     exe.linkLibrary(lib_zlib);
     exe.addIncludePath(b.path("lib/zlib"));
+    // Mark the root binary to be installed when the "install" step is invoked
+    b.installArtifact(exe);
 
     // Add an executable artifact, and a build step to execute it ('zig build run')
     const run_exe = b.addRunArtifact(exe);
