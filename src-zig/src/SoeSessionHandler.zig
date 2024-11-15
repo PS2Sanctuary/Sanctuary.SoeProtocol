@@ -32,7 +32,7 @@ _last_received_packet_tick: std.time.Instant,
 mode: SessionMode,
 remote: std.net.Address,
 state: SessionState,
-session_id: u32 = undefined,
+session_id: u32 = 0,
 termination_reason: soe_protocol.DisconnectReason = .none,
 terminated_by_remote: bool = false,
 
@@ -57,6 +57,9 @@ pub fn init(
     session_handler._data_input_channel = undefined;
     session_handler._last_received_packet_tick = try std.time.Instant.now();
     session_handler.state = SessionState.negotiating;
+    session_handler.termination_reason = .none;
+    session_handler.terminated_by_remote = false;
+    session_handler.session_id = 0;
 
     const input_channel = try ReliableDataInputChannel.init(
         session_handler,

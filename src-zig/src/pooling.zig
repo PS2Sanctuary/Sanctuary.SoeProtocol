@@ -25,7 +25,7 @@ pub const PooledDataManager = struct {
         };
     }
 
-    pub fn deinit(self: @This()) void {
+    pub fn deinit(self: *const PooledDataManager) void {
         for (self._pool.items) |element| {
             releaseItem(self, element);
         }
@@ -67,7 +67,7 @@ pub const PooledDataManager = struct {
         }
     }
 
-    fn releaseItem(self: *PooledDataManager, item: *PooledData) void {
+    fn releaseItem(self: *const PooledDataManager, item: *PooledData) void {
         self._allocator.free(item.data);
         item._ref_count = 0;
         self._allocator.destroy(item);

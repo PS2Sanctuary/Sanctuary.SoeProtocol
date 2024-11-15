@@ -23,17 +23,19 @@ pub fn main() !void {
         .on_session_closed = AppDataHandler.onSessionClosed,
         .on_session_opened = AppDataHandler.onSessionOpened,
     };
-    const data_pool = pooling.PooledDataManager.init(
+    var data_pool = pooling.PooledDataManager.init(
         allocator,
         512,
         5192,
     );
+    defer data_pool.deinit();
     var handler: SoeSocketHandler = try SoeSocketHandler.init(
         allocator,
         &session_params,
         &app_params,
         data_pool,
     );
+    defer handler.deinit();
 
     const bind_addr = try std.net.Address.parseIp("127.0.0.1", 0);
     try handler.bind(bind_addr);
@@ -43,6 +45,10 @@ pub fn main() !void {
     while (true) {
         std.Thread.sleep(1 * std.time.ns_per_ms);
         try handler.runTick();
+    }
+
+    if (gpa.deinit() == .leak) {
+        @panic("WARNING: Memory leaks detected");
     }
 }
 

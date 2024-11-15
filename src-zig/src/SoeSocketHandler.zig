@@ -47,9 +47,9 @@ pub fn deinit(self: *SoeSocketHandler) void {
     self._allocator.free(self._recv_buffer);
 
     // Free all session connections
-    const iterator = self._connections.valueIterator();
-    for (0..iterator.len) |i| {
-        iterator.items[i].deinit();
+    var iterator = self._connections.valueIterator();
+    while (iterator.next()) |element| {
+        element.*.deinit();
     }
     self._connections.deinit();
 }
@@ -60,26 +60,22 @@ pub fn bind(self: *SoeSocketHandler, endpoint: std.net.Address) !void {
 }
 
 pub fn connect(self: *SoeSocketHandler, remote: std.net.Address) !*SoeSessionHandler {
-    return try self.spawnSessionHandler(remote, .client);
+    return try self.createSessionHandler(remote, .client);
 }
 
 pub fn runTick(self: *SoeSocketHandler) !void {
     try self.processOneFromSocket();
 
-    const iterator = self._connections.valueIterator();
-    for (0..iterator.len) |i| {
-        var conn = iterator.items[i];
+    var iterator = self._connections.valueIterator();
+    while (iterator.next()) |entry| {
+        var conn = entry.*;
 
         if (conn.termination_reason != .none) {
             _ = self._connections.remove(conn.remote.any);
         } else {
             conn.runTick() catch |err| {
                 std.debug.print("Failed to run tick of session handler with error {any}", .{err});
-                conn.terminateSession(.application_released, true, false) catch {
-                    // This is fine. We're getting rid of it anyway
-                };
-                _ = self._connections.remove(conn.remote.any);
-                conn.deinit();
+                self.destroySession(conn);
             };
         }
     }
@@ -104,21 +100,17 @@ fn processOneFromSocket(self: *SoeSocketHandler) !void {
 
         if (conn == null) {
             // TODO: Check for remap request
-            conn = try self.spawnSessionHandler(result.sender, .server);
+            conn = try self.createSessionHandler(result.sender, .server);
         }
 
         conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
             std.debug.print("Failed to run tick of session handler with error {any}", .{err});
-            conn.?.terminateSession(.application_released, true, false) catch {
-                // This is fine. We're getting rid of it anyway
-            };
-            _ = self._connections.remove(conn.?.remote.any);
-            conn.?.deinit();
+            self.destroySession(conn.?);
         };
     }
 }
 
-fn spawnSessionHandler(
+fn createSessionHandler(
     self: *SoeSocketHandler,
     remote: std.net.Address,
     mode: SoeSessionHandler.SessionMode,
@@ -138,4 +130,13 @@ fn spawnSessionHandler(
     try self._connections.put(remote.any, handler);
 
     return handler;
+}
+
+fn destroySession(self: *SoeSocketHandler, session: *SoeSessionHandler) void {
+    session.terminateSession(.application_released, true, false) catch {
+        // This is fine. We're getting rid of it anyway
+    };
+
+    _ = self._connections.remove(session.remote.any);
+    session.deinit();
 }
