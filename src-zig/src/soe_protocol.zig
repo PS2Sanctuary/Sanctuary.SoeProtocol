@@ -81,7 +81,7 @@ pub const DisconnectReason = enum(u16) {
 /// Bundles parameters used to control a session.
 pub const SessionParams = struct {
     /// The application protocol being proxied by this session.
-    application_protocol: []const u8 = undefined,
+    application_protocol: [:0]const u8 = undefined,
     /// The maximum length of a UDP packet that this party can send or receive.
     udp_length: u32 = DEFAULT_UDP_LENGTH,
     /// The maximum length of a UDP packet that the other party can send or receive.

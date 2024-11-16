@@ -198,7 +198,7 @@ pub fn terminateSession(
 
 /// Sends a session request to the remote. The underlying network writer must be connected,
 /// and the handler must be in client mode, and ready for negotiation.
-fn sendSessionRequest(self: *SoeSessionHandler) void {
+pub fn sendSessionRequest(self: *SoeSessionHandler) !void {
     if (self.state != SessionState.negotiating) {
         std.debug.panic("Can only send a session request while in the negotiating state", .{});
     }
@@ -207,7 +207,7 @@ fn sendSessionRequest(self: *SoeSessionHandler) void {
         std.debug.panic("Can only send a session request while in client mode", .{});
     }
 
-    const session_id: u32 = std.Random.DefaultPrng.random().int(u32);
+    const session_id: u32 = @truncate(_random.next());
     const sreq = soe_packets.SessionRequest{
         .application_protocol = self._session_params.application_protocol,
         .session_id = session_id,
@@ -221,9 +221,10 @@ fn sendSessionRequest(self: *SoeSessionHandler) void {
         std.debug.panic("The application_protocol string is too long", .{});
     }
 
-    var buffer: [packet_size]u8 = undefined;
+    const buffer = try self._allocator.alloc(u8, packet_size);
+    defer self._allocator.free(buffer);
     sreq.serialize(buffer, true);
-    self._parent.sendSessionData(self, &buffer);
+    _ = try self._parent.sendSessionData(self, buffer);
 }
 
 fn handleContextlessPacket(self: *SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet: []u8) !void {

@@ -142,7 +142,7 @@ pub const SessionRequest = struct {
         };
     }
 
-    pub fn serialize(self: @This(), buffer: []u8, include_op_code: bool) void {
+    pub fn serialize(self: *const SessionRequest, buffer: []u8, include_op_code: bool) void {
         var writer = BinaryWriter.init(buffer);
 
         if (include_op_code) {
@@ -155,7 +155,7 @@ pub const SessionRequest = struct {
         writer.writeStringNullTerminated(self.application_protocol);
     }
 
-    pub fn getSize(self: *SessionRequest) usize {
+    pub fn getSize(self: *const SessionRequest) usize {
         return MIN_SIZE + self.application_protocol.len;
     }
 };

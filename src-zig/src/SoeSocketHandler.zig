@@ -136,6 +136,7 @@ fn createSessionHandler(
     );
 
     try self._connections.put(remote.any, handler);
+    try handler.sendSessionRequest();
 
     return handler;
 }
