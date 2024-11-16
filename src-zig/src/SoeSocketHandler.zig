@@ -36,7 +36,7 @@ pub fn init(
         ._app_params = app_params,
         ._data_pool = data_pool,
         ._socket = try udp_socket.UdpSocket.init(max_socket_len),
-        ._recv_buffer = try allocator.alloc(u8, @intCast(session_params.remote_udp_length)),
+        ._recv_buffer = try allocator.alloc(u8, @intCast(session_params.udp_length * 32)),
         ._connections = std.AutoHashMap(std.posix.sockaddr, *SoeSessionHandler).init(allocator),
     };
 }
@@ -63,8 +63,10 @@ pub fn connect(self: *SoeSocketHandler, remote: std.net.Address) !*SoeSessionHan
     return try self.createSessionHandler(remote, .client);
 }
 
-pub fn runTick(self: *SoeSocketHandler) !void {
-    try self.processOneFromSocket();
+/// Runs a tick of operations for the `SoeSocketHandler`.
+/// Returns `true` if another tick must be run as soon as possible.
+pub fn runTick(self: *SoeSocketHandler) !bool {
+    const processed_one = try self.processOneFromSocket();
 
     var iterator = self._connections.valueIterator();
     while (iterator.next()) |entry| {
@@ -79,6 +81,8 @@ pub fn runTick(self: *SoeSocketHandler) !void {
             };
         }
     }
+
+    return processed_one;
 }
 
 /// Sends data to the remote endpoint of a session.
@@ -86,28 +90,32 @@ pub fn sendSessionData(self: *const SoeSocketHandler, session: *const SoeSession
     return try self._socket.sendTo(session.remote, data);
 }
 
-fn processOneFromSocket(self: *SoeSocketHandler) !void {
+fn processOneFromSocket(self: *SoeSocketHandler) !bool {
     const result = self._socket.receiveFrom(self._recv_buffer) catch |err| {
         if (err == std.posix.RecvFromError.WouldBlock) {
-            return;
+            return false;
         } else {
             return err;
         }
     };
 
-    if (result.received_len > 0) {
-        var conn: ?*SoeSessionHandler = self._connections.get(result.sender.any);
-
-        if (conn == null) {
-            // TODO: Check for remap request
-            conn = try self.createSessionHandler(result.sender, .server);
-        }
-
-        conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
-            std.debug.print("Failed to run tick of session handler with error {any}", .{err});
-            self.destroySession(conn.?);
-        };
+    if (result.received_len <= 0) {
+        return false;
     }
+
+    var conn: ?*SoeSessionHandler = self._connections.get(result.sender.any);
+
+    if (conn == null) {
+        // TODO: Check for remap request
+        conn = try self.createSessionHandler(result.sender, .server);
+    }
+
+    conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
+        std.debug.print("Failed to run tick of session handler with error {any}", .{err});
+        self.destroySession(conn.?);
+    };
+
+    return true;
 }
 
 fn createSessionHandler(

@@ -43,8 +43,11 @@ pub fn main() !void {
     _ = try handler.connect(address);
 
     while (true) {
-        std.Thread.sleep(1 * std.time.ns_per_ms);
-        try handler.runTick();
+        const needs_new_tick = try handler.runTick();
+
+        if (!needs_new_tick) {
+            std.Thread.sleep(1 * std.time.ns_per_ms);
+        }
     }
 
     if (gpa.deinit() == .leak) {
