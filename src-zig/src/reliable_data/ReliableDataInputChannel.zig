@@ -129,6 +129,9 @@ pub fn handleReliableData(self: *ReliableDataInputChannel, data: []u8) !void {
     }
 
     self.processData(my_data);
+    // We've now processed another packet, so we can increment the window
+    self._window_start_sequence += 1;
+
     try self.consumeStashedDataFragments();
 }
 
@@ -143,6 +146,8 @@ pub fn handleReliableDataFragment(self: *ReliableDataInputChannel, data: []u8) !
     // At this point we know this fragment can be written directly to the buffer
     // as it is next in the sequence.
     try self.writeImmediateFragmentToBuffer(my_data);
+    // We've now processed another packet, so we can increment the window
+    self._window_start_sequence += 1;
 
     // Attempt to process the current buffer now, as the stashed fragments may belong to a new buffer
     // consumeStashedDataFragments will attempt to process the current buffer as it releases stashes
