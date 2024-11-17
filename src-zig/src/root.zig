@@ -1,6 +1,7 @@
 const ApplicationParams = @import("./soe_protocol.zig").ApplicationParams;
 const pooling = @import("./pooling.zig");
 const soe_protocol = @import("./soe_protocol.zig");
+const SoeSessionHandler = @import("./SoeSessionHandler.zig");
 const SoeSocketHandler = @import("./SoeSocketHandler.zig");
 const std = @import("std");
 const zlib = @cImport({
@@ -56,18 +57,30 @@ pub fn main() !void {
 }
 
 const AppDataHandler = struct {
-    pub fn onSessionOpened(self: *anyopaque) void {
+    count: i32 = 0,
+
+    pub fn onSessionOpened(self: *anyopaque, session: *const SoeSessionHandler) void {
         _ = self;
         std.debug.print("Session Opened!\n", .{});
+        session.sendHeartbeat() catch |err| {
+            std.debug.print("failed to send heartbeat with error {any}", .{err});
+        };
     }
 
-    pub fn onSessionClosed(self: *anyopaque, reason: soe_protocol.DisconnectReason) void {
+    pub fn onSessionClosed(
+        self: *anyopaque,
+        session: *const SoeSessionHandler,
+        reason: soe_protocol.DisconnectReason,
+    ) void {
         _ = self;
+        _ = session;
         std.debug.print("Session closed with reason {}!\n", .{reason});
     }
 
-    pub fn receiveData(ptr: *anyopaque, data: []const u8) void {
-        _ = ptr;
-        std.debug.print("Received data {s}\n", .{data});
+    pub fn receiveData(ptr: *anyopaque, session: *const SoeSessionHandler, data: []const u8) void {
+        const self: *AppDataHandler = @ptrCast(@alignCast(ptr));
+        _ = session;
+        std.debug.print("[{d}] Received data {s}\n", .{ self.count, data });
+        self.count += 1;
     }
 };

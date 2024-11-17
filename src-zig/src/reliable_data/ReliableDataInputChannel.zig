@@ -330,7 +330,7 @@ fn decryptAndCallHandler(self: *ReliableDataInputChannel, data: []u8) void {
     }
 
     self.input_stats.total_received_bytes += my_data.len;
-    self._app_params.callHandleAppData(my_data);
+    self._app_params.callHandleAppData(self._session_handler, my_data);
 }
 
 const InputStats = struct {
@@ -526,7 +526,8 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(u8, data_1[4..] ++ data_2, channel._current_buffer.?);
     }
 
-    fn receiveData(ptr: *anyopaque, data: []const u8) void {
+    fn receiveData(ptr: *anyopaque, session: *const SoeSessionHandler, data: []const u8) void {
+        _ = session;
         const self: *tests = @ptrCast(@alignCast(ptr));
         self.last_received_data = data;
         self.received_data_queue.append(data) catch @panic("Failed to add to queue");

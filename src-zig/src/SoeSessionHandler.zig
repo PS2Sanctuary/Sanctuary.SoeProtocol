@@ -102,7 +102,7 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
     };
 
     if (self.state == SessionState.waiting_on_client_to_open_session) {
-        self._app_params.callOnSessionOpened();
+        self._app_params.callOnSessionOpened(self);
         self.state = SessionState.running;
     }
 
@@ -189,12 +189,12 @@ pub fn terminateSession(
 
     self.state = SessionState.terminated;
     self.terminated_by_remote = terminated_by_remote;
-    self._app_params.callOnSessionClosed(reason);
+    self._app_params.callOnSessionClosed(self, reason);
 
     // Our parent socket handler should remove us during its tick loop
 }
 
-pub fn sendHeartbeat(self: *SoeSessionHandler) !void {
+pub fn sendHeartbeat(self: *const SoeSessionHandler) !void {
     try self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, &[0]u8{});
 }
 
@@ -309,7 +309,7 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
     }
 
     self.state = SessionState.running;
-    self._app_params.callOnSessionOpened();
+    self._app_params.callOnSessionOpened(self);
 }
 
 // ===== End Contextless Packet Handling =====
