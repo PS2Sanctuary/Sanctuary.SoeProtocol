@@ -58,16 +58,16 @@ pub fn main() !void {
 const AppDataHandler = struct {
     pub fn onSessionOpened(self: *anyopaque) void {
         _ = self;
-        std.debug.print("Session Opened!", .{});
+        std.debug.print("Session Opened!\n", .{});
     }
 
     pub fn onSessionClosed(self: *anyopaque, reason: soe_protocol.DisconnectReason) void {
         _ = self;
-        std.debug.print("Session closed with reason {}!", .{reason});
+        std.debug.print("Session closed with reason {}!\n", .{reason});
     }
 
     pub fn receiveData(ptr: *anyopaque, data: []const u8) void {
         _ = ptr;
-        std.debug.print("Received data {s}", .{data});
+        std.debug.print("Received data {s}\n", .{data});
     }
 };

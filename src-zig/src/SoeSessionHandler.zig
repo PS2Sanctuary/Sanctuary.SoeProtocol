@@ -194,6 +194,10 @@ pub fn terminateSession(
     // Our parent socket handler should remove us during its tick loop
 }
 
+pub fn sendHeartbeat(self: *SoeSessionHandler) !void {
+    try self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, &[0]u8{});
+}
+
 // ===== Start Contextless Packet Handling =====
 
 /// Sends a session request to the remote. The underlying network writer must be connected,
@@ -403,7 +407,7 @@ fn sendHeartbeatIfRequired(self: *SoeSessionHandler) !void {
         now.since(self._last_received_packet_tick) > self._session_params.heartbeat_after_ns;
 
     if (maySendHeartbeat) {
-        try self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, &[0]u8{});
+        try self.sendHeartbeat();
     }
 }
 
