@@ -63,7 +63,7 @@ const AppDataHandler = struct {
         _ = self;
         std.debug.print("Session Opened!\n", .{});
         session.sendHeartbeat() catch |err| {
-            std.debug.print("failed to send heartbeat with error {any}", .{err});
+            std.debug.print("failed to send heartbeat with error {}", .{err});
         };
     }
 
@@ -73,8 +73,13 @@ const AppDataHandler = struct {
         reason: soe_protocol.DisconnectReason,
     ) void {
         _ = self;
-        _ = session;
+        const data_input_stats = session.getDataInputStats();
         std.debug.print("Session closed with reason {}!\n", .{reason});
+        std.debug.print("- Total received data: {d}\n", .{data_input_stats.total_received_data});
+        std.debug.print("- Acknowledge packets sent: {d}\n", .{data_input_stats.acknowledge_count});
+        std.debug.print("- Duplicate data received: {d}\n", .{data_input_stats.duplicate_count});
+        std.debug.print("- Out-of-order data received: {d}\n", .{data_input_stats.out_of_order_count});
+        std.debug.print("- Total received bytes: {d}\n", .{data_input_stats.total_received_bytes});
     }
 
     pub fn receiveData(ptr: *anyopaque, session: *const SoeSessionHandler, data: []const u8) void {

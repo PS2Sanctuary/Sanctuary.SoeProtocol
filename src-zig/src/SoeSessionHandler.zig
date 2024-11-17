@@ -198,6 +198,10 @@ pub fn sendHeartbeat(self: *const SoeSessionHandler) !void {
     try self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, &[0]u8{});
 }
 
+pub fn getDataInputStats(self: *const SoeSessionHandler) ReliableDataInputChannel.InputStats {
+    return self._data_input_channel.input_stats;
+}
+
 // ===== Start Contextless Packet Handling =====
 
 /// Sends a session request to the remote. The underlying network writer must be connected,

@@ -338,7 +338,7 @@ fn decryptAndCallHandler(self: *ReliableDataInputChannel, data: []u8) void {
     self._app_params.callHandleAppData(self._session_handler, my_data);
 }
 
-const InputStats = struct {
+pub const InputStats = struct {
     /// The total number of reliable data packets (incl. fragments) that have been
     /// received. This count includes duplicate packets.
     total_received_data: u32 = 0,
