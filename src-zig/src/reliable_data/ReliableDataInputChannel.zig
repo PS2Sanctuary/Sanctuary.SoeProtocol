@@ -13,7 +13,7 @@ const utils = @import("utils.zig");
 pub const ReliableDataInputChannel = @This();
 
 /// Gets the maximum length of time that data may go un-acknowledged.
-const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 30;
+const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 3;
 
 // === External private fields ===
 _session_handler: *const SoeSessionHandler,
@@ -108,9 +108,9 @@ pub fn runTick(self: *ReliableDataInputChannel) !void {
 
     const now = try std.time.Instant.now();
     // ack if:
-    // - at least 30ms have passed since the last ack time and
+    // - at least MAX_ACK_DELAY_NS have passed since the last ack time and
     // - our seq to ack is greater than the last ack seq + half of the ack window
-    const need_ack = now.since(self._last_ack_all_time) > 30 * std.time.ns_per_ms or
+    const need_ack = now.since(self._last_ack_all_time) > MAX_ACK_DELAY_NS or
         to_ack >= self._last_ack_all_seq + @divExact(self._session_params.data_ack_window, 2);
 
     if (need_ack) {
