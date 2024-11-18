@@ -45,9 +45,11 @@ pub fn hasMultiData(buffer: []const u8) bool {
 }
 
 /// Writes the `MULTI_DATA_INDICATOR` to a buffer.
-pub fn writeMultiDataIndicator(buffer: []u8) void {
+/// Returns the length of the indicator in bytes.
+pub fn writeMultiDataIndicator(buffer: []u8) usize {
     buffer[0] = MULTI_DATA_INDICATOR[0];
     buffer[1] = MULTI_DATA_INDICATOR[1];
+    return MULTI_DATA_INDICATOR.len;
 }
 
 test getTrueIncomingSequence {
