@@ -13,7 +13,7 @@ const utils = @import("utils.zig");
 pub const ReliableDataInputChannel = @This();
 
 /// Gets the maximum length of time that data may go un-acknowledged.
-const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 3;
+const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 2;
 
 // === External private fields ===
 _session_handler: *const SoeSessionHandler,

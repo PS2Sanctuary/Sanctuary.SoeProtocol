@@ -24,7 +24,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <summary>
     /// Gets the maximum length of time that data may go un-acknowledged.
     /// </summary>
-    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(3);
+    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(2);
 
     private readonly ISoeConnection _handler;
     private readonly SessionParameters _sessionParams;
