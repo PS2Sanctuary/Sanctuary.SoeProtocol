@@ -2,6 +2,7 @@ const binary_primitives = @import("./utils/binary_primitives.zig");
 const BinaryWriter = @import("./utils/BinaryWriter.zig");
 const pooling = @import("./pooling.zig");
 const ReliableDataInputChannel = @import("./reliable_data/ReliableDataInputChannel.zig");
+const ReliableDataOutputChannel = @import("./reliable_data/ReliableDataOutputChannel.zig");
 const soe_packets = @import("./soe_packets.zig");
 const soe_packet_utils = @import("./utils/soe_packet_utils.zig");
 const soe_protocol = @import("./soe_protocol.zig");
@@ -26,6 +27,7 @@ _data_pool: pooling.PooledDataManager,
 // Internal private fields
 _contextual_send_buffer: []u8,
 _data_input_channel: ReliableDataInputChannel,
+_data_output_channel: ReliableDataOutputChannel,
 _last_received_packet_tick: std.time.Instant,
 
 // Public fields
@@ -70,6 +72,16 @@ pub fn init(
     );
     session_handler._data_input_channel = input_channel;
 
+    const output_channel = try ReliableDataOutputChannel.init(
+        session_handler.calculateMaxDataLength(),
+        session_handler,
+        allocator,
+        session_params,
+        app_params,
+        data_pool,
+    );
+    session_handler._data_output_channel = output_channel;
+
     return session_handler;
 }
 
@@ -88,6 +100,7 @@ pub fn runTick(self: *SoeSessionHandler) !void {
     }
 
     try self._data_input_channel.runTick();
+    try self._data_output_channel.runTick();
 }
 
 pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
@@ -173,7 +186,9 @@ pub fn terminateSession(
     self.termination_reason = reason;
 
     // Naive flush of the output channel
-    // TODO: _dataOutputChannel.RunTick(CancellationToken.None);
+    // TODO: we should implement a proper flush method, and only run it
+    // in cases where we can reasonably determine this is a 'safe' termination
+    self._data_output_channel.runTick();
 
     if (notify_remote and self.state == SessionState.running) {
         const disconnect = soe_packets.Disconnect{ .session_id = self.session_id, .reason = reason };
@@ -200,6 +215,10 @@ pub fn sendHeartbeat(self: *const SoeSessionHandler) !void {
 
 pub fn getDataInputStats(self: *const SoeSessionHandler) ReliableDataInputChannel.InputStats {
     return self._data_input_channel.input_stats;
+}
+
+pub fn getDataOutputStats(self: *const SoeSessionHandler) ReliableDataOutputChannel.OutputStats {
+    return self._data_output_channel.output_stats;
 }
 
 // ===== Start Contextless Packet Handling =====
@@ -270,7 +289,7 @@ fn handleSessionRequest(self: *SoeSessionHandler, packet: []u8) !void {
     self._session_params.crc_length = soe_protocol.CRC_LENGTH;
     self._session_params.crc_seed = @truncate(_random.next());
 
-    // TODO: self._data_output_channel.setMaxDataLength(calculateMaxDataLength());
+    self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
 
     const sresp = soe_packets.SessionResponse{
         .session_id = self.session_id,
@@ -301,7 +320,7 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
     self._session_params.crc_seed = sresp.crc_seed;
     self._session_params.is_compression_enabled = sresp.is_compression_enabled;
     self.session_id = sresp.session_id;
-    // TODO: self._data_output_channel.setMaxDataLength(calculateMaxDataLength());
+    self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
 
     if (self.state != SessionState.negotiating) {
         try self.terminateSession(.connect_error, true, false);
@@ -314,6 +333,13 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
 
     self.state = SessionState.running;
     self._app_params.callOnSessionOpened(self);
+}
+
+fn calculateMaxDataLength(self: *const SoeSessionHandler) u32 {
+    return self._session_params.udp_length -
+        @sizeOf(soe_protocol.SoeOpCode) -
+        (if (self._session_params.is_compression_enabled) 1 else 0) -
+        self._session_params.crc_length;
 }
 
 // ===== End Contextless Packet Handling =====

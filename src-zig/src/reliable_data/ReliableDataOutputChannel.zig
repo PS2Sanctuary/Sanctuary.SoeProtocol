@@ -22,6 +22,8 @@ _data_pool: pooling.PooledDataManager,
 // === Internal private fields ===
 _rc4_state: ?Rc4State,
 _stash: []StashedItem,
+/// The next sequence number to output.
+_current_sequence: i64 = 0,
 /// The next reliable data sequence that we expect to receive.
 _window_start_sequence: i64 = 0,
 /// Stores the multi-buffer.
@@ -39,7 +41,7 @@ _last_ack_received_time: std.time.Instant,
 _last_data_submission_time: std.time.Instant,
 
 // === Public fields ===
-input_stats: OutputStats = OutputStats{},
+output_stats: OutputStats = OutputStats{},
 
 pub fn init(
     max_data_size: u16,
@@ -75,6 +77,7 @@ pub fn init(
         ._last_ack_received_time = try std.time.Instant.now(),
         ._multi_buffer = try allocator.alloc(u8, max_data_size),
         ._multi_buffer_position = utils.MULTI_DATA_INDICATOR.len,
+        ._last_data_submission_time = try std.time.Instant.now(),
     };
 
     channel._multi_buffer_position = utils.writeMultiDataIndicator(channel._multi_buffer);
@@ -92,6 +95,16 @@ pub fn deinit(self: *ReliableDataOutputChannel) void {
 
     self._allocator.free(self._stash);
     self._allocator.free(self._multi_buffer);
+}
+
+pub fn setMaxDataLength(self: *ReliableDataOutputChannel, max_data_len: u32) !void {
+    if (self._current_sequence != 0) {
+        @panic("The maximum length may not be changed after data has been enqueued");
+    }
+
+    self._allocator.free(self._multi_buffer);
+    self._multi_buffer = self._allocator.alloc(u8, max_data_len);
+    self._multi_buffer_position = utils.writeMultiDataIndicator(self._multi_buffer);
 }
 
 pub fn runTick(self: *ReliableDataOutputChannel) !void {
