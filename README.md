@@ -17,8 +17,8 @@ I have documented the SOE protocol to the extent that I understand it. This can 
 
 ## Implementation
 
-A simple C# implementation of the SOE protocol, including samples and tests, can be found under the
-`src` folder.
+C# and Zig implementations of the SOE protocol, including samples and tests, can be found under the
+respective `src-cs` and `src-zig` directories.
 
 ## Other References
 
