@@ -35,6 +35,8 @@ _expected_data_len: usize = 0,
 /// The last reliable data sequence that we acknowledged.
 _last_ack_all_seq: i64 = -1,
 _last_ack_received_time: std.time.Instant,
+/// The time that data was last put onto the stack
+_last_data_submission_time: std.time.Instant,
 
 // === Public fields ===
 input_stats: OutputStats = OutputStats{},
@@ -92,7 +94,17 @@ pub fn deinit(self: *ReliableDataOutputChannel) void {
     self._allocator.free(self._multi_buffer);
 }
 
+pub fn runTick(self: *ReliableDataOutputChannel) !void {
+    const now = try std.time.Instant.now();
+
+    if (now.since(self._last_data_submission_time) > 1 * std.time.ns_per_ms) {
+        // TODO: flush the multibuffer if it hasn't been written to in a while
+    }
+}
+
 pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
+    self._last_data_submission_time = try std.time.Instant.now();
+
     // First try to write to the multibuffer. If this succeeds then we don't need to do more
     if (self.putInMultiBuffer(data)) {
         return;
