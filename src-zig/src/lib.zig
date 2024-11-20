@@ -1,5 +1,6 @@
 pub const Rc4State = @import("reliable_data/Rc4State.zig");
 pub const ReliableDataInputChannel = @import("reliable_data/ReliableDataInputChannel.zig").tests;
+pub const ReliableDataOutputChannel = @import("reliable_data/ReliableDataOutputChannel.zig").tests;
 pub const reliable_data_utils = @import("reliable_data/utils.zig");
 pub const binary_primitives = @import("utils/binary_primitives.zig");
 pub const BinaryReader = @import("utils/BinaryReader.zig");

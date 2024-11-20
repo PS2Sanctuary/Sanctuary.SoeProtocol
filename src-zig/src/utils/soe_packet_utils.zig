@@ -129,7 +129,7 @@ pub fn readVariableLength(source: []const u8, offset: *usize) u32 {
     return value;
 }
 
-pub fn getVariableLengthSize(length: u32) comptime_int {
+pub fn getVariableLengthSize(length: u32) u3 {
     if (length < 0xFF) {
         return 1;
     } else if (length < 0xFFFF) {

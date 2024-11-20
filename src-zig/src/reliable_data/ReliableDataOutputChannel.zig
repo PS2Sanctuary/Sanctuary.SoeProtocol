@@ -72,6 +72,7 @@ pub fn init(
         ._stash = stash,
         ._last_ack_received_time = try std.time.Instant.now(),
         ._multi_buffer = try allocator.alloc(u8, max_data_size),
+        ._multi_buffer_position = utils.MULTI_DATA_INDICATOR.len,
     };
 
     channel._multi_buffer_position = utils.writeMultiDataIndicator(channel._multi_buffer);
@@ -89,10 +90,6 @@ pub fn deinit(self: *ReliableDataOutputChannel) void {
 
     self._allocator.free(self._stash);
     self._allocator.free(self._multi_buffer);
-
-    if (self._current_buffer) |current_buffer| {
-        self._allocator.free(current_buffer);
-    }
 }
 
 pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
@@ -105,20 +102,31 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
 /// Attempts to put the given `data` into the multibuffer. If this could not
 /// be achieved then `false` is returned and the packet should be dispatched
 /// on its own.
-fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
-    const total_len = data.len + soe_packet_utils.getVariableLengthSize(data.len);
+fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) bool {
+    const total_len = data.len + soe_packet_utils.getVariableLengthSize(@intCast(data.len));
 
     if (total_len > self._multi_buffer.len - self._multi_buffer_position) {
         // TODO: flush the multi-buffer
         self._multi_buffer_position = utils.MULTI_DATA_INDICATOR.len;
+    }
+
+    // Now that we've flushed the buffer, check if we can fit again. If not, dispatch immediately
+    if (total_len > self._multi_buffer.len - self._multi_buffer_position) {
         return false;
     }
 
     // Write the length of the data into the multibuffer, passing a reference to the _multi_buffer_position to update
-    soe_packet_utils.writeVariableLength(self._multi_buffer, data.len, &self._multi_buffer_position);
+    soe_packet_utils.writeVariableLength(
+        self._multi_buffer,
+        @intCast(data.len),
+        &self._multi_buffer_position,
+    );
     // Copy the data into the multibuffer
-    @memcpy(self._multi_buffer[self._multi_buffer_position .. self._multi_buffer_position + data.len], data);
-    self._multi_buffer_position += total_len;
+    @memcpy(
+        self._multi_buffer[self._multi_buffer_position .. self._multi_buffer_position + data.len],
+        data,
+    );
+    self._multi_buffer_position += data.len;
 
     if (self._multi_buffer_position == self._multi_buffer.len) {
         // TODO: flush the multi buffer
@@ -143,4 +151,120 @@ pub const OutputStats = struct {
 const StashedItem = struct {
     data: ?*pooling.PooledData = null,
     is_fragment: bool = false,
+};
+
+// =====
+// BEGIN TESTS
+// =====
+
+pub const tests = struct {
+    session_params: soe_protocol.SessionParams,
+    app_params: *ApplicationParams,
+
+    fn init() !*tests {
+        const test_class = try std.testing.allocator.create(tests);
+        test_class.session_params = soe_protocol.SessionParams{};
+
+        test_class.app_params = try std.testing.allocator.create(ApplicationParams);
+        test_class.app_params.is_encryption_enabled = false;
+        test_class.app_params.initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 });
+
+        return test_class;
+    }
+
+    fn deinit(self: *tests) void {
+        std.testing.allocator.destroy(self.app_params);
+        std.testing.allocator.destroy(self);
+    }
+
+    test putInMultiBuffer {
+        var plain_data = [_]u8{ 0, 1, 2, 3, 4 };
+        const plain_data_var_len = soe_packet_utils.getVariableLengthSize(plain_data.len);
+
+        const test_class = try tests.init();
+        defer test_class.deinit();
+
+        var channel = try test_class.getChannel(15);
+        defer channel.deinit();
+
+        // Assert that the multi-data-indicator has been written to the multibuffer
+        try std.testing.expectEqual(utils.MULTI_DATA_INDICATOR.len, channel._multi_buffer_position);
+        try std.testing.expectEqualSlices(
+            u8,
+            &utils.MULTI_DATA_INDICATOR,
+            channel._multi_buffer[0..utils.MULTI_DATA_INDICATOR.len],
+        );
+
+        // Test a first successful write
+        var success = channel.putInMultiBuffer(&plain_data);
+        try std.testing.expect(success);
+        try std.testing.expectEqual(
+            utils.MULTI_DATA_INDICATOR.len + plain_data_var_len + plain_data.len,
+            channel._multi_buffer_position,
+        );
+        try std.testing.expectEqualSlices(
+            u8,
+            utils.MULTI_DATA_INDICATOR ++ &[_]u8{5} ++ &plain_data,
+            channel._multi_buffer[0..channel._multi_buffer_position],
+        );
+
+        // Test a sequential write that fits into the buffer
+        success = channel.putInMultiBuffer(&plain_data);
+        try std.testing.expect(success);
+        try std.testing.expectEqual(
+            utils.MULTI_DATA_INDICATOR.len + (plain_data_var_len + plain_data.len) * 2,
+            channel._multi_buffer_position,
+        );
+        try std.testing.expectEqualSlices(
+            u8,
+            utils.MULTI_DATA_INDICATOR ++ &[_]u8{5} ++ &plain_data ++ &[_]u8{5} ++ &plain_data,
+            channel._multi_buffer[0..channel._multi_buffer_position],
+        );
+
+        // Test a write which will consume two bytes (one for the length indicator). This will require the
+        // multibuffer to be flushed as it only has space for two more bytes. Check that this occurs
+        success = channel.putInMultiBuffer(&[_]u8{1});
+        try std.testing.expect(success);
+        try std.testing.expectEqual(
+            utils.MULTI_DATA_INDICATOR.len + 2,
+            channel._multi_buffer_position,
+        );
+        try std.testing.expectEqualSlices(
+            u8,
+            &utils.MULTI_DATA_INDICATOR ++ &[_]u8{ 1, 1 },
+            channel._multi_buffer[0..channel._multi_buffer_position],
+        );
+        // TODO: Test we got a good flush
+
+        // Test a write which will fill the entire buffer without overflowing. We should get a single flush
+        // Our MB should be a pos 4 as of the last test, and our buffer is 15. Leaving 1 for the length indicator,
+        // this means our data here should have 10 bytes
+        success = channel.putInMultiBuffer(&[_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
+        try std.testing.expect(success);
+        try std.testing.expectEqual(
+            utils.MULTI_DATA_INDICATOR.len,
+            channel._multi_buffer_position,
+        );
+        try std.testing.expectEqualSlices(
+            u8,
+            &utils.MULTI_DATA_INDICATOR,
+            channel._multi_buffer[0..channel._multi_buffer_position],
+        );
+        // TODO: Test we got a good flush
+    }
+
+    fn getChannel(self: tests, max_data_size: u16) !ReliableDataOutputChannel {
+        return try ReliableDataOutputChannel.init(
+            max_data_size,
+            undefined,
+            std.testing.allocator,
+            &self.session_params,
+            self.app_params,
+            pooling.PooledDataManager.init(
+                std.testing.allocator,
+                self.session_params.udp_length,
+                max_data_size,
+            ),
+        );
+    }
 };

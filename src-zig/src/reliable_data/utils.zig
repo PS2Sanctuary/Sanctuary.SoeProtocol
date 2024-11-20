@@ -85,6 +85,11 @@ test hasMultiData {
 
 test writeMultiDataIndicator {
     var data = std.mem.zeroes([4]u8);
-    writeMultiDataIndicator(&data);
-    try std.testing.expectEqualSlices(u8, MULTI_DATA_INDICATOR ++ &[_]u8{ 0x00, 0x00 }, &data);
+    const written = writeMultiDataIndicator(&data);
+    try std.testing.expectEqualSlices(
+        u8,
+        MULTI_DATA_INDICATOR ++ &[_]u8{ 0x00, 0x00 },
+        &data,
+    );
+    try std.testing.expectEqual(MULTI_DATA_INDICATOR.len, written);
 }
