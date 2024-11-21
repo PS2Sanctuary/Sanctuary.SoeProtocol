@@ -4,13 +4,14 @@ The SOE protocol is a UDP transport layer for the networking traffic of many gam
 Sony Online Entertainment, newer examples of which include Free Realms, H1Z1, Landmark and PlanetSide 2.
 
 The protocol can be thought of, in essence, as a stripped-back version of TCP. It offers basic
-sessions, packet verification (CRC32) with optional compression (zlib), and reliable/ordered
-transmission of data, with optional encryption (RC4).
+sessions, packet verification (CRC32), optional compression (zlib), reliable/ordered
+transmission of data, and optional encryption (RC4).
 
 This documentation covers version **3** of the SOE protocol, using 2022 versions of PlanetSide 2
 as a reference.
 
-> **Warning**: this documentation is reverse engineered. As such, it may be incomplete and/or
+> [!Warning]
+> This documentation is reverse engineered. As such, it may be incomplete and/or
 > incorrect, and is not necessarily applicable to other games that use the SOE protocol.
 
 ## Structural Overview
