@@ -30,6 +30,8 @@ _window_start_sequence: i64 = 0,
 _multi_buffer: []u8,
 /// The current position into the multi-buffer that we have reached
 _multi_buffer_position: usize,
+/// The number of packets that have been written to the current multibuffer
+_multi_buffer_count: i8 = 0,
 /// The current length of the data that has been received into the `_current_buffer`.
 _running_data_len: usize = 0,
 /// The expected length of the data that should be received into the `_current_buffer`.
@@ -111,7 +113,7 @@ pub fn runTick(self: *ReliableDataOutputChannel) !void {
     const now = try std.time.Instant.now();
 
     if (now.since(self._last_data_submission_time) > 1 * std.time.ns_per_ms) {
-        // TODO: flush the multibuffer if it hasn't been written to in a while
+        self.flushMultiBuffer();
     }
 }
 
@@ -131,8 +133,7 @@ fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) bool {
     const total_len = data.len + soe_packet_utils.getVariableLengthSize(@intCast(data.len));
 
     if (total_len > self._multi_buffer.len - self._multi_buffer_position) {
-        // TODO: flush the multi-buffer
-        self._multi_buffer_position = utils.MULTI_DATA_INDICATOR.len;
+        self.flushMultiBuffer();
     }
 
     // Now that we've flushed the buffer, check if we can fit again. If not, dispatch immediately
@@ -152,13 +153,20 @@ fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) bool {
         data,
     );
     self._multi_buffer_position += data.len;
+    self._multi_buffer_count += 1;
 
     if (self._multi_buffer_position == self._multi_buffer.len) {
-        // TODO: flush the multi buffer
-        self._multi_buffer_position = utils.MULTI_DATA_INDICATOR.len;
+        self.flushMultiBuffer();
     }
 
     return true;
+}
+
+fn flushMultiBuffer(self: *ReliableDataOutputChannel) void {
+    // TODO: If there is only a single packet in the multibuffer, then send it as a fragment
+
+    self._multi_buffer_position = utils.MULTI_DATA_INDICATOR.len;
+    self._multi_buffer_count = 0;
 }
 
 pub const OutputStats = struct {
