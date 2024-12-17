@@ -100,12 +100,13 @@ pub const PooledData = struct {
         }
     }
 
-    pub fn storeData(self: @This(), data: []u8) void {
+    /// Stores the given `data` into the pool item, and sets the `data_len` field appropriately.
+    pub fn storeData(self: *PooledData, data: []u8) void {
         if (data.len > self.data.len) {
             @panic("Data is too long to store");
         }
 
-        @memcpy(self.data, data);
+        @memcpy(self.data[0..data.len], data);
         self.data_len = data.len;
     }
 
