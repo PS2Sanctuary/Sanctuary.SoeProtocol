@@ -209,7 +209,7 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
     // Create some pooled data and copy our packet in
     var pool_item = try self._data_pool.get();
     pool_item.takeRef();
-    @memcpy(pool_item.data, data.*);
+    pool_item.storeData(data.*);
 
     // Update our stash item
     stash_item.is_fragment = is_fragment;
