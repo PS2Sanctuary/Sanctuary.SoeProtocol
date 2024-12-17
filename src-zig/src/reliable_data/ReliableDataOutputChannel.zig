@@ -26,6 +26,8 @@ _stash: []StashedItem,
 _current_sequence: i64 = 0,
 /// The next reliable data sequence that we expect to receive.
 _window_start_sequence: i64 = 0,
+/// The maximum length of reliable data that may be sent.
+_max_data_len: u32 = 0,
 /// Stores the multi-buffer.
 _multi_buffer: []u8,
 /// The current position into the multi-buffer that we have reached
@@ -46,7 +48,7 @@ _last_data_submission_time: std.time.Instant,
 output_stats: OutputStats = OutputStats{},
 
 pub fn init(
-    max_data_size: u16,
+    max_data_size: u32,
     session_handler: *const SoeSessionHandler,
     allocator: std.mem.Allocator,
     session_params: *const soe_protocol.SessionParams,
@@ -77,6 +79,7 @@ pub fn init(
         ._rc4_state = my_rc4_state,
         ._stash = stash,
         ._last_ack_received_time = try std.time.Instant.now(),
+        ._max_data_len = max_data_size,
         ._multi_buffer = try allocator.alloc(u8, max_data_size),
         ._multi_buffer_position = utils.MULTI_DATA_INDICATOR.len,
         ._last_data_submission_time = try std.time.Instant.now(),
@@ -105,8 +108,9 @@ pub fn setMaxDataLength(self: *ReliableDataOutputChannel, max_data_len: u32) !vo
     }
 
     self._allocator.free(self._multi_buffer);
-    self._multi_buffer = self._allocator.alloc(u8, max_data_len);
+    self._multi_buffer = try self._allocator.alloc(u8, max_data_len);
     self._multi_buffer_position = utils.writeMultiDataIndicator(self._multi_buffer);
+    self._max_data_len = max_data_len;
 }
 
 pub fn runTick(self: *ReliableDataOutputChannel) !void {

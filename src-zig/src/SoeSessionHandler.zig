@@ -37,6 +37,10 @@ state: SessionState,
 session_id: u32 = 0,
 termination_reason: soe_protocol.DisconnectReason = .none,
 terminated_by_remote: bool = false,
+/// The number of bytes required to store the header of a contextual packet
+contextual_header_len: u8,
+/// The number of bytes required to store the trailer of a contextual packet.
+contextual_trailer_len: u8,
 
 pub fn init(
     mode: SessionMode,
@@ -62,6 +66,10 @@ pub fn init(
     session_handler.termination_reason = .none;
     session_handler.terminated_by_remote = false;
     session_handler.session_id = 0;
+
+    session_handler.contextual_header_len = @as(u8, @sizeOf(soe_protocol.SoeOpCode)) +
+        @intFromBool(session_params.is_compression_enabled);
+    session_handler.contextual_trailer_len = session_params.crc_length;
 
     const input_channel = try ReliableDataInputChannel.init(
         session_handler,
@@ -139,31 +147,44 @@ pub fn handlePacket(self: *SoeSessionHandler, packet: []u8) !void {
     }
 }
 
-/// Sends a contextual packet.\
+/// Sends data in a contextual packet. Header and trailer data will be appended to the data.\
 /// `op_code`: The OP code of the packet to send.\
 /// `packet_data`: The packet data, not including the OP code.
 pub fn sendContextualPacket(self: *const SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
-    const extra_bytes: u32 = @sizeOf(soe_protocol.SoeOpCode) +
-        @as(u32, @intFromBool(self._session_params.is_compression_enabled)) +
-        @as(u32, self._session_params.crc_length);
+    const total_len = packet_data.len + self.contextual_header_len + self.contextual_trailer_len;
 
-    if (packet_data.len + extra_bytes > self._session_params.remote_udp_length) {
-        std.debug.panic("packet_data is too long (max len: {d})", .{self._session_params.remote_udp_length - extra_bytes});
+    if (total_len > self._session_params.remote_udp_length) {
+        @panic("packet_data is too long");
     }
 
-    var writer = BinaryWriter.init(self._contextual_send_buffer);
+    const dest_buffer = self._contextual_send_buffer[self.contextual_header_len .. self.contextual_header_len + packet_data.len];
+    @memcpy(dest_buffer, packet_data);
+
+    return self.sendPresizedContextualPacket(op_code, self._contextual_send_buffer[0..total_len]);
+}
+
+/// Sends a contextual packet that has already had space for its extra bytes allocated. This means the `packet_data`
+/// will have padding at the start for an OP code, the compression indicator (if enabled) and at the end for the CRC bytes\
+/// `op_code`: The OP code of the packet to send.\
+/// `packet_data`: The packet data, not including the OP code.
+pub fn sendPresizedContextualPacket(self: *const SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
+    if (packet_data.len > self._session_params.remote_udp_length) {
+        std.debug.panic("packet_data is too long (max len: {d})", .{self._session_params.remote_udp_length});
+    }
+
+    var writer = BinaryWriter.init(packet_data);
 
     writer.writeU16BE(@intFromEnum(op_code));
     if (self._session_params.is_compression_enabled)
         writer.writeBool(false); // Compression is not implemented at the moment
-    writer.writeBytes(packet_data);
+    writer.offset = packet_data.len - self._session_params.crc_length;
     soe_packet_utils.appendCrc(
         &writer,
         self._session_params.crc_seed,
         self._session_params.crc_length,
     );
 
-    _ = self._parent.sendSessionData(self, writer.getConsumed()) catch |err| {
+    _ = self._parent.sendSessionData(self, packet_data) catch |err| {
         std.debug.panic("Failed to send contextual packet due to socket error: {any}", .{err});
     };
 }
@@ -188,7 +209,7 @@ pub fn terminateSession(
     // Naive flush of the output channel
     // TODO: we should implement a proper flush method, and only run it
     // in cases where we can reasonably determine this is a 'safe' termination
-    self._data_output_channel.runTick();
+    try self._data_output_channel.runTick();
 
     if (notify_remote and self.state == SessionState.running) {
         const disconnect = soe_packets.Disconnect{ .session_id = self.session_id, .reason = reason };
@@ -289,7 +310,7 @@ fn handleSessionRequest(self: *SoeSessionHandler, packet: []u8) !void {
     self._session_params.crc_length = soe_protocol.CRC_LENGTH;
     self._session_params.crc_seed = @truncate(_random.next());
 
-    self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
+    try self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
 
     const sresp = soe_packets.SessionResponse{
         .session_id = self.session_id,
@@ -320,7 +341,7 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
     self._session_params.crc_seed = sresp.crc_seed;
     self._session_params.is_compression_enabled = sresp.is_compression_enabled;
     self.session_id = sresp.session_id;
-    self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
+    try self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
 
     if (self.state != SessionState.negotiating) {
         try self.terminateSession(.connect_error, true, false);
@@ -338,7 +359,7 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
 fn calculateMaxDataLength(self: *const SoeSessionHandler) u32 {
     return self._session_params.udp_length -
         @sizeOf(soe_protocol.SoeOpCode) -
-        (if (self._session_params.is_compression_enabled) 1 else 0) -
+        @as(u1, (if (self._session_params.is_compression_enabled) 1 else 0)) -
         self._session_params.crc_length;
 }
 
