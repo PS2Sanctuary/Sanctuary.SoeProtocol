@@ -1,5 +1,6 @@
 const ApplicationParams = @import("../soe_protocol.zig").ApplicationParams;
 const binary_primitives = @import("../utils/binary_primitives.zig");
+const BinaryWriter = @import("../utils/BinaryWriter.zig");
 const pooling = @import("../pooling.zig");
 const Rc4State = @import("Rc4State.zig");
 const soe_packets = @import("../soe_packets.zig");
@@ -128,6 +129,34 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
     if (self.putInMultiBuffer(data)) {
         return;
     }
+
+    if (data.len > self._max_data_len) {
+        // TODO: We need to send in fragments
+    } else {
+        var pool_item = try self._data_pool.get();
+        pool_item.takeRef();
+
+        var writer = BinaryWriter.init(pool_item.data);
+        writer.advance(self._session_handler.contextual_header_len);
+        writer.writeBytes(data);
+        pool_item.data_len = writer.offset + self._session_handler.contextual_trailer_len;
+
+        // Check that this stash space hasn't been previously filled. We're running terribly behind
+        // if it has been
+        const stash_spot: usize = @intCast(@mod(self._current_sequence, self._session_params.max_queued_outgoing_data_packets));
+        var stash_item = self._stash[stash_spot];
+        if (stash_item.data != null) {
+            self.output_stats.dropped_packets += 1;
+            // TODO: How do we handle the fact that we're out of stash space?
+        }
+
+        // Replace the data in the stash
+        stash_item.data = pool_item;
+        stash_item.is_fragment = false;
+        self._stash[stash_spot] = stash_item;
+
+        self._current_sequence += 1;
+    }
 }
 
 /// Attempts to put the given `data` into the multibuffer. If this could not
@@ -183,6 +212,8 @@ pub const OutputStats = struct {
     total_sent_bytes: u64 = 0,
     /// The total number of receive acknowledgement packets (incl. ack all).
     total_received_acknowledgements: u32 = 0,
+    /// The number of packets that have been dropped because the stash was out of space.
+    dropped_packets: u32 = 0,
 };
 
 const StashedItem = struct {

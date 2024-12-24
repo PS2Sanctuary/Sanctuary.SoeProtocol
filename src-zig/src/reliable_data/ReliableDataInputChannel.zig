@@ -214,6 +214,7 @@ fn preprocessData(self: *ReliableDataInputChannel, data: *[]u8, is_fragment: boo
     // Update our stash item
     stash_item.is_fragment = is_fragment;
     stash_item.data = pool_item;
+    self._stash[stash_spot] = stash_item;
     return false;
 }
 

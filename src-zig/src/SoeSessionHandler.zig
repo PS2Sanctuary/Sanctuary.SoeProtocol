@@ -164,9 +164,10 @@ pub fn sendContextualPacket(self: *const SoeSessionHandler, op_code: soe_protoco
 }
 
 /// Sends a contextual packet that has already had space for its extra bytes allocated. This means the `packet_data`
-/// will have padding at the start for an OP code, the compression indicator (if enabled) and at the end for the CRC bytes\
+/// will have padding at the start for an OP code, the compression indicator (if enabled) and at the end for the CRC bytes.
+/// Use the `contextual_header_len` and `contextual_trailer_len` fields to allow for this space.\
 /// `op_code`: The OP code of the packet to send.\
-/// `packet_data`: The packet data, not including the OP code.
+/// `packet_data`: The packet data, with padding for the packet header and trailer.
 pub fn sendPresizedContextualPacket(self: *const SoeSessionHandler, op_code: soe_protocol.SoeOpCode, packet_data: []u8) !void {
     if (packet_data.len > self._session_params.remote_udp_length) {
         std.debug.panic("packet_data is too long (max len: {d})", .{self._session_params.remote_udp_length});
