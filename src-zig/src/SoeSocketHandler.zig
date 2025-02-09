@@ -13,7 +13,7 @@ pub const SoeSocketHandler = @This();
 _allocator: std.mem.Allocator,
 _session_params: *soe_protocol.SessionParams,
 _app_params: *const soe_protocol.ApplicationParams,
-_data_pool: pooling.PooledDataManager,
+_data_pool: *pooling.PooledDataManager,
 
 // Internal private fields
 _socket: udp_socket.UdpSocket,
@@ -26,7 +26,7 @@ pub fn init(
     allocator: std.mem.Allocator,
     session_params: *soe_protocol.SessionParams,
     app_params: *const soe_protocol.ApplicationParams,
-    data_pool: pooling.PooledDataManager,
+    data_pool: *pooling.PooledDataManager,
 ) !SoeSocketHandler {
     const max_socket_len: i32 = @as(i32, @intCast(@max(session_params.udp_length, session_params.remote_udp_length))) * 64;
 

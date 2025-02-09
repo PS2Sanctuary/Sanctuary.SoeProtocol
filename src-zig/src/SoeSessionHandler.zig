@@ -22,7 +22,7 @@ _parent: *SoeSocketHandler,
 _allocator: std.mem.Allocator,
 _session_params: *soe_protocol.SessionParams,
 _app_params: *const soe_protocol.ApplicationParams,
-_data_pool: pooling.PooledDataManager,
+_data_pool: *pooling.PooledDataManager,
 
 // Internal private fields
 _contextual_send_buffer: []u8,
@@ -49,7 +49,7 @@ pub fn init(
     allocator: std.mem.Allocator,
     session_params: *soe_protocol.SessionParams,
     app_params: *const soe_protocol.ApplicationParams,
-    data_pool: pooling.PooledDataManager,
+    data_pool: *pooling.PooledDataManager,
 ) !*SoeSessionHandler {
     const session_handler = try allocator.create(SoeSessionHandler);
     session_handler.mode = mode;
@@ -76,7 +76,7 @@ pub fn init(
         allocator,
         session_params,
         app_params,
-        data_pool,
+        data_pool.*,
     );
     session_handler._data_input_channel = input_channel;
 

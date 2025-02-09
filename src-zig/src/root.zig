@@ -13,6 +13,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     var app_data_handler = AppDataHandler{};
+
     var session_params: soe_protocol.SessionParams = .{
         .application_protocol = "Ping_1",
     };
@@ -24,17 +25,19 @@ pub fn main() !void {
         .on_session_closed = AppDataHandler.onSessionClosed,
         .on_session_opened = AppDataHandler.onSessionOpened,
     };
+
     var data_pool = pooling.PooledDataManager.init(
         allocator,
         512,
         5192,
     );
     defer data_pool.deinit();
+
     var handler: SoeSocketHandler = try SoeSocketHandler.init(
         allocator,
         &session_params,
         &app_params,
-        data_pool,
+        &data_pool,
     );
     defer handler.deinit();
 

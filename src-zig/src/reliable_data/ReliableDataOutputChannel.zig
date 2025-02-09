@@ -18,7 +18,7 @@ _session_handler: *const SoeSessionHandler,
 _allocator: std.mem.Allocator,
 _session_params: *const soe_protocol.SessionParams,
 _app_params: *const ApplicationParams,
-_data_pool: pooling.PooledDataManager,
+_data_pool: *pooling.PooledDataManager,
 
 // === Internal private fields ===
 _rc4_state: ?Rc4State,
@@ -52,7 +52,7 @@ pub fn init(
     allocator: std.mem.Allocator,
     session_params: *const soe_protocol.SessionParams,
     app_params: *const ApplicationParams,
-    data_pool: pooling.PooledDataManager,
+    data_pool: *pooling.PooledDataManager,
 ) !ReliableDataOutputChannel {
     // Take a copy of the RC4 state
     var my_rc4_state: ?Rc4State = null;
@@ -278,7 +278,7 @@ pub const tests = struct {
             std.testing.allocator,
             &test_class.session_params,
             test_class.app_params,
-            test_class.pool,
+            &test_class.pool,
         );
 
         return test_class;
