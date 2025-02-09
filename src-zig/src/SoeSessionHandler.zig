@@ -52,24 +52,23 @@ pub fn init(
     data_pool: *pooling.PooledDataManager,
 ) !*SoeSessionHandler {
     const session_handler = try allocator.create(SoeSessionHandler);
-    session_handler.mode = mode;
-    session_handler.remote = remote;
-    session_handler._parent = parent;
-    session_handler._allocator = allocator;
-    session_handler._session_params = session_params;
-    session_handler._app_params = app_params;
-    session_handler._data_pool = data_pool;
-    session_handler._contextual_send_buffer = try allocator.alloc(u8, @intCast(session_params.udp_length));
-    session_handler._data_input_channel = undefined;
-    session_handler._last_received_packet_tick = try std.time.Instant.now();
-    session_handler.state = SessionState.negotiating;
-    session_handler.termination_reason = .none;
-    session_handler.terminated_by_remote = false;
-    session_handler.session_id = 0;
-
-    session_handler.contextual_header_len = @as(u8, @sizeOf(soe_protocol.SoeOpCode)) +
-        @intFromBool(session_params.is_compression_enabled);
-    session_handler.contextual_trailer_len = session_params.crc_length;
+    session_handler.* = SoeSessionHandler{
+        ._allocator = allocator,
+        ._app_params = app_params,
+        ._contextual_send_buffer = try allocator.alloc(u8, @intCast(session_params.udp_length)),
+        ._data_input_channel = undefined,
+        ._data_output_channel = undefined,
+        ._data_pool = data_pool,
+        ._last_received_packet_tick = try std.time.Instant.now(),
+        ._parent = parent,
+        ._session_params = session_params,
+        .contextual_header_len = @as(u8, @sizeOf(soe_protocol.SoeOpCode)) +
+            @intFromBool(session_params.is_compression_enabled),
+        .contextual_trailer_len = session_params.crc_length,
+        .mode = mode,
+        .remote = remote,
+        .state = SessionState.negotiating,
+    };
 
     const input_channel = try ReliableDataInputChannel.init(
         session_handler,
