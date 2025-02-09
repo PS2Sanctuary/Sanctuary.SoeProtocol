@@ -253,7 +253,7 @@ pub const tests = struct {
     app_params: *ApplicationParams,
     pool: pooling.PooledDataManager,
     session_handler: *SoeSessionHandler,
-    channel: ReliableDataOutputChannel,
+    channel: *ReliableDataOutputChannel,
 
     fn init(max_data_size: u16) !*tests {
         const test_class = try std.testing.allocator.create(tests);
@@ -272,7 +272,8 @@ pub const tests = struct {
         test_class.session_handler = try std.testing.allocator.create(SoeSessionHandler);
         test_class.session_handler.contextual_header_len = 2;
 
-        test_class.channel = try ReliableDataOutputChannel.init(
+        test_class.channel = try std.testing.allocator.create(ReliableDataOutputChannel);
+        test_class.channel.* = try ReliableDataOutputChannel.init(
             max_data_size,
             test_class.session_handler,
             std.testing.allocator,
@@ -287,6 +288,7 @@ pub const tests = struct {
     fn deinit(self: *tests) void {
         self.channel.deinit();
 
+        std.testing.allocator.destroy(self.channel);
         std.testing.allocator.destroy(self.session_handler);
         std.testing.allocator.destroy(self.app_params);
 
