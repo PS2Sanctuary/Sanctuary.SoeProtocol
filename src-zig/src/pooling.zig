@@ -49,13 +49,15 @@ pub const PooledDataManager = struct {
         var new_item = try self._allocator.create(PooledData);
         new_item._manager = self;
         new_item.data = try self._allocator.alloc(u8, self.data_length);
-        new_item.takeRef();
+        new_item._ref_count = 0;
         try self._pool.append(new_item);
         return new_item;
     }
 
     /// Returns a `PooledData` instance to the pool. This method is called from `PooledData.releaseRef()`.
     fn put(self: *PooledDataManager, item: *PooledData) void {
+        std.debug.assert(item._ref_count == 0); // Ensure nothing is still using this data
+
         // Can we append to the pool without going over the max size?
         if (self._pool.items.len < self._max_pool_size) {
             self._pool.append(item) catch {
@@ -69,7 +71,6 @@ pub const PooledDataManager = struct {
 
     fn releaseItem(self: *const PooledDataManager, item: *PooledData) void {
         self._allocator.free(item.data);
-        item._ref_count = 0;
         self._allocator.destroy(item);
     }
 };
@@ -78,7 +79,7 @@ pub const PooledDataManager = struct {
 /// retrieve it through the `PooledDataManager` and ensure to call the `takeRef` and `releaseRef` methods.
 pub const PooledData = struct {
     _manager: *PooledDataManager,
-    _ref_count: i16,
+    _ref_count: i16 = 0,
 
     /// The data. Do not re-assign this field.
     data: []u8,
@@ -91,11 +92,12 @@ pub const PooledData = struct {
     }
 
     /// Indicates that the calling scope is releasing a reference to this `PooledData` instance.
+    /// If no references to this instance remain it will return itself to the pool.
     pub fn releaseRef(self: *PooledData) void {
+        std.debug.assert(self._ref_count > 0); // Ensure that consumers are calling addRef() and not doubly-releasing
         self._ref_count -= 1;
 
-        // It should just be the manager holding a ref on us. Let's return to the pool
-        if (self._ref_count == 1) {
+        if (self._ref_count == 0) {
             self._manager.put(self);
         }
     }
