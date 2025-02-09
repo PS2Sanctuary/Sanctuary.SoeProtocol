@@ -34,23 +34,21 @@ pub const PooledDataManager = struct {
 
     /// Get a `PooledData` instance.
     pub fn get(self: *PooledDataManager) !*PooledData {
-        // Lock while we try to retrieve from the pool. We don't want to return the same item
-        // to two callers at once
-        self._mutex.lock();
-        defer self._mutex.unlock();
 
-        // Attempt to retrieve an item from the pool
+        // Attempt to retrieve an item from the pool. Lock while doing so.
+        // We don't want to return the same item to two callers at once
+        self._mutex.lock();
         const item = self._pool.popOrNull();
         if (item) |actual| {
             return actual;
         }
+        self._mutex.unlock();
 
         // Couldn't get one. Make a new one and add it to the pool
         var new_item = try self._allocator.create(PooledData);
         new_item._manager = self;
         new_item.data = try self._allocator.alloc(u8, self.data_length);
         new_item._ref_count = 0;
-        try self._pool.append(new_item);
         return new_item;
     }
 
@@ -60,9 +58,11 @@ pub const PooledDataManager = struct {
 
         // Can we append to the pool without going over the max size?
         if (self._pool.items.len < self._max_pool_size) {
+            self._mutex.lock();
             self._pool.append(item) catch {
                 releaseItem(self, item);
             };
+            self._mutex.unlock();
         } else {
             // Otherwise, free the item
             releaseItem(self, item);
