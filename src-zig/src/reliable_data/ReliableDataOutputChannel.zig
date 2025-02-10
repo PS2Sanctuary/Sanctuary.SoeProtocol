@@ -321,7 +321,7 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(
             u8,
             &utils.MULTI_DATA_INDICATOR,
-            channel._multi_buffer.data[multi_start_index .. multi_start_index + utils.MULTI_DATA_INDICATOR.len],
+            channel._multi_buffer.getSlice()[multi_start_index..],
         );
 
         // Test a first successful write
@@ -334,7 +334,7 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(
             u8,
             utils.MULTI_DATA_INDICATOR ++ &[_]u8{5} ++ &plain_data,
-            channel._multi_buffer.data[multi_start_index..channel._multi_buffer.data_len],
+            channel._multi_buffer.getSlice()[multi_start_index..],
         );
 
         // Test a sequential write that fits into the buffer
@@ -347,7 +347,7 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(
             u8,
             utils.MULTI_DATA_INDICATOR ++ &[_]u8{5} ++ &plain_data ++ &[_]u8{5} ++ &plain_data,
-            channel._multi_buffer.data[multi_start_index..channel._multi_buffer.data_len],
+            channel._multi_buffer.getSlice()[multi_start_index..],
         );
 
         // Test a write which will consume two bytes (one for the length indicator). This will require the
@@ -361,7 +361,7 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(
             u8,
             &utils.MULTI_DATA_INDICATOR ++ &[_]u8{ 1, 1 },
-            channel._multi_buffer.data[multi_start_index..channel._multi_buffer.data_len],
+            channel._multi_buffer.getSlice()[multi_start_index..],
         );
         try std.testing.expectEqual(1, channel._current_sequence);
 
@@ -377,7 +377,7 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(
             u8,
             &utils.MULTI_DATA_INDICATOR,
-            channel._multi_buffer.data[multi_start_index..channel._multi_buffer.data_len],
+            channel._multi_buffer.getSlice()[multi_start_index..],
         );
         try std.testing.expectEqual(2, channel._current_sequence);
     }
