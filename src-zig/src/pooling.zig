@@ -19,7 +19,7 @@ pub const PooledDataManager = struct {
     ) PooledDataManager {
         return PooledDataManager{
             ._allocator = allocator,
-            ._pool = std.ArrayList(*PooledData).init(allocator),
+            ._pool = std.ArrayList(*PooledData).initCapacity(allocator, max_pool_size) catch unreachable,
             ._max_pool_size = max_pool_size,
             .data_length = data_length,
         };
@@ -142,6 +142,8 @@ pub const tests = struct {
             7,
             3,
         );
+        defer manager.deinit();
+
         try std.testing.expectEqual(7, manager.data_length);
         try std.testing.expectEqual(3, manager._max_pool_size);
         try std.testing.expectEqual(3, manager._pool.capacity);
@@ -149,6 +151,7 @@ pub const tests = struct {
 
     test "pool limits respected" {
         var manager = PooledDataManager.init(std.testing.allocator, 7, 2);
+        defer manager.deinit();
 
         const data_1 = try manager.get();
         const data_2 = try manager.get();

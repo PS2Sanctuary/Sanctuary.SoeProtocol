@@ -20,7 +20,7 @@ _session_handler: *const SoeSessionHandler,
 _allocator: std.mem.Allocator,
 _session_params: *const soe_protocol.SessionParams,
 _app_params: *const ApplicationParams,
-_data_pool: pooling.PooledDataManager,
+_data_pool: *pooling.PooledDataManager,
 
 // === Internal private fields ===
 _rc4_state: ?Rc4State,
@@ -46,7 +46,7 @@ pub fn init(
     allocator: std.mem.Allocator,
     session_params: *const soe_protocol.SessionParams,
     app_params: *const ApplicationParams,
-    data_pool: pooling.PooledDataManager,
+    data_pool: *pooling.PooledDataManager,
 ) !ReliableDataInputChannel {
     // Take a copy of the RC4 state
     var my_rc4_state: ?Rc4State = null;
@@ -366,6 +366,7 @@ pub const tests = struct {
     app_params: ApplicationParams,
     last_received_data: []const u8 = undefined,
     received_data_queue: std.ArrayList([]const u8),
+    pool: pooling.PooledDataManager,
 
     fn init() !*tests {
         const test_class = try std.testing.allocator.create(tests);
@@ -381,12 +382,18 @@ pub const tests = struct {
                 .on_session_opened = undefined,
             },
             .received_data_queue = std.ArrayList([]const u8).init(std.testing.allocator),
+            .pool = pooling.PooledDataManager.init(
+                std.testing.allocator,
+                512,
+                512,
+            ),
         };
 
         return test_class;
     }
 
     fn deinit(self: *tests) void {
+        self.pool.deinit();
         self.received_data_queue.deinit();
         std.testing.allocator.destroy(self);
     }
@@ -541,17 +548,13 @@ pub const tests = struct {
         self.received_data_queue.append(data) catch @panic("Failed to add to queue");
     }
 
-    fn getChannel(self: *const tests) !ReliableDataInputChannel {
+    fn getChannel(self: *tests) !ReliableDataInputChannel {
         return try ReliableDataInputChannel.init(
             undefined,
             std.testing.allocator,
             &self.session_params,
             &self.app_params,
-            pooling.PooledDataManager.init(
-                std.testing.allocator,
-                self.session_params.udp_length,
-                512,
-            ),
+            &self.pool,
         );
     }
 };
