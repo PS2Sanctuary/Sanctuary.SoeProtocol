@@ -39,6 +39,8 @@ pub const PooledDataManager = struct {
         self._mutex.lock();
         const item = self._pool.popOrNull();
         if (item) |actual| {
+            actual.data_start_idx = 0;
+            actual.data_end_idx = 0;
             return actual;
         }
         self._mutex.unlock();
