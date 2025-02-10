@@ -29,6 +29,8 @@ _current_sequence: i64 = 0,
 _window_start_sequence: i64 = 0,
 /// The maximum length of reliable data that may be sent.
 _max_data_len: u32 = 0,
+/// The maximum length of reliable data that may be stored in the `_multi_buffer`.
+_multi_max_data_len: u32 = 0,
 /// Stores the multi-buffer.
 _multi_buffer: *pooling.PooledData,
 /// The number of packets that have been written to the current multibuffer
@@ -78,10 +80,10 @@ pub fn init(
         ._rc4_state = my_rc4_state,
         ._stash = stash,
         ._last_ack_received_time = try std.time.Instant.now(),
-        ._max_data_len = max_data_size,
         ._multi_buffer = undefined,
         ._last_data_submission_time = try std.time.Instant.now(),
     };
+    try channel.setMaxDataLength(max_data_size);
 
     try channel.setNewMultiBuffer();
 
@@ -106,6 +108,9 @@ pub fn setMaxDataLength(self: *ReliableDataOutputChannel, max_data_len: u32) !vo
     }
 
     self._max_data_len = max_data_len;
+    // The multibuffer `data_len` includes the contextual packet header, but this is not part of the
+    // reliable data and hence doesn't contribute to the `_max_data_len` limit
+    self._multi_max_data_len = max_data_len + self._session_handler.contextual_header_len;
 }
 
 pub fn runTick(self: *ReliableDataOutputChannel) !void {
@@ -159,12 +164,12 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
 fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
     const total_len = data.len + soe_packet_utils.getVariableLengthSize(@intCast(data.len));
 
-    if (total_len > self._max_data_len - self._multi_buffer.data_len) {
+    if (total_len > self._multi_max_data_len - self._multi_buffer.data_len) {
         try self.flushMultiBuffer();
     }
 
     // Now that we've flushed the buffer, check if we can fit again. If not, dispatch immediately
-    if (total_len > self._max_data_len - self._multi_buffer.data_len) {
+    if (total_len > self._multi_max_data_len - self._multi_buffer.data_len) {
         return false;
     }
 
@@ -182,7 +187,7 @@ fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
     self._multi_buffer.data_len += data.len;
     self._multi_buffer_count += 1;
 
-    if (self._multi_buffer.data_len == self._max_data_len) {
+    if (self._multi_buffer.data_len == self._multi_max_data_len) {
         try self.flushMultiBuffer();
     }
 
