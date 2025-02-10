@@ -363,29 +363,31 @@ const StashedItem = struct {
 
 pub const tests = struct {
     session_params: soe_protocol.SessionParams,
-    app_params: *ApplicationParams,
+    app_params: ApplicationParams,
     last_received_data: []const u8 = undefined,
     received_data_queue: std.ArrayList([]const u8),
 
     fn init() !*tests {
         const test_class = try std.testing.allocator.create(tests);
-        test_class.received_data_queue = std.ArrayList([]const u8).init(std.testing.allocator);
-        test_class.session_params = soe_protocol.SessionParams{};
 
-        test_class.app_params = try std.testing.allocator.create(ApplicationParams);
-        test_class.app_params.is_encryption_enabled = false;
-        test_class.app_params.initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 });
-        test_class.app_params.handler_ptr = test_class;
-        test_class.app_params.handle_app_data = receiveData;
-        test_class.app_params.on_session_closed = undefined;
-        test_class.app_params.on_session_opened = undefined;
+        test_class.* = tests{
+            .session_params = soe_protocol.SessionParams{},
+            .app_params = ApplicationParams{
+                .is_encryption_enabled = false,
+                .initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 }),
+                .handler_ptr = test_class,
+                .handle_app_data = receiveData,
+                .on_session_closed = undefined,
+                .on_session_opened = undefined,
+            },
+            .received_data_queue = std.ArrayList([]const u8).init(std.testing.allocator),
+        };
 
         return test_class;
     }
 
     fn deinit(self: *tests) void {
         self.received_data_queue.deinit();
-        std.testing.allocator.destroy(self.app_params);
         std.testing.allocator.destroy(self);
     }
 
@@ -539,12 +541,12 @@ pub const tests = struct {
         self.received_data_queue.append(data) catch @panic("Failed to add to queue");
     }
 
-    fn getChannel(self: tests) !ReliableDataInputChannel {
+    fn getChannel(self: *const tests) !ReliableDataInputChannel {
         return try ReliableDataInputChannel.init(
             undefined,
             std.testing.allocator,
             &self.session_params,
-            self.app_params,
+            &self.app_params,
             pooling.PooledDataManager.init(
                 std.testing.allocator,
                 self.session_params.udp_length,
