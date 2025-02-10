@@ -38,12 +38,13 @@ pub const PooledDataManager = struct {
         // We don't want to return the same item to two callers at once
         self._mutex.lock();
         const item = self._pool.popOrNull();
+        self._mutex.unlock();
+
         if (item) |actual| {
             actual.data_start_idx = 0;
             actual.data_end_idx = 0;
             return actual;
         }
-        self._mutex.unlock();
 
         // Couldn't get one. Make a new one and add it to the pool
         const new_item = try self._allocator.create(PooledData);
@@ -166,5 +167,64 @@ pub const tests = struct {
         manager.put(data_2);
         manager.put(data_3);
         try std.testing.expectEqual(2, manager._pool.items.len);
+    }
+
+    test "pool is utilised" {
+        var manager = PooledDataManager.init(std.testing.allocator, 2, 2);
+        defer manager.deinit();
+
+        var data_1 = try manager.get();
+        data_1.storeData(&[_]u8{ 1, 2 });
+        manager.put(data_1);
+        try std.testing.expectEqual(1, manager._pool.items.len);
+        data_1 = try manager.get();
+        try std.testing.expectEqual(0, manager._pool.items.len);
+        try std.testing.expectEqualSlices(u8, &[_]u8{ 1, 2 }, data_1.data);
+        manager.put(data_1);
+    }
+
+    test "reference taking" {
+        var manager = PooledDataManager.init(std.testing.allocator, 2, 2);
+        defer manager.deinit();
+
+        var data = try manager.get();
+        try std.testing.expectEqual(0, data._ref_count);
+
+        data.takeRef();
+        try std.testing.expectEqual(1, data._ref_count);
+        data.takeRef();
+        try std.testing.expectEqual(2, data._ref_count);
+
+        data.releaseRef();
+        try std.testing.expectEqual(0, manager._pool.items.len);
+        data.releaseRef();
+        try std.testing.expectEqual(1, manager._pool.items.len);
+    }
+
+    test "data manipulation" {
+        var manager = PooledDataManager.init(std.testing.allocator, 3, 2);
+        defer manager.deinit();
+
+        var data = try manager.get();
+        defer manager.put(data);
+
+        // Test that store data works as expected
+        try std.testing.expectEqual(0, data.data_end_idx);
+        data.storeData(&[_]u8{ 1, 2, 3 });
+        try std.testing.expectEqual(3, data.data_end_idx);
+        try std.testing.expectEqualSlices(u8, &[_]u8{ 1, 2, 3 }, data.getSlice());
+
+        // Test getSlice respects the indexes
+        data.data_end_idx = 2;
+        data.data_start_idx = 1;
+        try std.testing.expectEqualSlices(u8, &[_]u8{2}, data.getSlice());
+
+        // Append data from the end index
+        data.appendData(&[_]u8{4});
+        try std.testing.expectEqualSlices(u8, &[_]u8{ 2, 4 }, data.getSlice());
+
+        // Store data with a non-zero start index
+        data.storeData(&[_]u8{ 6, 7 });
+        try std.testing.expectEqualSlices(u8, &[_]u8{ 6, 7 }, data.getSlice());
     }
 };
