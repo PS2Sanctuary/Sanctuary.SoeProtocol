@@ -250,7 +250,7 @@ const StashedItem = struct {
 
 pub const tests = struct {
     session_params: soe_protocol.SessionParams,
-    app_params: *ApplicationParams,
+    app_params: ApplicationParams,
     pool: pooling.PooledDataManager,
     session_handler: *SoeSessionHandler,
     channel: *ReliableDataOutputChannel,
@@ -265,9 +265,14 @@ pub const tests = struct {
             max_data_size,
         );
 
-        test_class.app_params = try std.testing.allocator.create(ApplicationParams);
-        test_class.app_params.is_encryption_enabled = false;
-        test_class.app_params.initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 });
+        test_class.app_params = ApplicationParams{
+            .is_encryption_enabled = false,
+            .initial_rc4_state = Rc4State.init(&[_]u8{ 0, 1, 2, 3, 4 }),
+            .handle_app_data = undefined,
+            .handler_ptr = undefined,
+            .on_session_closed = undefined,
+            .on_session_opened = undefined,
+        };
 
         test_class.session_handler = try std.testing.allocator.create(SoeSessionHandler);
         test_class.session_handler.contextual_header_len = 2;
@@ -278,7 +283,7 @@ pub const tests = struct {
             test_class.session_handler,
             std.testing.allocator,
             &test_class.session_params,
-            test_class.app_params,
+            &test_class.app_params,
             &test_class.pool,
         );
 
@@ -290,7 +295,6 @@ pub const tests = struct {
 
         std.testing.allocator.destroy(self.channel);
         std.testing.allocator.destroy(self.session_handler);
-        std.testing.allocator.destroy(self.app_params);
 
         self.pool.deinit();
         std.testing.allocator.destroy(self);
