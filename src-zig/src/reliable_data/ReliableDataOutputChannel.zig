@@ -135,10 +135,13 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
         var pool_item = try self._data_pool.get();
         pool_item.takeRef();
 
-        var writer = BinaryWriter.init(pool_item.data);
-        writer.advance(self._session_handler.contextual_header_len);
-        writer.writeBytes(data);
-        pool_item.data_end_idx = writer.offset + self._session_handler.contextual_trailer_len;
+        pool_item.data_start_idx = self._session_handler.contextual_header_len;
+        pool_item.storeData(data);
+        pool_item.data_start_idx = 0;
+        // var writer = BinaryWriter.init(pool_item.data);
+        // writer.advance(self._session_handler.contextual_header_len);
+        // writer.writeBytes(data);
+        // pool_item.data_end_idx = writer.offset + self._session_handler.contextual_trailer_len;
 
         // Check that this stash space hasn't been previously filled. We're running terribly behind
         // if it has been
@@ -179,12 +182,7 @@ fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
         @intCast(data.len),
         &self._multi_buffer.data_end_idx,
     );
-    // Copy the data into the multibuffer
-    @memcpy(
-        self._multi_buffer.data[self._multi_buffer.data_end_idx .. self._multi_buffer.data_end_idx + data.len],
-        data,
-    );
-    self._multi_buffer.data_end_idx += data.len;
+    self._multi_buffer.appendData(data);
     self._multi_buffer_count += 1;
 
     if (self._multi_buffer.data_end_idx == self._multi_max_data_len) {

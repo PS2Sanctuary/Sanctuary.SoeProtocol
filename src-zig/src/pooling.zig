@@ -107,14 +107,26 @@ pub const PooledData = struct {
         }
     }
 
-    /// Stores the given `data` into the pool item, and sets the `data_len` field appropriately.
-    pub fn storeData(self: *PooledData, data: []u8) void {
+    /// Stores the given `data` in the pool (by copying it into `data`, starting at `data_start_idx`),
+    /// and sets the `data_end_idx` field appropriately.
+    pub fn storeData(self: *PooledData, data: []const u8) void {
         if (self.data_start_idx + data.len > self.data.len) {
             @panic("Data is too long to store");
         }
 
         @memcpy(self.data[self.data_start_idx .. self.data_start_idx + data.len], data);
         self.data_end_idx = self.data_start_idx + data.len;
+    }
+
+    /// Appends the given `data` to the pool (by copying it into `data`, starting at `data_end_idx`),
+    /// and sets the `data_end_idx` field appropriately.
+    pub fn appendData(self: *PooledData, data: []const u8) void {
+        if (self.data_end_idx + data.len > self.data.len) {
+            @panic("Data is too long to store");
+        }
+
+        @memcpy(self.data[self.data_end_idx .. self.data_end_idx + data.len], data);
+        self.data_end_idx += data.len;
     }
 
     /// Gets a slice over the actual data stored in this instance.
