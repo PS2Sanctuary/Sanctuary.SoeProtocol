@@ -363,10 +363,10 @@ pub const tests = struct {
             &utils.MULTI_DATA_INDICATOR ++ &[_]u8{ 1, 1 },
             channel._multi_buffer.data[multi_start_index..channel._multi_buffer.data_len],
         );
-        // TODO: Test we got a good flush
+        try std.testing.expectEqual(1, channel._current_sequence);
 
         // Test a write which will fill the entire buffer without overflowing. We should get a single flush
-        // Our MB should be a pos 4 as of the last test, and our buffer is 15. Leaving 1 for the length indicator,
+        // Our MB should be at pos 4 as of the last test, and our buffer is 15. Leaving 1 for the length indicator,
         // this means our data here should have 10 bytes
         success = try channel.putInMultiBuffer(&[_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
         try std.testing.expect(success);
@@ -379,6 +379,6 @@ pub const tests = struct {
             &utils.MULTI_DATA_INDICATOR,
             channel._multi_buffer.data[multi_start_index..channel._multi_buffer.data_len],
         );
-        // TODO: Test we got a good flush
+        try std.testing.expectEqual(2, channel._current_sequence);
     }
 };
