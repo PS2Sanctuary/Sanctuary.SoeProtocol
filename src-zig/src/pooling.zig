@@ -134,3 +134,34 @@ pub const PooledData = struct {
         return self.data[self.data_start_idx..self.data_end_idx];
     }
 };
+
+pub const tests = struct {
+    test "init manager" {
+        const manager = PooledDataManager.init(
+            std.testing.allocator,
+            7,
+            3,
+        );
+        try std.testing.expectEqual(7, manager.data_length);
+        try std.testing.expectEqual(3, manager._max_pool_size);
+        try std.testing.expectEqual(3, manager._pool.capacity);
+    }
+
+    test "pool limits respected" {
+        var manager = PooledDataManager.init(std.testing.allocator, 7, 2);
+
+        const data_1 = try manager.get();
+        const data_2 = try manager.get();
+        const data_3 = try manager.get();
+
+        try std.testing.expectEqual(7, data_1.data.len);
+        try std.testing.expectEqual(7, data_2.data.len);
+        try std.testing.expectEqual(7, data_3.data.len);
+
+        try std.testing.expectEqual(0, manager._pool.items.len);
+        manager.put(data_1);
+        manager.put(data_2);
+        manager.put(data_3);
+        try std.testing.expectEqual(2, manager._pool.items.len);
+    }
+};
