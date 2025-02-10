@@ -34,7 +34,6 @@ pub const PooledDataManager = struct {
 
     /// Get a `PooledData` instance.
     pub fn get(self: *PooledDataManager) !*PooledData {
-
         // Attempt to retrieve an item from the pool. Lock while doing so.
         // We don't want to return the same item to two callers at once
         self._mutex.lock();
@@ -45,10 +44,12 @@ pub const PooledDataManager = struct {
         self._mutex.unlock();
 
         // Couldn't get one. Make a new one and add it to the pool
-        var new_item = try self._allocator.create(PooledData);
-        new_item._manager = self;
-        new_item.data = try self._allocator.alloc(u8, self.data_length);
-        new_item._ref_count = 0;
+        const new_item = try self._allocator.create(PooledData);
+        new_item.* = PooledData{
+            ._manager = self,
+            .data = try self._allocator.alloc(u8, self.data_length),
+        };
+
         return new_item;
     }
 
@@ -83,8 +84,10 @@ pub const PooledData = struct {
 
     /// The data. Do not re-assign this field.
     data: []u8,
-    /// The actual length of the data stored in `data`
-    data_len: usize,
+    /// The end index of the actual data stored in `data`.
+    data_end_idx: usize = 0,
+    /// The start index of the actual data stored in `data`.
+    data_start_idx: usize = 0,
 
     /// Indicates that the calling scope is holding a reference to this `PooledData` instance.
     pub fn takeRef(self: *PooledData) void {
@@ -104,16 +107,16 @@ pub const PooledData = struct {
 
     /// Stores the given `data` into the pool item, and sets the `data_len` field appropriately.
     pub fn storeData(self: *PooledData, data: []u8) void {
-        if (data.len > self.data.len) {
+        if (self.data_start_idx + data.len > self.data.len) {
             @panic("Data is too long to store");
         }
 
-        @memcpy(self.data[0..data.len], data);
-        self.data_len = data.len;
+        @memcpy(self.data[self.data_start_idx .. self.data_start_idx + data.len], data);
+        self.data_end_idx = self.data_start_idx + data.len;
     }
 
     /// Gets a slice over the actual data stored in this instance.
     pub fn getSlice(self: @This()) []u8 {
-        return self.data[0..self.data_len];
+        return self.data[self.data_start_idx..self.data_end_idx];
     }
 };

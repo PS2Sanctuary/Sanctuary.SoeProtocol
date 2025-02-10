@@ -138,7 +138,7 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
         var writer = BinaryWriter.init(pool_item.data);
         writer.advance(self._session_handler.contextual_header_len);
         writer.writeBytes(data);
-        pool_item.data_len = writer.offset + self._session_handler.contextual_trailer_len;
+        pool_item.data_end_idx = writer.offset + self._session_handler.contextual_trailer_len;
 
         // Check that this stash space hasn't been previously filled. We're running terribly behind
         // if it has been
@@ -164,12 +164,12 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
 fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
     const total_len = data.len + soe_packet_utils.getVariableLengthSize(@intCast(data.len));
 
-    if (total_len > self._multi_max_data_len - self._multi_buffer.data_len) {
+    if (total_len > self._multi_max_data_len - self._multi_buffer.data_end_idx) {
         try self.flushMultiBuffer();
     }
 
     // Now that we've flushed the buffer, check if we can fit again. If not, dispatch immediately
-    if (total_len > self._multi_max_data_len - self._multi_buffer.data_len) {
+    if (total_len > self._multi_max_data_len - self._multi_buffer.data_end_idx) {
         return false;
     }
 
@@ -177,17 +177,17 @@ fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
     soe_packet_utils.writeVariableLength(
         self._multi_buffer.data,
         @intCast(data.len),
-        &self._multi_buffer.data_len,
+        &self._multi_buffer.data_end_idx,
     );
     // Copy the data into the multibuffer
     @memcpy(
-        self._multi_buffer.data[self._multi_buffer.data_len .. self._multi_buffer.data_len + data.len],
+        self._multi_buffer.data[self._multi_buffer.data_end_idx .. self._multi_buffer.data_end_idx + data.len],
         data,
     );
-    self._multi_buffer.data_len += data.len;
+    self._multi_buffer.data_end_idx += data.len;
     self._multi_buffer_count += 1;
 
-    if (self._multi_buffer.data_len == self._multi_max_data_len) {
+    if (self._multi_buffer.data_end_idx == self._multi_max_data_len) {
         try self.flushMultiBuffer();
     }
 
@@ -202,11 +202,11 @@ fn setNewMultiBuffer(self: *ReliableDataOutputChannel) !void {
 
     var written: usize = self._session_handler.contextual_header_len;
     written += utils.writeMultiDataIndicator(self._multi_buffer.data[written..]);
-    self._multi_buffer.data_len = written;
+    self._multi_buffer.data_end_idx = written;
 }
 
 fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
-    self._multi_buffer.data_len += self._session_handler.contextual_trailer_len;
+    self._multi_buffer.data_end_idx += self._session_handler.contextual_trailer_len;
 
     // Check that this stash space hasn't been previously filled. We're running terribly behind
     // if it has been
@@ -317,7 +317,7 @@ pub const tests = struct {
         const data_start_index = channel._session_handler.contextual_header_len + utils.MULTI_DATA_INDICATOR.len;
 
         // Assert that the multi-data-indicator has been written to the multibuffer
-        try std.testing.expectEqual(data_start_index, channel._multi_buffer.data_len);
+        try std.testing.expectEqual(data_start_index, channel._multi_buffer.data_end_idx);
         try std.testing.expectEqualSlices(
             u8,
             &utils.MULTI_DATA_INDICATOR,
@@ -329,7 +329,7 @@ pub const tests = struct {
         try std.testing.expect(success);
         try std.testing.expectEqual(
             data_start_index + plain_data_var_len + plain_data.len,
-            channel._multi_buffer.data_len,
+            channel._multi_buffer.data_end_idx,
         );
         try std.testing.expectEqualSlices(
             u8,
@@ -342,7 +342,7 @@ pub const tests = struct {
         try std.testing.expect(success);
         try std.testing.expectEqual(
             data_start_index + (plain_data_var_len + plain_data.len) * 2,
-            channel._multi_buffer.data_len,
+            channel._multi_buffer.data_end_idx,
         );
         try std.testing.expectEqualSlices(
             u8,
@@ -356,7 +356,7 @@ pub const tests = struct {
         try std.testing.expect(success);
         try std.testing.expectEqual(
             data_start_index + 2,
-            channel._multi_buffer.data_len,
+            channel._multi_buffer.data_end_idx,
         );
         try std.testing.expectEqualSlices(
             u8,
@@ -372,7 +372,7 @@ pub const tests = struct {
         try std.testing.expect(success);
         try std.testing.expectEqual(
             data_start_index,
-            channel._multi_buffer.data_len,
+            channel._multi_buffer.data_end_idx,
         );
         try std.testing.expectEqualSlices(
             u8,
