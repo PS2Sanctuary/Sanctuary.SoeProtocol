@@ -347,7 +347,7 @@ pub const InputStats = struct {
     duplicate_count: u32 = 0,
     /// The total number of sequences that have been received out-of-order.
     out_of_order_count: u32 = 0,
-    /// The total number of data bytes received by the channel
+    /// The total number of data bytes received by the channel. This count excludes header/trailer data and does not include resent data.
     total_received_bytes: u64 = 0,
     acknowledge_count: u32 = 0,
 };

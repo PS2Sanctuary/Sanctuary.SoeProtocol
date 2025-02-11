@@ -117,31 +117,38 @@ pub fn runTick(self: *ReliableDataOutputChannel) !void {
     const now = try std.time.Instant.now();
 
     if (now.since(self._last_data_submission_time) > 1 * std.time.ns_per_ms) {
-        try self.flushMultiBuffer();
+        try self.flushMultiBuffer(); // TODO: We probably need a lock around this. And a lock around stashing
     }
 }
 
-pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
+/// Queues data to be sent on the reliable channel. The data may be mutated
+/// if encryption is enabled.
+pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
     self._last_data_submission_time = try std.time.Instant.now();
+    self.output_stats.total_sent_bytes = data.len;
+
+    var my_data: []u8 = undefined;
+    var needs_free: bool = undefined;
+    if (self._app_params.is_encryption_enabled) {
+        const enc_result = self.encryptReliableData(data);
+        my_data = enc_result[0];
+        needs_free = enc_result[1];
+    }
 
     // First try to write to the multibuffer. If this succeeds then we don't need to do more
-    if (try self.putInMultiBuffer(data)) {
+    if (try self.putInMultiBuffer(my_data)) {
         return;
     }
 
-    if (data.len > self._max_data_len) {
+    if (my_data.len > self._max_data_len) {
         // TODO: We need to send in fragments
     } else {
         var pool_item = try self._data_pool.get();
         pool_item.takeRef();
 
         pool_item.data_start_idx = self._session_handler.contextual_header_len;
-        pool_item.storeData(data);
+        pool_item.storeData(my_data);
         pool_item.data_start_idx = 0;
-        // var writer = BinaryWriter.init(pool_item.data);
-        // writer.advance(self._session_handler.contextual_header_len);
-        // writer.writeBytes(data);
-        // pool_item.data_end_idx = writer.offset + self._session_handler.contextual_trailer_len;
 
         // Check that this stash space hasn't been previously filled. We're running terribly behind
         // if it has been
@@ -159,6 +166,27 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
 
         self._current_sequence += 1;
     }
+
+    if (needs_free) {
+        self._allocator.free(my_data);
+    }
+}
+
+fn encryptReliableData(self: *ReliableDataOutputChannel, data: []u8) .{ []u8, bool } {
+    // We can assume the key state is present, as encryption is enabled
+    self._rc4_state.?.transform(data, data);
+
+    var my_data = data;
+    var needs_free = false;
+    // Encrypted blocks that begin with zero must have another zero prefixed
+    if (my_data[0] == 0) {
+        my_data = self._allocator.alloc(u8, data.len + 1);
+        @memcpy(my_data[1..], data);
+        my_data[0] = 0;
+        needs_free = true;
+    }
+
+    return .{ my_data, needs_free };
 }
 
 /// Attempts to put the given `data` into the multibuffer. If this could not
@@ -233,6 +261,7 @@ fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
     try self.setNewMultiBuffer();
 }
 
+/// Gets the index in the `_stash` that a particular reliable sequence should be placed.
 fn getStashIndex(self: @This(), sequence: i64) usize {
     return @intCast(@mod(sequence, self._session_params.max_queued_outgoing_data_packets));
 }
@@ -243,7 +272,7 @@ pub const OutputStats = struct {
     total_sent_data: u32 = 0,
     /// The total number of sequences that needed to be resent.
     resent_count: u32 = 0,
-    /// The total number of data bytes received by the channel.
+    /// The total number of data bytes sent by the channel. This count excludes header/trailer data and does not include resent data.
     total_sent_bytes: u64 = 0,
     /// The total number of receive acknowledgement packets (incl. ack all).
     total_received_acknowledgements: u32 = 0,
