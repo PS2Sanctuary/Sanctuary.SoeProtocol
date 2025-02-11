@@ -145,7 +145,7 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []const u8) !void {
 
         // Check that this stash space hasn't been previously filled. We're running terribly behind
         // if it has been
-        const stash_spot: usize = @intCast(@mod(self._current_sequence, self._session_params.max_queued_outgoing_data_packets));
+        const stash_spot = self.getStashIndex(self._current_sequence);
         var stash_item = self._stash[stash_spot];
         if (stash_item.data != null) {
             self.output_stats.dropped_packets += 1;
@@ -206,9 +206,17 @@ fn setNewMultiBuffer(self: *ReliableDataOutputChannel) !void {
 fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
     self._multi_buffer.data_end_idx += self._session_handler.contextual_trailer_len;
 
+    // There is only a single packet in the multibuffer so we can send it directly as a fragment
+    // We can do this by advancing the start of the pool buffer by the length of the multi
+    // data indicator, so it gets overwritten by the underlying SOE contextual sender
+    // TODO: But then we also need to get rid of the packet length marker... how will we achieve this?
+    if (self._multi_buffer_count == 1) {
+        self._multi_buffer.data_start_idx += utils.MULTI_DATA_INDICATOR.len;
+    }
+
     // Check that this stash space hasn't been previously filled. We're running terribly behind
     // if it has been
-    const stash_spot: usize = @intCast(@mod(self._current_sequence, self._session_params.max_queued_outgoing_data_packets));
+    const stash_spot = self.getStashIndex(self._current_sequence);
     var stash_item = self._stash[stash_spot];
     if (stash_item.data != null) {
         self.output_stats.dropped_packets += 1;
@@ -221,11 +229,12 @@ fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
     self._stash[stash_spot] = stash_item;
 
     self._current_sequence += 1;
-    // TODO: If there is only a single packet in the multibuffer, then send it as a fragment.
-    // We can do this by advancing the start of the pool buffer by the length of the multi
-    // data indicator, so it gets overwritten by the underlying SOE contextual sender
 
     try self.setNewMultiBuffer();
+}
+
+fn getStashIndex(self: @This(), sequence: i64) usize {
+    return @intCast(@mod(sequence, self._session_params.max_queued_outgoing_data_packets));
 }
 
 pub const OutputStats = struct {
@@ -301,6 +310,17 @@ pub const tests = struct {
 
         self.pool.deinit();
         std.testing.allocator.destroy(self);
+    }
+
+    test getStashIndex {
+        const test_class = try tests.init(15);
+        defer test_class.deinit();
+
+        try std.testing.expectEqual(1, test_class.channel.getStashIndex(1));
+        try std.testing.expectEqual(
+            0,
+            test_class.channel.getStashIndex(test_class.session_params.max_queued_outgoing_data_packets),
+        );
     }
 
     test putInMultiBuffer {
