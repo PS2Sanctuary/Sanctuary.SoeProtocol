@@ -107,15 +107,16 @@ pub fn deinit(self: *ReliableDataOutputChannel) void {
     self._multi_buffer.releaseRef();
 }
 
+/// Sets the maximum length of data that the channel may dispatch into an SOE reliable data packet.
 pub fn setMaxDataLength(self: *ReliableDataOutputChannel, max_data_len: u32) !void {
     if (self._current_sequence != 0) {
         @panic("The maximum length may not be changed after data has been enqueued");
     }
 
     self._max_data_len = max_data_len;
-    // The multibuffer `data_len` includes the contextual packet header, but this is not part of the
-    // reliable data and hence doesn't contribute to the `_max_data_len` limit
-    self._multi_max_data_len = max_data_len + self._session_handler.contextual_header_len;
+    // The multibuffer `data_len` includes space for the contextual packet header and reliable sequence,
+    // but these are not part of the reliable data and hence don't contribute to the `_max_data_len` limit
+    self._multi_max_data_len = max_data_len + self._session_handler.contextual_header_len + @sizeOf(u16);
 }
 
 pub fn runTick(self: *ReliableDataOutputChannel) !void {
@@ -235,13 +236,18 @@ fn setNewMultiBuffer(self: *ReliableDataOutputChannel) !void {
     self._multi_buffer_count = 0;
     self._multi_first_data_offset = 0;
 
-    var written: usize = self._session_handler.contextual_header_len;
+    // Leave space for the contextual header and reliable sequence to be written
+    var written: usize = self._session_handler.contextual_header_len + @sizeOf(u16);
     written += utils.writeMultiDataIndicator(self._multi_buffer.data[written..]);
     self._multi_buffer.data_end_idx = written;
 }
 
 fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
     self._multi_buffer.data_end_idx += self._session_handler.contextual_trailer_len;
+    binary_primitives.writeU16BE(
+        self._multi_buffer.getSlice()[self._session_handler.contextual_header_len..],
+        @intCast(self._current_sequence),
+    );
 
     // There is only a single packet in the multibuffer so we can send it directly as a fragment
     // We can do this by advancing the start of the pool buffer to the start of the first item in
@@ -373,8 +379,9 @@ pub const tests = struct {
         var plain_data = [_]u8{ 0, 1, 2, 3, 4 };
 
         const plain_data_var_len = soe_packet_utils.getVariableLengthSize(plain_data.len);
-        const multi_start_index = channel._session_handler.contextual_header_len;
-        const data_start_index = channel._session_handler.contextual_header_len + utils.MULTI_DATA_INDICATOR.len;
+        // N.B. @sizeOf(u16) represents the reliable sequence
+        const multi_start_index = channel._session_handler.contextual_header_len + @sizeOf(u16);
+        const data_start_index = channel._session_handler.contextual_header_len + @sizeOf(u16) + utils.MULTI_DATA_INDICATOR.len;
 
         // Assert that the multi-data-indicator has been written to the multibuffer
         try std.testing.expectEqual(data_start_index, channel._multi_buffer.data_end_idx);
@@ -432,6 +439,7 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(
             u8,
             &contextual_header ++ // Space for the contextual header, 0xAA as this is how Zig stores uninitialized memory
+                &[_]u8{ 0, 0 } ++ // Reliable sequence
                 utils.MULTI_DATA_INDICATOR ++
                 &[_]u8{5} ++ // First data length
                 &plain_data ++
@@ -463,6 +471,7 @@ pub const tests = struct {
         try std.testing.expectEqualSlices(
             u8,
             &contextual_header ++ // Space for the contextual header, 0xAA as this is how Zig stores uninitialized memory
+                &[_]u8{ 0, 1 } ++ // Reliable sequence
                 utils.MULTI_DATA_INDICATOR ++
                 &[_]u8{ 1, 1 } ++ // The single byte we submitted earlier, and its length indicator
                 &[_]u8{10} ++ // Len of long addition
