@@ -91,7 +91,7 @@ pub const SessionParams = struct {
     crc_seed: u32 = 0,
     /// The numer of bytes used to store a packet CRC hash. Must be between 0 and 4, inclusive.
     crc_length: u8 = CRC_LENGTH,
-    /// Whether compression is enabled for the session.
+    /// Whether compression is enabled for the session. This may not be changed after the session is initialized.
     is_compression_enabled: bool = false,
     /// The maximum number of data fragments that may be queued for either stitching or dispatch.
     max_queued_incoming_data_packets: i16 = 400,
