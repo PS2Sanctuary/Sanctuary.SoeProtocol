@@ -37,7 +37,7 @@ pub const PooledDataManager = struct {
         // Attempt to retrieve an item from the pool. Lock while doing so.
         // We don't want to return the same item to two callers at once
         self._mutex.lock();
-        const item = self._pool.popOrNull();
+        const item = self._pool.pop();
         self._mutex.unlock();
 
         if (item) |actual| {
