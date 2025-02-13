@@ -141,41 +141,65 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
         needs_free = enc_result[1];
     }
 
-    // First try to write to the multibuffer. If this succeeds then we don't need to do more
+    // First try to write to the multibuffer. If this succeeds then we don't need to do more.
+    // Otherwise we flush the multibuffer to retain packet ordering, and stash the data.
     if (try self.putInMultiBuffer(my_data)) {
         return;
+    } else {
+        try self.flushMultiBuffer();
     }
 
-    if (my_data.len > self._max_data_len) {
-        // TODO: We need to send in fragments
-    } else {
-        var pool_item = try self._data_pool.get();
-        pool_item.takeRef();
-
-        pool_item.data_start_idx = self._session_handler.contextual_header_len;
-        pool_item.storeData(my_data);
-        pool_item.data_start_idx = 0;
-
-        // Check that this stash space hasn't been previously filled. We're running terribly behind
-        // if it has been
-        const stash_spot = self.getStashIndex(self._current_sequence);
-        var stash_item = self._stash[stash_spot];
-        if (stash_item.data != null) {
-            self.output_stats.dropped_packets += 1;
-            // TODO: How do we handle the fact that we're out of stash space?
-        }
-
-        // Replace the data in the stash
-        stash_item.data = pool_item;
-        stash_item.is_fragment = false;
-        self._stash[stash_spot] = stash_item;
-
-        self._current_sequence += 1;
+    self.stashFragment(&my_data, true);
+    while (my_data.len > 0) {
+        self.stashFragment(&my_data, false);
     }
 
     if (needs_free) {
         self._allocator.free(my_data);
     }
+}
+
+fn stashFragment(self: *ReliableDataOutputChannel, remaining_data: *[]u8, is_master: bool) !void {
+    var pool_item = try self._data_pool.get();
+    pool_item.takeRef();
+
+    var writer = BinaryWriter.init(pool_item.data);
+    // We reserve space for the contextual header len as we call SoeSessionHandler.sendPresizedContextualPacket
+    writer.advance(self._session_handler.contextual_header_len);
+
+    // Write the sequence marker
+    writer.writeU16BE(@intCast(self._current_sequence));
+    self._current_sequence += 1;
+
+    // Either store what we have left, or take the max data we can, less the sequence marker
+    // If we need to store fragments and this is the master packet, also set space for the data len
+    var is_fragment = false;
+    const amount_to_take = @min(remaining_data.len, self._max_data_len - @sizeOf(u16));
+    if (amount_to_take > remaining_data.len and is_master) {
+        writer.writeU32BE(@truncate(remaining_data.len));
+        amount_to_take -= @sizeOf(u32);
+        is_fragment = true;
+    }
+
+    // Write our data, and shorten the remaining
+    writer.writeBytes(remaining_data.*[0..amount_to_take]);
+    remaining_data.* = remaining_data.*[amount_to_take..];
+
+    // Check that this stash space hasn't been previously filled. We're running terribly behind
+    // if it has been
+    const stash_spot = self.getStashIndex(self._current_sequence);
+    var stash_item = self._stash[stash_spot];
+    if (stash_item.data != null) {
+        self.output_stats.dropped_packets += 1;
+        // TODO: How do we handle the fact that we're out of stash space?
+    }
+
+    // Replace the data in the stash
+    stash_item.data = pool_item;
+    stash_item.is_fragment = is_fragment;
+    self._stash[stash_spot] = stash_item;
+
+    self._current_sequence += 1;
 }
 
 fn encryptReliableData(self: *ReliableDataOutputChannel, data: []u8) .{ []u8, bool } {
