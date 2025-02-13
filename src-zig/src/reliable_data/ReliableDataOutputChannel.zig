@@ -126,7 +126,7 @@ pub fn runTick(self: *ReliableDataOutputChannel) !void {
     }
 }
 
-/// Queues data to be sent on the reliable channel. The data may be mutated
+/// Queues data to be sent on the reliable channel. The `data` may be mutated
 /// if encryption is enabled.
 pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
     self._last_data_submission_time = try std.time.Instant.now();
