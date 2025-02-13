@@ -29,12 +29,17 @@ _current_sequence: i64 = 0,
 _window_start_sequence: i64 = 0,
 /// The maximum length of reliable data that may be sent.
 _max_data_len: u32 = 0,
+
 /// The maximum length of reliable data that may be stored in the `_multi_buffer`.
 _multi_max_data_len: u32 = 0,
 /// Stores the multi-buffer.
 _multi_buffer: *pooling.PooledData,
 /// The number of packets that have been written to the current multibuffer
 _multi_buffer_count: i8 = 0,
+/// The index into the `_multi_buffer` at which the data of the first item starts.
+/// Used so we can flush a multi buffer with only one item as a standard data packet.
+_multi_first_data_offset: usize = 0,
+
 /// The current length of the data that has been received into the `_current_buffer`.
 _running_data_len: usize = 0,
 /// The expected length of the data that should be received into the `_current_buffer`.
@@ -210,6 +215,9 @@ fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
         @intCast(data.len),
         &self._multi_buffer.data_end_idx,
     );
+    if (self._multi_buffer_count == 0) {
+        self._multi_first_data_offset = self._multi_buffer.data_end_idx;
+    }
     self._multi_buffer.appendData(data);
     self._multi_buffer_count += 1;
 
@@ -225,6 +233,7 @@ fn setNewMultiBuffer(self: *ReliableDataOutputChannel) !void {
     self._multi_buffer = try self._data_pool.get();
     self._multi_buffer.takeRef();
     self._multi_buffer_count = 0;
+    self._multi_first_data_offset = 0;
 
     var written: usize = self._session_handler.contextual_header_len;
     written += utils.writeMultiDataIndicator(self._multi_buffer.data[written..]);
@@ -235,11 +244,10 @@ fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
     self._multi_buffer.data_end_idx += self._session_handler.contextual_trailer_len;
 
     // There is only a single packet in the multibuffer so we can send it directly as a fragment
-    // We can do this by advancing the start of the pool buffer by the length of the multi
-    // data indicator, so it gets overwritten by the underlying SOE contextual sender
-    // TODO: But then we also need to get rid of the packet length marker... how will we achieve this?
+    // We can do this by advancing the start of the pool buffer to the start of the first item in
+    // the buffer, but leaving space for the SOE contextual sender
     if (self._multi_buffer_count == 1) {
-        self._multi_buffer.data_start_idx += utils.MULTI_DATA_INDICATOR.len;
+        self._multi_buffer.data_start_idx = self._multi_first_data_offset - self._session_handler.contextual_header_len;
     }
 
     // Check that this stash space hasn't been previously filled. We're running terribly behind
@@ -317,6 +325,7 @@ pub const tests = struct {
 
         test_class.session_handler = try std.testing.allocator.create(SoeSessionHandler);
         test_class.session_handler.contextual_header_len = 2;
+        test_class.session_handler.contextual_trailer_len = 2;
 
         test_class.channel = try std.testing.allocator.create(ReliableDataOutputChannel);
         test_class.channel.* = try ReliableDataOutputChannel.init(
@@ -353,12 +362,16 @@ pub const tests = struct {
     }
 
     test putInMultiBuffer {
-        const test_class = try tests.init(15);
+        const max_reliable_data_len = 15;
+        const test_class = try tests.init(max_reliable_data_len);
         defer test_class.deinit();
 
         var channel = test_class.channel;
+        const contextual_header = [_]u8{ 0xAA, 0xAA }; // 2 bytes of SOE code, no compression indicator
+        const contextual_trailer = [_]u8{ 0xAA, 0xAA }; // 2 bytes of CRC
 
         var plain_data = [_]u8{ 0, 1, 2, 3, 4 };
+
         const plain_data_var_len = soe_packet_utils.getVariableLengthSize(plain_data.len);
         const multi_start_index = channel._session_handler.contextual_header_len;
         const data_start_index = channel._session_handler.contextual_header_len + utils.MULTI_DATA_INDICATOR.len;
@@ -374,6 +387,7 @@ pub const tests = struct {
         // Test a first successful write
         var success = try channel.putInMultiBuffer(&plain_data);
         try std.testing.expect(success);
+        try std.testing.expectEqual(1, channel._multi_buffer_count);
         try std.testing.expectEqual(
             data_start_index + plain_data_var_len + plain_data.len,
             channel._multi_buffer.data_end_idx,
@@ -387,6 +401,7 @@ pub const tests = struct {
         // Test a sequential write that fits into the buffer
         success = try channel.putInMultiBuffer(&plain_data);
         try std.testing.expect(success);
+        try std.testing.expectEqual(2, channel._multi_buffer_count);
         try std.testing.expectEqual(
             data_start_index + (plain_data_var_len + plain_data.len) * 2,
             channel._multi_buffer.data_end_idx,
@@ -398,9 +413,10 @@ pub const tests = struct {
         );
 
         // Test a write which will consume two bytes (one for the length indicator). This will require the
-        // multibuffer to be flushed as it only has space for two more bytes. Check that this occurs
+        // multibuffer to be flushed as it only has space for one more byte. Check that this occurs
         success = try channel.putInMultiBuffer(&[_]u8{1});
         try std.testing.expect(success);
+        try std.testing.expectEqual(1, channel._multi_buffer_count);
         try std.testing.expectEqual(
             data_start_index + 2,
             channel._multi_buffer.data_end_idx,
@@ -412,11 +428,26 @@ pub const tests = struct {
         );
         try std.testing.expectEqual(1, channel._current_sequence);
 
+        // Test that the multibuffer was flushed correctly
+        try std.testing.expectEqualSlices(
+            u8,
+            &contextual_header ++ // Space for the contextual header, 0xAA as this is how Zig stores uninitialized memory
+                utils.MULTI_DATA_INDICATOR ++
+                &[_]u8{5} ++ // First data length
+                &plain_data ++
+                &[_]u8{5} ++ // Second data length
+                &plain_data ++
+                &contextual_trailer,
+            channel._stash[0].data.?.getSlice(),
+        );
+
         // Test a write which will fill the entire buffer without overflowing. We should get a single flush
         // Our MB should be at pos 4 as of the last test, and our buffer is 15. Leaving 1 for the length indicator,
         // this means our data here should have 10 bytes
-        success = try channel.putInMultiBuffer(&[_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
+        const long_addition = [_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+        success = try channel.putInMultiBuffer(&long_addition);
         try std.testing.expect(success);
+        try std.testing.expectEqual(0, channel._multi_buffer_count);
         try std.testing.expectEqual(
             data_start_index,
             channel._multi_buffer.data_end_idx,
@@ -427,5 +458,39 @@ pub const tests = struct {
             channel._multi_buffer.getSlice()[multi_start_index..],
         );
         try std.testing.expectEqual(2, channel._current_sequence);
+
+        // Test that the multibuffer was flushed correctly
+        try std.testing.expectEqualSlices(
+            u8,
+            &contextual_header ++ // Space for the contextual header, 0xAA as this is how Zig stores uninitialized memory
+                utils.MULTI_DATA_INDICATOR ++
+                &[_]u8{ 1, 1 } ++ // The single byte we submitted earlier, and its length indicator
+                &[_]u8{10} ++ // Len of long addition
+                &long_addition ++
+                &contextual_trailer,
+            channel._stash[1].data.?.getSlice(),
+        );
+
+        // Now test a write that will fill the buffer and result in a flush of a single packet
+        // To make the fifteen that counts in the buffer, we include the multi data indicator and the length indicator,
+        // allowing us 12 bytes of data
+        const fill_the_multibuffer = [_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+        success = try channel.putInMultiBuffer(&fill_the_multibuffer);
+        try std.testing.expect(success);
+        try std.testing.expectEqual(0, channel._multi_buffer_count);
+        try std.testing.expectEqual(3, channel._current_sequence);
+        // Test that the multibuffer was flushed correctly. No multidata-specific additions should be present
+        try std.testing.expectEqualSlices(
+            u8,
+            &[_]u8{ 0x19, 0x0C } ++ // In practice, this will be overwritten with the contextual header! This is the last bytes of the multi data indicator, and the len of the data we submitted
+                &fill_the_multibuffer ++
+                &contextual_trailer,
+            channel._stash[2].data.?.getSlice(),
+        );
+
+        // Ensure the method rejects data that is too long to fit
+        success = try channel.putInMultiBuffer(&[_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 });
+        try std.testing.expect(!success);
+        try std.testing.expectEqual(0, channel._multi_buffer_count);
     }
 };

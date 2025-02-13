@@ -75,7 +75,7 @@ pub fn init(
         allocator,
         session_params,
         app_params,
-        data_pool.*,
+        data_pool,
     );
     session_handler._data_input_channel = input_channel;
 
