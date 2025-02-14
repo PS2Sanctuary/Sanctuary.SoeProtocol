@@ -159,6 +159,7 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
     }
 }
 
+/// Notifies the output channel of an acknowledge packet.
 pub fn receivedAck(self: *ReliableDataOutputChannel, ack: soe_packets.Acknowledge) void {
     const seq = utils.getTrueIncomingSequence(
         ack.sequence,
@@ -168,6 +169,7 @@ pub fn receivedAck(self: *ReliableDataOutputChannel, ack: soe_packets.Acknowledg
     self.processAck(seq);
 }
 
+/// Notifies the output channel of an acknowledge-all packet.
 pub fn receivedAckAll(self: *ReliableDataOutputChannel, ack: soe_packets.AcknowledgeAll) void {
     const seq = utils.getTrueIncomingSequence(
         ack.sequence,
