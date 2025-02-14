@@ -177,6 +177,49 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
     }
 }
 
+pub fn receivedAck(self: *ReliableDataOutputChannel, ack: soe_packets.Acknowledge) void {
+    const seq = utils.getTrueIncomingSequence(
+        ack.sequence,
+        self._window_start_sequence,
+        self._session_params.max_queued_outgoing_data_packets,
+    );
+    self.processAck(seq);
+}
+
+pub fn receivedAckAll(self: *ReliableDataOutputChannel, ack: soe_packets.AcknowledgeAll) void {
+    const seq = utils.getTrueIncomingSequence(
+        ack.sequence,
+        self._window_start_sequence,
+        self._session_params.max_queued_outgoing_data_packets,
+    );
+    for (self._window_start_sequence..seq + 1) |i| {
+        self.processAck(i);
+    }
+}
+
+fn processAck(self: *ReliableDataOutputChannel, sequence: i64) void {
+    var stash_index = self.getStashIndex(sequence);
+    const stashed_item = self._stash[stash_index];
+
+    if (stashed_item.data) |has_data| {
+        has_data.releaseRef();
+        stashed_item.data = null;
+    }
+    self._stash[stash_index] = stashed_item;
+
+    // Walk the window forward to either the _current_sequence, or the next un-acked packet
+    while (self._window_start_sequence < self._current_sequence) {
+        stash_index = self.getStashIndex(self._window_start_sequence);
+        if (self._stash[stash_index].data) |_| {
+            break;
+        } else {
+            self._window_start_sequence += 1;
+        }
+    }
+
+    self._last_ack_received_time = try std.time.Instant.now();
+}
+
 fn encryptReliableData(self: *ReliableDataOutputChannel, data: []u8) .{ []u8, bool } {
     // We can assume the key state is present, as encryption is enabled
     self._rc4_state.?.transform(data, data);
