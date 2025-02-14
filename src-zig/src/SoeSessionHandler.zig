@@ -436,12 +436,12 @@ fn handleContextualPacketInternal(
             try self._data_input_channel.handleReliableDataFragment(packet_data);
         },
         .acknowledge => {
-            //const ack = soe_packets.Acknowledge.deserialize(packet_data);
-            // TODO: _dataOutputChannel.NotifyOfAcknowledge(ack);
+            const ack = soe_packets.Acknowledge.deserialize(packet_data);
+            self._data_output_channel.receivedAck(ack);
         },
         .acknowledge_all => {
-            //const ack_all = soe_packets.AcknowledgeAll.deserialize(packet_data);
-            // TODO: _dataOutputChannel.NotifyOfAcknowledgeAll(ack_all);
+            const ack_all = soe_packets.AcknowledgeAll.deserialize(packet_data);
+            self._data_output_channel.receivedAckAll(ack_all);
         },
         else => {
             std.debug.panic("The contextual handler does not support {any} packets", .{op_code});
