@@ -124,6 +124,8 @@ fn createSessionHandler(
     mode: SoeSessionHandler.SessionMode,
 ) !*SoeSessionHandler {
     // TODO: We need to ensure we have a unique session params and app params per session handler
+    // One way we could do this is by cloning the parameter objects and passing them to the session handler
+    // by value. Consumers must then manipulate the param objects from the session handler itself
 
     const handler = try SoeSessionHandler.init(
         mode,
