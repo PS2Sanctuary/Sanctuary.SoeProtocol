@@ -210,11 +210,8 @@ fn stashFragment(self: *ReliableDataOutputChannel, remaining_data: *[]u8, is_mas
 
     var writer = BinaryWriter.init(pool_item.data);
     // We reserve space for the contextual header len as we call SoeSessionHandler.sendPresizedContextualPacket
-    writer.advance(self._session_handler.contextual_header_len);
-
-    // Write the sequence marker
-    writer.writeU16BE(@intCast(self._current_sequence));
-    self._current_sequence += 1;
+    // We also advance past the reliable sequence, as the call to stashPackedData will write it
+    writer.advance(self._session_handler.contextual_header_len + @sizeOf(u16));
 
     // Either store what we have left, or take the max data we can, less the sequence marker
     // If we need to store fragments and this is the master packet, also set space for the data len
@@ -230,17 +227,28 @@ fn stashFragment(self: *ReliableDataOutputChannel, remaining_data: *[]u8, is_mas
     writer.writeBytes(remaining_data.*[0..amount_to_take]);
     remaining_data.* = remaining_data.*[amount_to_take..];
 
+    try self.stashPackedData(pool_item, is_fragment);
+}
+
+/// Places pre-packed pooled data into the stash, and writes the reliable sequence.
+fn stashPackedData(self: *ReliableDataOutputChannel, packed_data: *pooling.PooledData, is_fragment: bool) !void {
+    binary_primitives.writeU16BE(
+        packed_data.getSlice()[self._session_handler.contextual_header_len..],
+        @intCast(self._current_sequence),
+    );
+
     // Check that this stash space hasn't been previously filled. We're running terribly behind
     // if it has been
     const stash_spot = self.getStashIndex(self._current_sequence);
     var stash_item = self._stash[stash_spot];
     if (stash_item.data != null) {
         self.output_stats.dropped_packets += 1;
-        // TODO: How do we handle the fact that we're out of stash space?
+        // TODO: How best do we handle the fact that we're out of stash space?
+        return error.OutOfStashSpace;
     }
 
     // Replace the data in the stash
-    stash_item.data = pool_item;
+    stash_item.data = packed_data;
     stash_item.is_fragment = is_fragment;
     self._stash[stash_spot] = stash_item;
 
@@ -313,33 +321,17 @@ fn setNewMultiBuffer(self: *ReliableDataOutputChannel) !void {
 
 fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
     self._multi_buffer.data_end_idx += self._session_handler.contextual_trailer_len;
-    binary_primitives.writeU16BE(
-        self._multi_buffer.getSlice()[self._session_handler.contextual_header_len..],
-        @intCast(self._current_sequence),
-    );
 
     // There is only a single packet in the multibuffer so we can send it directly as a fragment
     // We can do this by advancing the start of the pool buffer to the start of the first item in
     // the buffer, but leaving space for the SOE contextual sender
     if (self._multi_buffer_count == 1) {
-        self._multi_buffer.data_start_idx = self._multi_first_data_offset - self._session_handler.contextual_header_len;
+        self._multi_buffer.data_start_idx = self._multi_first_data_offset -
+            self._session_handler.contextual_header_len -
+            @sizeOf(u16); // reliable sequence
     }
 
-    // Check that this stash space hasn't been previously filled. We're running terribly behind
-    // if it has been
-    const stash_spot = self.getStashIndex(self._current_sequence);
-    var stash_item = self._stash[stash_spot];
-    if (stash_item.data != null) {
-        self.output_stats.dropped_packets += 1;
-        // TODO: How do we handle the fact that we're out of stash space?
-    }
-
-    // Replace the data in the stash
-    stash_item.data = self._multi_buffer;
-    stash_item.is_fragment = false;
-    self._stash[stash_spot] = stash_item;
-
-    self._current_sequence += 1;
+    try self.stashPackedData(self._multi_buffer, false);
 
     try self.setNewMultiBuffer();
 }
@@ -560,7 +552,8 @@ pub const tests = struct {
         // Test that the multibuffer was flushed correctly. No multidata-specific additions should be present
         try std.testing.expectEqualSlices(
             u8,
-            &[_]u8{ 0x19, 0x0C } ++ // In practice, this will be overwritten with the contextual header! This is the last bytes of the multi data indicator, and the len of the data we submitted
+            &[_]u8{ 0xAA, 0x00 } ++ // In practice, this will be overwritten with the contextual header!
+                &[_]u8{ 0, 2 } ++ // Reliable sequence
                 &fill_the_multibuffer ++
                 &contextual_trailer,
             channel._stash[2].data.?.getSlice(),
