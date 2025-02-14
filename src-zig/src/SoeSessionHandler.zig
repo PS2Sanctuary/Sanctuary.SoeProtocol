@@ -358,9 +358,8 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
 
 fn calculateMaxDataLength(self: *const SoeSessionHandler) u32 {
     return self._session_params.udp_length -
-        @sizeOf(soe_protocol.SoeOpCode) -
-        @as(u1, (if (self._session_params.is_compression_enabled) 1 else 0)) -
-        self._session_params.crc_length;
+        self.contextual_header_len -
+        self.contextual_trailer_len;
 }
 
 // ===== End Contextless Packet Handling =====
