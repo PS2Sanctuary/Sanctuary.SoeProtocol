@@ -18,6 +18,11 @@ public partial class SoeProtocolHandler
     public DataInputStats ReliableDataReceiveStats => _dataInputChannel.InputStats;
 
     /// <summary>
+    /// Gets statistics related to sending reliable data.
+    /// </summary>
+    public DataOutputStats ReliableDataSendStats => _dataOutputChannel.OutputStats;
+
+    /// <summary>
     /// Sends a contextual packet.
     /// </summary>
     /// <param name="opCode">The OP code of the packet to send.</param>

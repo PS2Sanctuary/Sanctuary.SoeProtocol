@@ -56,6 +56,11 @@ public sealed class ReliableDataOutputChannel : IDisposable
     private int _multiBufferFirstItemOffset;
 
     /// <summary>
+    /// Gets the data output statistics.
+    /// </summary>
+    public DataOutputStats OutputStats { get; } = new();
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ReliableDataOutputChannel"/> class.
     /// </summary>
     /// <param name="handler">The parent handler.</param>
@@ -128,8 +133,12 @@ public sealed class ReliableDataOutputChannel : IDisposable
             _lastAckAt = Stopwatch.GetTimestamp();
 
         // Been a while since we received an ack? Send again from the start of the window
+        long resendingUpTo = 0;
         if (Stopwatch.GetElapsedTime(_lastAckAt).Milliseconds >= ACK_WAIT_MILLISECONDS)
+        {
             _currentSequence = _windowStartSequence;
+            resendingUpTo = _currentSequence;
+        }
 
         // Send everything we haven't sent from the current window
         long lastSequenceToSend = Math.Min
@@ -143,14 +152,18 @@ public sealed class ReliableDataOutputChannel : IDisposable
             ct.ThrowIfCancellationRequested();
 
             int index = GetSequenceIndexInDispatchBuffer(_currentSequence);
-            _currentSequence++;
-
             StashedOutputPacket stashedPacket = _dispatchStash[index];
             if (stashedPacket.DataSpan is null)
                 continue; // Packets ahead of _currentSequence may have been individually acked & cleared
 
             SoeOpCode opCode = stashedPacket.IsFragment ? SoeOpCode.ReliableDataFragment : SoeOpCode.ReliableData;
             _handler.SendContextualPacket(opCode, stashedPacket.DataSpan.UsedSpan);
+
+            OutputStats.TotalSentReliablePackets++;
+            if (_currentSequence < resendingUpTo)
+                OutputStats.TotalResentReliablePackets++;
+
+            _currentSequence++;
         }
     }
 
@@ -161,6 +174,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
     public void NotifyOfAcknowledge(Acknowledge ack)
     {
         long seq = GetTrueIncomingSequence(ack.Sequence);
+        OutputStats.IncomingAcknowledgeCount++;
         ProcessAck(seq);
     }
 
@@ -171,6 +185,8 @@ public sealed class ReliableDataOutputChannel : IDisposable
     public void NotifyOfAcknowledgeAll(AcknowledgeAll ackAll)
     {
         long seq = GetTrueIncomingSequence(ackAll.Sequence);
+        OutputStats.IncomingAcknowledgeCount++;
+
         for (long i = _windowStartSequence; i <= seq; i++)
             ProcessAck(i);
     }
@@ -203,6 +219,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         {
             _spanPool.Return(packet.DataSpan);
             packet.DataSpan = null;
+            OutputStats.ActualAcknowledgeCount++;
         }
 
         // Walk the window forward to our _currentSequence, until we find a packet that hasn't been acked

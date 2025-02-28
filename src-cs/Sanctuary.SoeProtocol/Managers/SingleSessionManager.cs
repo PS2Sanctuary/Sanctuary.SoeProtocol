@@ -31,6 +31,11 @@ public sealed class SingleSessionManager : IDisposable
     public DataInputStats? ReliableDataReceiveStats => _protocolHandler?.ReliableDataReceiveStats;
 
     /// <summary>
+    /// Gets statistics reliated to sending reliable data.
+    /// </summary>
+    public DataOutputStats? ReliableDataSendStats => _protocolHandler?.ReliableDataSendStats;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="SingleSessionManager"/> class.
     /// </summary>
     /// <param name="logger">The logging interface to use.</param>
