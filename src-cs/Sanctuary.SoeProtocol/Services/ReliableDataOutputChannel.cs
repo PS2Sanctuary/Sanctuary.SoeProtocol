@@ -222,8 +222,8 @@ public sealed class ReliableDataOutputChannel : IDisposable
             OutputStats.ActualAcknowledgeCount++;
         }
 
-        // Walk the window forward to our _totalSequence, until we find a packet that hasn't been acked
-        while (_windowStartSequence < _totalSequence)
+        // Walk the window forward to our _currentSequence, until we find a packet that hasn't been acked
+        while (_windowStartSequence < _currentSequence)
         {
             index = GetSequenceIndexInDispatchBuffer(_windowStartSequence);
             if (_dispatchStash[index].DataSpan is not null)
