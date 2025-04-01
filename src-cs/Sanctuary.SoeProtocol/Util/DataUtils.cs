@@ -133,7 +133,7 @@ public static class DataUtils
     public static int GetVariableLengthSize(uint length)
         => length switch
         {
-            < 0xFE => sizeof(byte),
+            < 0xFF => sizeof(byte),
             < 0xFFFF => sizeof(ushort) + 1,
             _ => sizeof(uint) + 3
         };
@@ -149,7 +149,7 @@ public static class DataUtils
     /// </param>
     public static void WriteVariableLength(Span<byte> buffer, uint length, ref int offset)
     {
-        if (length < 0xFE)
+        if (length < 0xFF)
         {
             buffer[offset++] = (byte)length;
         }
