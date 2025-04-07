@@ -14,6 +14,7 @@ namespace SingleSessionPeersSample;
 public class PingApplication : IApplicationProtocolHandler
 {
     private readonly ILogger<PingApplication> _logger;
+    private readonly TimeSpan _pingPongDuration = TimeSpan.FromSeconds(10);
 
     private ISessionHandler? _sessionHandler;
     private long _sessionStart;
@@ -40,7 +41,12 @@ public class PingApplication : IApplicationProtocolHandler
     public void OnSessionOpened()
     {
         _sessionStart = Stopwatch.GetTimestamp();
-        _logger.LogInformation("{Mode} Session opened", GetModePrefix());
+        _logger.LogInformation
+        (
+            "{Mode} Session opened. Running ping throughput test for {Duration}...",
+            GetModePrefix(),
+            _pingPongDuration
+        );
 
         if (_sessionHandler!.Mode is SessionMode.Client)
             _sessionHandler.EnqueueData("Ping!"u8);
@@ -51,14 +57,13 @@ public class PingApplication : IApplicationProtocolHandler
     {
         _receiveCount++;
         string message = Encoding.UTF8.GetString(data);
-        _logger.LogInformation("{Mode} Received {Message}", GetModePrefix(), message);
 
         _sessionHandler!.EnqueueData
         (
             message is "Ping!" ? "Pong!"u8 : "Ping!"u8
         );
 
-        if (_sessionHandler!.Mode is SessionMode.Client && Stopwatch.GetElapsedTime(_sessionStart) >= TimeSpan.FromSeconds(10))
+        if (_sessionHandler!.Mode is SessionMode.Client && Stopwatch.GetElapsedTime(_sessionStart) >= _pingPongDuration)
             _sessionHandler!.TerminateSession();
     }
 
