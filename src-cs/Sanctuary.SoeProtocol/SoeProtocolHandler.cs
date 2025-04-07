@@ -113,23 +113,6 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     }
 
     /// <summary>
-    /// Processes a packet immediately. Use in tandem with <see cref="RunTick"/>.
-    /// </summary>
-    /// <param name="packetData">The packet data.</param>
-    /// <param name="validate">
-    /// Use to indicate that the packet has already been validated. Must set <paramref name="opCode"/>.
-    /// </param>
-    /// <param name="opCode">The OP code of the packet, if known.</param>
-    /// <exception cref="InvalidOperationException"></exception>
-    public void ProcessPacket(Span<byte> packetData, bool validate, SoeOpCode opCode = SoeOpCode.Invalid)
-    {
-        if (_runningAsync)
-            throw new InvalidOperationException("This method should only be used in tandem with RunTick");
-
-        ProcessPacketCore(packetData, validate, opCode);
-    }
-
-    /// <summary>
     /// Initializes the handler. This method should be called before
     /// <see cref="RunTick"/>.
     /// </summary>
