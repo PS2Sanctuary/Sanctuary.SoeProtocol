@@ -14,7 +14,6 @@ namespace Sanctuary.SoeProtocol.Services;
 public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
 {
     private readonly Socket _socket;
-    private readonly bool _disposeSocket;
 
     private bool _connectOnReceive;
     private SocketAddress? _remoteEndPoint;
@@ -25,51 +24,19 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="UdpSocketNetworkInterface"/> class.
     /// </summary>
-    /// <param name="maxDataLength">The maximum length of data that can be sent.</param>
-    /// <param name="connectOnReceive"><c>True</c> to connect the socket upon receiving remote data.</param>
-    public UdpSocketNetworkInterface(int maxDataLength, bool connectOnReceive = false)
-        : this
-        (
-            new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.IP),
-            maxDataLength,
-            connectOnReceive
-        )
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UdpSocketNetworkInterface"/> class.
-    /// </summary>
-    /// <param name="socket">The underlying socket to use.</param>
     /// <param name="maxDataLength">The maximum length of data that may be sent.</param>
     /// <param name="connectOnReceive"><c>True</c> to connect the socket upon receiving remote data.</param>
-    /// <param name="disposeSocket">
-    /// <c>True</c> to dispose of the <paramref name="socket"/> when <see cref="Dispose"/> is called.
-    /// </param>
     public UdpSocketNetworkInterface
     (
-        Socket socket,
         int maxDataLength,
-        bool connectOnReceive = false,
-        bool disposeSocket = true
+        bool connectOnReceive = false
     )
     {
-        if (socket.AddressFamily is not (AddressFamily.InterNetwork or AddressFamily.InterNetworkV6))
-            throw new ArgumentException("Must be an inter-network socket");
-
-        if (socket.SocketType is not SocketType.Dgram)
-            throw new ArgumentException("Must be a datagram socket", nameof(socket));
-
-        if (socket.ProtocolType is not (ProtocolType.IP or ProtocolType.Udp))
-            throw new ArgumentException("Socket must use the IP or UDP protocol", nameof(socket));
-
-        _socket = socket;
+        _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.IP);
         _connectOnReceive = connectOnReceive;
-        _disposeSocket = disposeSocket;
 
         _socket.SendBufferSize = maxDataLength;
         _socket.ReceiveBufferSize = maxDataLength;
-        //_socket.Blocking = false;
     }
 
     /// <inheritdoc />
@@ -145,8 +112,5 @@ public sealed class UdpSocketNetworkInterface : INetworkInterface, IDisposable
 
     /// <inheritdoc />
     public void Dispose()
-    {
-        if (_disposeSocket)
-            _socket.Dispose();
-    }
+        => _socket.Dispose();
 }
