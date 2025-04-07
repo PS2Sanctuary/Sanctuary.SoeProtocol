@@ -8,7 +8,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
 using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
 
 namespace Sanctuary.SoeProtocol;
@@ -28,7 +27,6 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     private bool _isDisposed;
     private bool _openSessionOnNextClientPacket;
     private long _lastReceivedPacketTick;
-    private bool _runningAsync;
 
     /// <summary>
     /// Gets the session parameters in use by the session.
@@ -150,51 +148,6 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
         _dataOutputChannel.RunTick(ct);
 
         return true;
-    }
-
-    /// <summary>
-    /// Asynchronously runs the protocol handler. This method will not return
-    /// until either it is cancelled, or the remote party terminates the session.
-    /// </summary>
-    /// <param name="ct">A <see cref="CancellationToken"/> that can be used to stop the operation.</param>
-    public async Task RunAsync(CancellationToken ct)
-    {
-        _runningAsync = true;
-        await Task.Yield();
-        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
-        _lastReceivedPacketTick = Stopwatch.GetTimestamp();
-
-        try
-        {
-            while (!ct.IsCancellationRequested && State is not SessionState.Terminated)
-            {
-                bool processedPacket = ProcessOneFromPacketQueue();
-
-                SendHeartbeatIfRequired();
-
-                if (Stopwatch.GetElapsedTime(_lastReceivedPacketTick) > SessionParams.InactivityTimeout)
-                {
-                    TerminateSession(DisconnectReason.Timeout, false);
-                    break;
-                }
-
-                _dataInputChannel.RunTick();
-                _dataOutputChannel.RunTick(ct);
-
-                if (!processedPacket)
-                    await timer.WaitForNextTickAsync(ct);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // This is fine
-        }
-        finally
-        {
-            TerminateSession();
-        }
-
-        _runningAsync = false;
     }
 
     /// <inheritdoc />
