@@ -4,6 +4,7 @@ using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Util;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,7 +75,93 @@ public sealed class SingleSessionManager : IDisposable
         await Task.Yield();
 
         using CancellationTokenSource internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        using UdpSocketNetworkInterface networkInterface = new
+        using UdpSocketNetworkInterface networkInterface = Initialize();
+        using Task receiveTask = RunReceiveLoopAsync(networkInterface, internalCts.Token);
+        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
+
+        try
+        {
+            if (_mode is SessionMode.Client)
+                _protocolHandler.SendSessionRequest();
+            _protocolHandler.Initialize();
+
+            while (!ct.IsCancellationRequested)
+            {
+                // Run a tick of the protocol handler. If this returns false, the protocol handler has terminated
+                if (!_protocolHandler.RunTick(out bool needsMoreTime, ct))
+                    break;
+
+                if (receiveTask.IsCompleted)
+                    break;
+
+                // If the protocol handler didn't need to process again immediately, have a cooldown
+                if (!needsMoreTime)
+                    await timer.WaitForNextTickAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // This is fine
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"{nameof(SingleSessionManager)} run loop failure");
+        }
+        finally
+        {
+            _protocolHandler.TerminateSession();
+        }
+
+        // Guaranteed cleanup, in case of an exception in the above try-catch
+        try
+        {
+            internalCts.Cancel();
+            await receiveTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // This is fine
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"{nameof(SingleSessionManager)} task cleanup failure");
+        }
+
+        _logger.LogDebug
+        (
+            "{Mode} session {ID} closed with reason: {Reason}",
+            _mode,
+            _protocolHandler?.SessionId,
+            _protocolHandler?.TerminationReason
+        );
+    }
+
+    private async Task RunReceiveLoopAsync(UdpSocketNetworkInterface networkReader, CancellationToken ct)
+    {
+        if (_protocolHandler is null)
+            throw new InvalidOperationException("Cannot run the receive loop while the protocol handler is null");
+
+        await Task.Yield();
+        byte[] receiveBuffer = GC.AllocateArray<byte>((int)_sessionParams.UdpLength, true);
+
+        while (!ct.IsCancellationRequested)
+        {
+            int amount = await networkReader.ReceiveAsync(receiveBuffer, ct).ConfigureAwait(false);
+            if (amount <= 0)
+                continue;
+
+            NativeSpan span = _spanPool.Rent();
+            span.CopyDataInto(receiveBuffer.AsSpan(0, amount));
+
+            if (!_protocolHandler.EnqueuePacket(span))
+                _spanPool.Return(span);
+        }
+    }
+
+    [MemberNotNull(nameof(_protocolHandler))]
+    private UdpSocketNetworkInterface Initialize()
+    {
+        UdpSocketNetworkInterface networkInterface = new
         (
             (int)_sessionParams.UdpLength * 64,
             _mode == SessionMode.Server
@@ -102,75 +189,7 @@ public sealed class SingleSessionManager : IDisposable
             _application
         );
 
-        Task receiveTask = RunReceiveLoopAsync(networkInterface, internalCts.Token);
-        Task handlerTask = _protocolHandler.RunAsync(internalCts.Token);
-
-        try
-        {
-            if (_mode is SessionMode.Client)
-                _protocolHandler.SendSessionRequest();
-            await Task.WhenAny(receiveTask, handlerTask);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"{nameof(SingleSessionManager)} run failure");
-        }
-
-        internalCts.Cancel();
-
-        try
-        {
-            await Task.WhenAll(receiveTask, handlerTask);
-        }
-        catch (AggregateException aex)
-        {
-            foreach (Exception ex in aex.InnerExceptions)
-                _logger.LogError(ex, $"{nameof(SingleSessionManager)} run failure");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"{nameof(SingleSessionManager)} run failure");
-        }
-
-        receiveTask.Dispose();
-        handlerTask.Dispose();
-
-        _logger.LogDebug
-        (
-            "{Mode} session {ID} closed with reason: {Reason}",
-            _mode,
-            _protocolHandler?.SessionId,
-            _protocolHandler?.TerminationReason
-        );
-    }
-
-    private async Task RunReceiveLoopAsync(UdpSocketNetworkInterface networkReader, CancellationToken ct)
-    {
-        if (_protocolHandler is null)
-            throw new InvalidOperationException("Cannot run the receive loop while the protocol handler is null");
-
-        await Task.Yield();
-        byte[] receiveBuffer = GC.AllocateArray<byte>((int)_sessionParams.UdpLength, true);
-
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                int amount = await networkReader.ReceiveAsync(receiveBuffer, ct).ConfigureAwait(false);
-                if (amount <= 0)
-                    continue;
-
-                NativeSpan span = _spanPool.Rent();
-                span.CopyDataInto(receiveBuffer.AsSpan(0, amount));
-
-                if (!_protocolHandler.EnqueuePacket(span))
-                    _spanPool.Return(span);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // This is fine
-        }
+        return networkInterface;
     }
 
     /// <inheritdoc />
