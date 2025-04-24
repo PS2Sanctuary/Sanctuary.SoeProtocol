@@ -12,6 +12,7 @@
     </PropertyGroup>
     
     <ItemGroup>
+      <PackageReference Include="carlst99.BinaryPrimitiveHelpers" Version="0.0.3" />
       <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
       <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="3.0.1" />
       <PackageReference Update="Microsoft.SourceLink.GitHub" Version="8.0.0" />

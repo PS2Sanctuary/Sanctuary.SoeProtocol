@@ -6,7 +6,7 @@ using System;
 using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
-using BinaryWriter = Sanctuary.SoeProtocol.Util.BinaryWriter;
+using BinaryWriter = BinaryPrimitiveHelpers.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol.Tests.Util;
 
@@ -77,7 +77,7 @@ public class SoePacketUtilsTests
 
         writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
         new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
-        writer.Advance(AcknowledgeAll.Size);
+        writer.Seek(AcknowledgeAll.Size);
         SoePacketUtils.AppendCrc(ref writer, sessionParams.CrcSeed, crcLength);
 
         SoePacketValidationResult result = SoePacketUtils.ValidatePacket(packet, sessionParams, out _);
@@ -95,7 +95,7 @@ public class SoePacketUtilsTests
 
         writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
         new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
-        writer.Advance(AcknowledgeAll.Size);
+        writer.Seek(AcknowledgeAll.Size);
         SoePacketUtils.AppendCrc(ref writer, 0, CRC_LENGTH);
 
         SoePacketValidationResult result = SoePacketUtils.ValidatePacket(packet, sessionParams, out _);

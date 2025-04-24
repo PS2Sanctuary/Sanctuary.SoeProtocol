@@ -1,4 +1,4 @@
-﻿using Sanctuary.SoeProtocol.Util;
+﻿using BinaryPrimitiveHelpers;
 using System;
 
 namespace Sanctuary.SoeProtocol.Objects.Packets;
@@ -40,7 +40,7 @@ public readonly record struct SessionRequest
         BinaryReader reader = new(buffer);
 
         if (hasOpCode)
-            reader.Advance(sizeof(SoeOpCode));
+            reader.Seek(sizeof(SoeOpCode));
 
         uint soeProtocolVersion = reader.ReadUInt32BE();
         uint sessionId = reader.ReadUInt32BE();

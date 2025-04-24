@@ -1,4 +1,5 @@
-﻿using Microsoft.IO;
+﻿using BinaryPrimitiveHelpers;
+using Microsoft.IO;
 using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Services;
@@ -7,6 +8,7 @@ using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
+using BinaryWriter = BinaryPrimitiveHelpers.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol.Util;
 
@@ -138,7 +140,7 @@ public static class SoePacketUtils
             }
             case 3:
             {
-                uint crc = new BinaryReader(packetData[^3..]).ReadUInt24BE();
+                uint crc = BinaryPrimitivesExtensions.ReadUInt24BE(packetData[^3..]);
                 crcMatch = (actualCrc & 0x00FFFFFF) == crc;
                 break;
             }

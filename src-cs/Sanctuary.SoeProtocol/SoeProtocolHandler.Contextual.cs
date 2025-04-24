@@ -4,7 +4,7 @@ using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Diagnostics;
 using System.IO;
-using BinaryWriter = Sanctuary.SoeProtocol.Util.BinaryWriter;
+using BinaryWriter = BinaryPrimitiveHelpers.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol;
 
@@ -105,7 +105,7 @@ public partial class SoeProtocolHandler
             case SoeOpCode.Heartbeat:
             {
                 if (Mode is SessionMode.Server)
-                    SendContextualPacket(SoeOpCode.Heartbeat, Array.Empty<byte>());
+                    SendContextualPacket(SoeOpCode.Heartbeat, []);
                 // Otherwise ignore, no need to hit the default clause
                 break;
             }

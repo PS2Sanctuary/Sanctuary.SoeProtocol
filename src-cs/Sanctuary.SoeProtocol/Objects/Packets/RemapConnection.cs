@@ -1,4 +1,4 @@
-﻿using Sanctuary.SoeProtocol.Util;
+﻿using BinaryPrimitiveHelpers;
 using System;
 
 namespace Sanctuary.SoeProtocol.Objects.Packets;
@@ -30,7 +30,7 @@ public readonly record struct RemapConnection(uint SessionId, uint CrcSeed)
         BinaryReader reader = new(buffer);
 
         if (hasOpCode)
-            reader.Advance(sizeof(SoeOpCode));
+            reader.Seek(sizeof(SoeOpCode));
 
         uint sessionId = reader.ReadUInt32BE();
         uint crcSeed = reader.ReadUInt32BE();

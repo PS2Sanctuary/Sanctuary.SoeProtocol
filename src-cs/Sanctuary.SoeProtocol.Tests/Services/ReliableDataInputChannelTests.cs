@@ -1,4 +1,5 @@
-﻿using Sanctuary.SoeProtocol.Objects;
+﻿using BinaryPrimitiveHelpers;
+using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Tests.Mocks;
