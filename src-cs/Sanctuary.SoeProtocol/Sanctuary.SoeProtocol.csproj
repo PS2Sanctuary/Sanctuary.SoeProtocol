@@ -5,7 +5,7 @@
         <IsAotCompatible>true</IsAotCompatible>
 
         <!-- Package info -->
-        <Version>5.0.0</Version>
+        <Version>5.0.1</Version>
         <Description>
             A naive implementation of the SOE Protocol, a game networking layer developed by Sony Online Entertainment.
         </Description>
