@@ -27,7 +27,7 @@ public readonly record struct RemapConnection(uint SessionId, uint CrcSeed)
     /// <returns>The deserialized packet.</returns>
     public static RemapConnection Deserialize(ReadOnlySpan<byte> buffer, bool hasOpCode)
     {
-        BinaryReader reader = new(buffer);
+        BinaryPrimitiveReader reader = new(buffer);
 
         if (hasOpCode)
             reader.Seek(sizeof(SoeOpCode));
@@ -49,7 +49,7 @@ public readonly record struct RemapConnection(uint SessionId, uint CrcSeed)
     /// <param name="buffer">The buffer.</param>
     public void Serialize(Span<byte> buffer)
     {
-        BinaryWriter writer = new(buffer);
+        BinaryPrimitiveWriter writer = new(buffer);
 
         writer.WriteUInt16BE((ushort)SoeOpCode.RemapConnection);
         writer.WriteUInt32BE(SessionId);

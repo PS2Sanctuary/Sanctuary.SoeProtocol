@@ -188,7 +188,7 @@ public sealed class ReliableDataOutputChannel2 : IDisposable
     private void StashFragment(ref ReadOnlySpan<byte> data, bool isMaster, bool isFragment)
     {
         NativeSpan span = _spanPool.Rent();
-        BinaryWriter writer = new(span.FullSpan);
+        BinaryPrimitiveWriter writer = new(span.FullSpan);
 
         writer.WriteUInt16BE((ushort)_totalSequence);
         int amountToTake = Math.Min(data.Length, _maxDataLength - sizeof(ushort));

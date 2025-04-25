@@ -1,4 +1,5 @@
-﻿using Sanctuary.SoeProtocol.Objects;
+﻿using BinaryPrimitiveHelpers;
+using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Services;
 using Sanctuary.SoeProtocol.Util;
@@ -6,7 +7,6 @@ using System;
 using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
-using BinaryWriter = BinaryPrimitiveHelpers.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol.Tests.Util;
 
@@ -23,7 +23,7 @@ public class SoePacketUtilsTests
         const uint CRC_SEED = 5;
 
         byte[] buffer = new byte[4 + crcLength];
-        BinaryWriter writer = new(buffer);
+        BinaryPrimitiveWriter writer = new(buffer);
         writer.WriteUInt32BE(454653524);
 
         uint expectedCrc = Crc32.Hash(buffer.AsSpan(0, 4), CRC_SEED);
@@ -73,7 +73,7 @@ public class SoePacketUtilsTests
     {
         SessionParameters sessionParams = GetSessionParams(crcLength);
         byte[] packet = new byte[sizeof(SoeOpCode) + AcknowledgeAll.Size + crcLength];
-        BinaryWriter writer = new(packet);
+        BinaryPrimitiveWriter writer = new(packet);
 
         writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
         new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
@@ -91,7 +91,7 @@ public class SoePacketUtilsTests
 
         SessionParameters sessionParams = GetSessionParams(CRC_LENGTH);
         byte[] packet = new byte[sizeof(SoeOpCode) + AcknowledgeAll.Size + CRC_LENGTH];
-        BinaryWriter writer = new(packet);
+        BinaryPrimitiveWriter writer = new(packet);
 
         writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
         new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));

@@ -8,7 +8,6 @@ using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
-using BinaryWriter = BinaryPrimitiveHelpers.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol.Util;
 
@@ -62,13 +61,13 @@ public static class SoePacketUtils
             or SoeOpCode.AcknowledgeAll;
 
     /// <summary>
-    /// Appends a CRC check value to the given <see cref="BinaryWriter"/>.
+    /// Appends a CRC check value to the given <see cref="BinaryPrimitiveWriter"/>.
     /// The entirety of the writer's buffer is used to calculate the check.
     /// </summary>
     /// <param name="writer">The writer to append to.</param>
     /// <param name="crcSeed">The CRC seed to use.</param>
     /// <param name="crcLength">The number of bytes to store the CRC check value in.</param>
-    public static void AppendCrc(ref BinaryWriter writer, uint crcSeed, byte crcLength)
+    public static void AppendCrc(ref BinaryPrimitiveWriter writer, uint crcSeed, byte crcLength)
     {
         if (crcLength is 0)
             return;

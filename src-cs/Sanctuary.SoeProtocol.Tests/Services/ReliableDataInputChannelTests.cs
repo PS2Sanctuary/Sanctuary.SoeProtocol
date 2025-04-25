@@ -279,7 +279,7 @@ public class ReliableDataInputChannelTests : IDisposable
         Random.Shared.NextBytes(data);
 
         byte[] buffer = new byte[length];
-        BinaryWriter writer = new(buffer);
+        BinaryPrimitiveWriter writer = new(buffer);
 
         writer.WriteUInt16BE(sequence);
         if (completeDataLength is not null)

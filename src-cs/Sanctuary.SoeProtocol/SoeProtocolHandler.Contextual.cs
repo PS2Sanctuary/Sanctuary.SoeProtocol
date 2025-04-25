@@ -1,10 +1,10 @@
-﻿using Sanctuary.SoeProtocol.Objects;
+﻿using BinaryPrimitiveHelpers;
+using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Diagnostics;
 using System.IO;
-using BinaryWriter = BinaryPrimitiveHelpers.BinaryWriter;
 
 namespace Sanctuary.SoeProtocol;
 
@@ -36,7 +36,7 @@ public partial class SoeProtocolHandler
         if (packetData.Length + extraBytes > SessionParams.RemoteUdpLength)
             throw new InvalidOperationException("Cannot send a packet larger than the remote UDP length");
 
-        BinaryWriter writer = new(_contextualSendBuffer);
+        BinaryPrimitiveWriter writer = new(_contextualSendBuffer);
 
         writer.WriteUInt16BE((ushort)opCode);
         if (SessionParams.IsCompressionEnabled)

@@ -7,7 +7,7 @@ public static class BinaryPrimitiveHelperExtensions
     /// Reads an unsigned 24-bit integer in big endian format.
     /// </summary>
     /// <returns>A uint value.</returns>
-    public static uint ReadUInt24BE(this ref BinaryReader reader)
+    public static uint ReadUInt24BE(this ref BinaryPrimitiveReader reader)
     {
         uint value = 0;
         value |= (uint)reader.ReadByte() << 16;
@@ -21,7 +21,7 @@ public static class BinaryPrimitiveHelperExtensions
     /// </summary>
     /// <param name="writer">The writer to use.</param>
     /// <param name="value">The value.</param>
-    public static void WriteUInt24BE(this ref BinaryWriter writer, uint value)
+    public static void WriteUInt24BE(this ref BinaryPrimitiveWriter writer, uint value)
     {
         writer.WriteByte((byte)(value >>> 16));
         writer.WriteByte((byte)(value >>> 8));
