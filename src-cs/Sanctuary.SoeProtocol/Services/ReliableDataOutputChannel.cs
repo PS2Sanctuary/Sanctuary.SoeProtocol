@@ -44,9 +44,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// The total number of sequences that have been output.
     private long _totalSequence;
 
-    /// The timestamp at which we last received an ack packet.
-    private long _lastAckAt;
-
     /// The current multi-buffer
     private NativeSpan _multiBuffer;
     /// The current offset into the multi-buffer at which data should be written.
@@ -89,10 +86,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
         _cipherState = _applicationParams.EncryptionKeyState?.Copy();
         SetMaxDataLength(maxDataLength);
         SetupNewMultiBuffer();
-
-        _windowStartSequence = 0;
-        _currentSequence = 0;
-        _totalSequence = 0;
     }
 
     /// <summary>
@@ -108,11 +101,14 @@ public sealed class ReliableDataOutputChannel : IDisposable
     /// <param name="ct">A <see cref="CancellationToken"/> that can be used to stop the operation.</param>
     public void RunTick(CancellationToken ct)
     {
+        int stashIndex;
         _packetOutputQueueLock.Wait(ct);
 
+        // Attempt to load packets from the dispatch queue into the dispatch stash (the current window)
+        // while there is unused space in the window
         while (_dispatchQueue.TryPeek(out (long Seq, StashedOutputPacket Data) bundle))
         {
-            int stashIndex = GetSequenceIndexInDispatchBuffer(bundle.Seq);
+            stashIndex = GetSequenceIndexInDispatchBuffer(bundle.Seq);
             if (_dispatchStash[stashIndex].DataSpan is not null)
                 break;
 
@@ -128,20 +124,19 @@ public sealed class ReliableDataOutputChannel : IDisposable
         EnqueueMultiBuffer();
         _packetOutputQueueLock.Release();
 
-        // Ensure we're not expecting an ack when we've only
-        // just started sending a block of data
-        if (_windowStartSequence == _currentSequence)
-            _lastAckAt = Stopwatch.GetTimestamp();
-
-        // Been a while since we received an ack? Send again from the start of the window
+        // Check how long it's been since we went the first item in the window. If it hasn't been cleared after
+        // our ack window has timed out, then it hasn't been acknowledged, and we need to re-send it
         long resendingUpTo = 0;
-        if (Stopwatch.GetElapsedTime(_lastAckAt).Milliseconds >= ACK_WAIT_MILLISECONDS)
+        stashIndex = GetSequenceIndexInDispatchBuffer(_windowStartSequence);
+        long earliestSent = _dispatchStash[stashIndex].SentAt;
+        if (earliestSent > -1 && Stopwatch.GetElapsedTime(earliestSent).Milliseconds >= ACK_WAIT_MILLISECONDS)
         {
             _currentSequence = _windowStartSequence;
             resendingUpTo = _currentSequence;
         }
 
         // Send everything we haven't sent from the current window
+        Debug.Assert(_currentSequence <= _totalSequence);
         long lastSequenceToSend = Math.Min
         (
             _totalSequence,
@@ -152,12 +147,13 @@ public sealed class ReliableDataOutputChannel : IDisposable
         {
             ct.ThrowIfCancellationRequested();
 
-            int index = GetSequenceIndexInDispatchBuffer(_currentSequence);
-            StashedOutputPacket stashedPacket = _dispatchStash[index];
+            stashIndex = GetSequenceIndexInDispatchBuffer(_currentSequence);
+            StashedOutputPacket stashedPacket = _dispatchStash[stashIndex];
             if (stashedPacket.DataSpan is null)
                 continue; // Packets ahead of _currentSequence may have been individually acked & cleared
 
             SoeOpCode opCode = stashedPacket.IsFragment ? SoeOpCode.ReliableDataFragment : SoeOpCode.ReliableData;
+            stashedPacket.SentAt = Stopwatch.GetTimestamp();
             _handler.SendContextualPacket(opCode, stashedPacket.DataSpan.UsedSpan);
 
             OutputStats.TotalSentReliablePackets++;
@@ -232,8 +228,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
 
             _windowStartSequence++;
         }
-
-        _lastAckAt = Stopwatch.GetTimestamp();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -359,6 +353,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         {
             packet.IsFragment = isFragment;
             packet.DataSpan = buffer;
+            packet.SentAt = -1;
         }
 
         _totalSequence++;
@@ -421,5 +416,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
     {
         public bool IsFragment { get; set; }
         public NativeSpan? DataSpan { get; set; }
+        public long SentAt { get; set; } = -1;
     }
 }
