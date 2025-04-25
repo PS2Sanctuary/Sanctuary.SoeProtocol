@@ -8,6 +8,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit.Abstractions;
 
 namespace Sanctuary.SoeProtocol.Tests.Services;
 
@@ -18,12 +19,14 @@ public class ReliableDataOutputChannelTests : IDisposable
 
     private static readonly NativeSpanPool SpanPool = new(512, 8);
 
+    private readonly ITestOutputHelper _outputHelper;
     private readonly MockNetworkInterface _netInterface;
     private readonly MockApplicationProtocolHandler _handler;
     private readonly ReliableDataOutputChannel _channel;
 
-    public ReliableDataOutputChannelTests()
+    public ReliableDataOutputChannelTests(ITestOutputHelper outputHelper)
     {
+        _outputHelper = outputHelper;
         _netInterface = new MockNetworkInterface();
         _handler = new MockApplicationProtocolHandler();
 
@@ -75,13 +78,25 @@ public class ReliableDataOutputChannelTests : IDisposable
         byte[] packet = GeneratePacket(packetLength);
 
         _channel.EnqueueData(packet);
+        _outputHelper.WriteLine("Enqueued packet");
+
         _channel.RunTick(CancellationToken.None);
+        _outputHelper.WriteLine("Ran first tick");
+
         AssertReceivedPacketsEqualBuffer(_netInterface, packet, true);
+        _outputHelper.WriteLine("Completed first assertion on received packets");
 
         _channel.NotifyOfAcknowledge(new Acknowledge(3));
+        _outputHelper.WriteLine("Notified of acknowledge");
+
         await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        _outputHelper.WriteLine("Delay complete");
+
         _channel.RunTick(CancellationToken.None);
+        _outputHelper.WriteLine("Ran second tick");
+
         AssertReceivedPacketsEqualBuffer(_netInterface, packet.AsSpan()[..^MAX_DATA_LENGTH], true);
+        _outputHelper.WriteLine("Completed second assertion on received packets");
     }
 
     [Fact]
