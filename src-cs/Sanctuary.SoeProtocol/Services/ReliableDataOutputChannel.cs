@@ -147,7 +147,11 @@ public sealed class ReliableDataOutputChannel : IDisposable
         {
             ct.ThrowIfCancellationRequested();
 
-            stashIndex = GetSequenceIndexInDispatchBuffer(_currentSequence);
+            OutputStats.TotalSentReliablePackets++;
+            if (_currentSequence < resendingUpTo)
+                OutputStats.TotalResentReliablePackets++;
+
+            stashIndex = GetSequenceIndexInDispatchBuffer(_currentSequence++);
             StashedOutputPacket stashedPacket = _dispatchStash[stashIndex];
             if (stashedPacket.DataSpan is null)
                 continue; // Packets ahead of _currentSequence may have been individually acked & cleared
@@ -156,11 +160,6 @@ public sealed class ReliableDataOutputChannel : IDisposable
             stashedPacket.SentAt = Stopwatch.GetTimestamp();
             _handler.SendContextualPacket(opCode, stashedPacket.DataSpan.UsedSpan);
 
-            OutputStats.TotalSentReliablePackets++;
-            if (_currentSequence < resendingUpTo)
-                OutputStats.TotalResentReliablePackets++;
-
-            _currentSequence++;
         }
     }
 
