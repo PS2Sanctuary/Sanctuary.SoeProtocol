@@ -322,6 +322,10 @@ fn setNewMultiBuffer(self: *ReliableDataOutputChannel) !void {
 }
 
 fn flushMultiBuffer(self: *ReliableDataOutputChannel) !void {
+    if (self._multi_buffer_count == 0) {
+        return;
+    }
+
     self._multi_buffer.data_end_idx += self._session_handler.contextual_trailer_len;
 
     // There is only a single packet in the multibuffer so we can send it directly as a fragment
