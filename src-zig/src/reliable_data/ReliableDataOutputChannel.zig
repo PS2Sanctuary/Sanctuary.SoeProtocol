@@ -160,30 +160,32 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
 }
 
 /// Notifies the output channel of an acknowledge packet.
-pub fn receivedAck(self: *ReliableDataOutputChannel, ack: soe_packets.Acknowledge) void {
+pub fn receivedAck(self: *ReliableDataOutputChannel, ack: soe_packets.Acknowledge) !void {
     const seq = utils.getTrueIncomingSequence(
         ack.sequence,
         self._window_start_sequence,
         self._session_params.max_queued_outgoing_data_packets,
     );
-    self.processAck(seq);
+    try self.processAck(seq);
 }
 
 /// Notifies the output channel of an acknowledge-all packet.
-pub fn receivedAckAll(self: *ReliableDataOutputChannel, ack: soe_packets.AcknowledgeAll) void {
+pub fn receivedAckAll(self: *ReliableDataOutputChannel, ack: soe_packets.AcknowledgeAll) !void {
     const seq = utils.getTrueIncomingSequence(
         ack.sequence,
         self._window_start_sequence,
         self._session_params.max_queued_outgoing_data_packets,
     );
-    for (self._window_start_sequence..seq + 1) |i| {
-        self.processAck(i);
+
+    var i = self._window_start_sequence;
+    while (i <= seq) : (i += 1) {
+        try self.processAck(i);
     }
 }
 
-fn processAck(self: *ReliableDataOutputChannel, sequence: i64) void {
+fn processAck(self: *ReliableDataOutputChannel, sequence: i64) !void {
     var stash_index = self.getStashIndex(sequence);
-    const stashed_item = self._stash[stash_index];
+    var stashed_item = self._stash[stash_index];
 
     if (stashed_item.data) |has_data| {
         has_data.releaseRef();

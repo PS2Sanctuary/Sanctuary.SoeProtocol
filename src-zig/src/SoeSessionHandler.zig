@@ -436,11 +436,11 @@ fn handleContextualPacketInternal(
         },
         .acknowledge => {
             const ack = soe_packets.Acknowledge.deserialize(packet_data);
-            self._data_output_channel.receivedAck(ack);
+            try self._data_output_channel.receivedAck(ack);
         },
         .acknowledge_all => {
             const ack_all = soe_packets.AcknowledgeAll.deserialize(packet_data);
-            self._data_output_channel.receivedAckAll(ack_all);
+            try self._data_output_channel.receivedAckAll(ack_all);
         },
         else => {
             std.debug.panic("The contextual handler does not support {any} packets", .{op_code});
