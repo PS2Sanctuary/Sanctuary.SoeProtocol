@@ -234,6 +234,8 @@ pub fn sendHeartbeat(self: *const SoeSessionHandler) !void {
     try self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, &[0]u8{});
 }
 
+/// Queues data to be sent on the reliable channel. The `data` may be mutated
+/// if encryption is enabled.
 pub fn sendReliableData(self: *SoeSessionHandler, data: []u8) !void {
     try self._data_output_channel.sendData(data);
 }
