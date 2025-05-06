@@ -27,9 +27,10 @@ public static class MultiPacketUtils
         }
         else if (data[offset] == byte.MaxValue && data[offset + 1] == 0)
         {
-            // We only offset by one, as the implied 0x00 in front of all
-            // core OP codes given big endian, allows us to use that
-            // as an indicator for a length value of 0xFF
+            // We only offset by one, as the implied 0x00 in front of all core OP codes given big endian, allows us to
+            // use that as an indicator for a length value of 0xFF. This works because the byte immediately following
+            // the length is going to be the start of the nested SOE packet!
+            // Note that this assumes the protocol will never have more than 256 OP codes.
             value = data[offset++];
         }
         else if (data[offset + 1] == byte.MaxValue && data[offset + 2] == byte.MaxValue)
@@ -73,10 +74,8 @@ public static class MultiPacketUtils
     /// </param>
     public static void WriteVariableLength(Span<byte> buffer, uint length, ref int offset)
     {
-        if (length <= byte.MaxValue)
+        if (length <= byte.MaxValue) // See ReadVariableLength for a description of why <= is valid here
         {
-            // We rely on core OP codes all starting with 0x00 (given big endian)
-            // to signal that a length of 0xFF is not a ushort value.
             buffer[offset++] = (byte)length;
         }
         else if (length < ushort.MaxValue)

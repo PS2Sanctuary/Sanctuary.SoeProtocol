@@ -149,7 +149,7 @@ public static class DataUtils
     /// </param>
     public static void WriteVariableLength(Span<byte> buffer, uint length, ref int offset)
     {
-        if (length < 0xFF)
+        if (length < 0xFF) // TODO: This may need to be 0xFE (254) instead?
         {
             buffer[offset++] = (byte)length;
         }

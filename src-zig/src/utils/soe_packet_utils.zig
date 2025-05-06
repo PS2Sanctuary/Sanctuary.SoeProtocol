@@ -140,7 +140,7 @@ pub fn getVariableLengthSize(length: u32) u3 {
 }
 
 pub fn writeVariableLength(dest: []u8, value: u32, offset: *usize) void {
-    if (value < 0xFF) {
+    if (value < 0xFF) { // TODO: This may need to be 0xFE (254) instead?
         dest[offset.*] = @truncate(value);
         offset.* += 1;
     } else if (value < 0xFFFF) {

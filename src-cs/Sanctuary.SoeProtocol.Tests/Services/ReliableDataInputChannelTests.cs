@@ -190,9 +190,9 @@ public class ReliableDataInputChannelTests : IDisposable
         // Fill out the data buffer
         int offset = sizeof(ushort);
         DataUtils.WriteMultiDataIndicator(multiBuffer, ref offset);
-        MultiPacketUtils.WriteVariableLength(multiBuffer, 1, ref offset);
+        DataUtils.WriteVariableLength(multiBuffer, 1, ref offset);
         multiBuffer[offset++] = 2;
-        MultiPacketUtils.WriteVariableLength(multiBuffer, 1, ref offset);
+        DataUtils.WriteVariableLength(multiBuffer, 1, ref offset);
         multiBuffer[offset] = 4;
 
         _channel.HandleReliableData(multiBuffer);
