@@ -276,7 +276,7 @@ fn encryptReliableData(self: *ReliableDataOutputChannel, data: []u8) .{ []u8, bo
 /// be achieved then `false` is returned and the packet should be dispatched
 /// on its own.
 fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
-    const total_len = data.len + soe_packet_utils.getVariableLengthSize(@intCast(data.len));
+    const total_len = data.len + utils.getMultiDataLenSize(@intCast(data.len));
 
     if (total_len > self._multi_max_data_len - self._multi_buffer.data_end_idx) {
         try self.flushMultiBuffer();
@@ -288,7 +288,7 @@ fn putInMultiBuffer(self: *ReliableDataOutputChannel, data: []const u8) !bool {
     }
 
     // Write the length of the data into the multibuffer, passing a reference to the _multi_buffer_position to update
-    soe_packet_utils.writeVariableLength(
+    utils.writeMultiDataLen(
         self._multi_buffer.data,
         @intCast(data.len),
         &self._multi_buffer.data_end_idx,
@@ -439,7 +439,7 @@ pub const tests = struct {
 
         var plain_data = [_]u8{ 0, 1, 2, 3, 4 };
 
-        const plain_data_var_len = soe_packet_utils.getVariableLengthSize(plain_data.len);
+        const plain_data_var_len = utils.getMultiDataLenSize(plain_data.len);
         // N.B. @sizeOf(u16) represents the reliable sequence
         const multi_start_index = channel._session_handler.contextual_header_len + @sizeOf(u16);
         const data_start_index = channel._session_handler.contextual_header_len + @sizeOf(u16) + utils.MULTI_DATA_INDICATOR.len;

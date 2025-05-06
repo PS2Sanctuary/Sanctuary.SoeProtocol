@@ -314,7 +314,7 @@ fn processData(self: *ReliableDataInputChannel, data: []u8) void {
     if (utils.hasMultiData(data)) {
         var offset: usize = 2;
         while (offset < data.len) {
-            const length = soe_packet_utils.readVariableLength(data, &offset);
+            const length = utils.readMultiDataLen(data, &offset);
             self.decryptAndCallHandler(data[offset .. offset + length]);
             offset += length;
         }

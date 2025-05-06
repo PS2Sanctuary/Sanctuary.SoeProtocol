@@ -52,6 +52,50 @@ pub fn writeMultiDataIndicator(buffer: []u8) usize {
     return MULTI_DATA_INDICATOR.len;
 }
 
+pub fn readMultiDataLen(source: []const u8, offset: *usize) u32 {
+    var value: u32 = 0;
+
+    if (source[offset.*] < 0xFF) {
+        value = source[offset.*];
+        offset.* += 1;
+    } else if (source[offset.* + 1] == 0xFF and source[offset.* + 2] == 0xFF) {
+        value = binary_primitives.readU32BE(source[offset.* + 3 ..]);
+        offset.* += 7;
+    } else {
+        value = binary_primitives.readU16BE(source[offset.* + 1 ..]);
+        offset.* += 3;
+    }
+
+    return value;
+}
+
+pub fn getMultiDataLenSize(length: u32) u3 {
+    if (length < 0xFF) {
+        return 1;
+    } else if (length < 0xFFFF) {
+        return 3;
+    } else {
+        return 7;
+    }
+}
+
+pub fn writeMultiDataLen(dest: []u8, value: u32, offset: *usize) void {
+    if (value < 0xFF) { // TODO: This may need to be 0xFE (254) instead? But only here, not in the read variant
+        dest[offset.*] = @truncate(value);
+        offset.* += 1;
+    } else if (value < 0xFFFF) {
+        dest[offset.*] = 0xFF;
+        binary_primitives.writeU16BE(dest[offset.* + 1 ..], @truncate(value));
+        offset.* += 3;
+    } else {
+        dest[offset.*] = 0xFF;
+        dest[offset.* + 1] = 0xFF;
+        dest[offset.* + 2] = 0xFF;
+        binary_primitives.writeU32BE(dest[offset.* + 3 ..], value);
+        offset.* += 7;
+    }
+}
+
 test getTrueIncomingSequence {
     try std.testing.expectEqual(3, getTrueIncomingSequence(3, 0, 10));
 
@@ -92,4 +136,41 @@ test writeMultiDataIndicator {
         &data,
     );
     try std.testing.expectEqual(MULTI_DATA_INDICATOR.len, written);
+}
+
+test readMultiDataLen {
+    var offset: usize = 0;
+
+    const one_byte_len = [_]u8{0xFE};
+    try std.testing.expectEqual(0xFE, readMultiDataLen(&one_byte_len, &offset));
+    try std.testing.expectEqual(1, offset);
+    offset = 0;
+
+    const two_byte_len = [_]u8{ 0xFF, 0x00, 0xFF };
+    try std.testing.expectEqual(0xFF, readMultiDataLen(&two_byte_len, &offset));
+    try std.testing.expectEqual(3, offset);
+    offset = 0;
+
+    const four_byte_len = [_]u8{ 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF };
+    try std.testing.expectEqual(0xFFFF, readMultiDataLen(&four_byte_len, &offset));
+    try std.testing.expectEqual(7, offset);
+}
+
+test writeMultiDataLen {
+    var offset: usize = 0;
+    var buffer = std.mem.zeroes([7]u8);
+
+    writeMultiDataLen(&buffer, 0xFE, &offset);
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, &buffer);
+    try std.testing.expectEqual(1, offset);
+    offset = 0;
+
+    writeMultiDataLen(&buffer, 0xFF, &offset);
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00 }, &buffer);
+    try std.testing.expectEqual(3, offset);
+    offset = 0;
+
+    writeMultiDataLen(&buffer, 0xFFFF, &offset);
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF }, &buffer);
+    try std.testing.expectEqual(7, offset);
 }

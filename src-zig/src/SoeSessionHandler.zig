@@ -400,7 +400,7 @@ fn handleContextualPacketInternal(
         .multi_packet => {
             var offset: usize = 0;
             while (offset < packet_data.len) {
-                const sub_packet_len: u32 = soe_packet_utils.readVariableLength(packet_data, &offset);
+                const sub_packet_len: u32 = soe_packet_utils.readVariableLen(packet_data, &offset);
                 if (sub_packet_len < @sizeOf(soe_protocol.SoeOpCode) or sub_packet_len > packet_data.len - offset) {
                     try self.terminateSession(.corrupt_packet, true, false);
                     return;

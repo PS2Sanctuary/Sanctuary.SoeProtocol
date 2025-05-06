@@ -112,10 +112,13 @@ pub fn getPacketMinimumLength(op_code: SoeOpCode, is_compression_enabled: bool, 
     };
 }
 
-pub fn readVariableLength(source: []const u8, offset: *usize) u32 {
+pub fn readVariableLen(source: []const u8, offset: *usize) u32 {
     var value: u32 = 0;
 
-    if (source[offset.*] < 0xFF) {
+    if (source[offset.*] <= 0xFF and source[offset.* + 1] == 0) {
+        // We use the implied 0x00 in front of all core OP codes given big endian to indicate that 0xFF is a single
+        // byte length. This works because the byte immediately following the length is going to be the start of the
+        // nested SOE packet! Note that this assumes the protocol will never have more than 256 OP codes.
         value = source[offset.*];
         offset.* += 1;
     } else if (source[offset.* + 1] == 0xFF and source[offset.* + 2] == 0xFF) {
@@ -127,33 +130,6 @@ pub fn readVariableLength(source: []const u8, offset: *usize) u32 {
     }
 
     return value;
-}
-
-pub fn getVariableLengthSize(length: u32) u3 {
-    if (length < 0xFF) {
-        return 1;
-    } else if (length < 0xFFFF) {
-        return 3;
-    } else {
-        return 7;
-    }
-}
-
-pub fn writeVariableLength(dest: []u8, value: u32, offset: *usize) void {
-    if (value < 0xFF) { // TODO: This may need to be 0xFE (254) instead?
-        dest[offset.*] = @truncate(value);
-        offset.* += 1;
-    } else if (value < 0xFFFF) {
-        dest[offset.*] = 0xFF;
-        binary_primitives.writeU16BE(dest[offset.* + 1 ..], @truncate(value));
-        offset.* += 3;
-    } else {
-        dest[offset.*] = 0xFF;
-        dest[offset.* + 1] = 0xFF;
-        dest[offset.* + 2] = 0xFF;
-        binary_primitives.writeU32BE(dest[offset.* + 3 ..], value);
-        offset.* += 7;
-    }
 }
 
 test readSoeOpCode {
@@ -261,39 +237,33 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
     }
 }
 
-test readVariableLength {
+test readVariableLen {
     var offset: usize = 0;
-
-    const one_byte_len = [_]u8{0xFE};
-    try std.testing.expectEqual(0xFE, readVariableLength(&one_byte_len, &offset));
+    // Note the extra zero appended to all test data, which is the start of the OP code
+    // of the theoretically nested OP packet
+    var one_byte_len = [_]u8{ 0xFE, 0x00 };
+    // Test 1-byte read
+    try std.testing.expectEqual(0xFE, readVariableLen(&one_byte_len, &offset));
     try std.testing.expectEqual(1, offset);
+
     offset = 0;
-
-    const two_byte_len = [_]u8{ 0xFF, 0x00, 0xFF };
-    try std.testing.expectEqual(0xFF, readVariableLength(&two_byte_len, &offset));
-    try std.testing.expectEqual(3, offset);
-    offset = 0;
-
-    const four_byte_len = [_]u8{ 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF };
-    try std.testing.expectEqual(0xFFFF, readVariableLength(&four_byte_len, &offset));
-    try std.testing.expectEqual(7, offset);
-}
-
-test writeVariableLength {
-    var offset: usize = 0;
-    var buffer = std.mem.zeroes([7]u8);
-
-    writeVariableLength(&buffer, 0xFE, &offset);
-    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, &buffer);
+    one_byte_len = [_]u8{ 0xFF, 0x00 };
+    // Test one-byte read
+    try std.testing.expectEqual(0xFF, readVariableLen(&one_byte_len, &offset));
     try std.testing.expectEqual(1, offset);
-    offset = 0;
 
-    writeVariableLength(&buffer, 0xFF, &offset);
-    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00 }, &buffer);
+    offset = 0;
+    var two_byte_len = [_]u8{ 0xFF, 0x01, 0x00, 0x00 };
+    try std.testing.expectEqual(0x0100, readVariableLen(&two_byte_len, &offset));
     try std.testing.expectEqual(3, offset);
-    offset = 0;
 
-    writeVariableLength(&buffer, 0xFFFF, &offset);
-    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF }, &buffer);
+    offset = 0;
+    two_byte_len = [_]u8{ 0xFF, 0xFE, 0xFF, 0x00 };
+    try std.testing.expectEqual(0xFEFF, readVariableLen(&two_byte_len, &offset));
+    try std.testing.expectEqual(3, offset);
+
+    offset = 0;
+    const four_byte_len = [_]u8{ 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00 };
+    try std.testing.expectEqual(0xFFFF, readVariableLen(&four_byte_len, &offset));
     try std.testing.expectEqual(7, offset);
 }
