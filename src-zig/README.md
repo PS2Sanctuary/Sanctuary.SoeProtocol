@@ -10,17 +10,15 @@ Ensure all submodules are initialised:
 git submodule update --init
 ```
 
-#### Build
+### Build
 
 ```sh
 zig build
 ```
 
-This will produce binaries in `./zig-out`, specifically:
+This will produce binaries in `./zig-out`.
 
-`./zig-out/libsoe-protocol.a`
-
-#### Test
+### Test
 
 ```sh
 zig build test
@@ -28,8 +26,13 @@ zig build test
 zig build test --summary all
 ```
 
-If you aren't using the verbose output, then nothing being printed to he console indicates that all
+If you aren't using the verbose output, then nothing being printed to the console indicates that all
 tests passed.
+
+### Debug
+
+Debug configurations for Visual Studio Code are provided in the `.vscode` directory.
+Both Linux and Windows are supported, provided either the 'CodeLLDB' or 'C/C++' extension is installed, respectively.
 
 ## Repository Maintenance
 
