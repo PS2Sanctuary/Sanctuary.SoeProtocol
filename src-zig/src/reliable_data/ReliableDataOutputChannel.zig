@@ -133,10 +133,10 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
     self._last_data_submission_time = try std.time.Instant.now();
     self.output_stats.total_sent_bytes = data.len;
 
-    var my_data: []u8 = undefined;
-    var needs_free: bool = undefined;
+    var my_data: []u8 = data;
+    var needs_free: bool = false;
     if (self._app_params.is_encryption_enabled) {
-        const enc_result = self.encryptReliableData(data);
+        const enc_result = try self.encryptReliableData(my_data);
         my_data = enc_result[0];
         needs_free = enc_result[1];
     }
@@ -149,9 +149,9 @@ pub fn sendData(self: *ReliableDataOutputChannel, data: []u8) !void {
         try self.flushMultiBuffer();
     }
 
-    self.stashFragment(&my_data, true);
+    try self.stashFragment(&my_data, true);
     while (my_data.len > 0) {
-        self.stashFragment(&my_data, false);
+        try self.stashFragment(&my_data, false);
     }
 
     if (needs_free) {
@@ -218,7 +218,7 @@ fn stashFragment(self: *ReliableDataOutputChannel, remaining_data: *[]u8, is_mas
     // Either store what we have left, or take the max data we can, less the sequence marker
     // If we need to store fragments and this is the master packet, also set space for the data len
     var is_fragment = false;
-    const amount_to_take = @min(remaining_data.len, self._max_data_len - @sizeOf(u16));
+    var amount_to_take = @min(remaining_data.len, self._max_data_len - @sizeOf(u16));
     if (amount_to_take > remaining_data.len and is_master) {
         writer.writeU32BE(@truncate(remaining_data.len));
         amount_to_take -= @sizeOf(u32);
@@ -257,7 +257,7 @@ fn stashPackedData(self: *ReliableDataOutputChannel, packed_data: *pooling.Poole
     self._current_sequence += 1;
 }
 
-fn encryptReliableData(self: *ReliableDataOutputChannel, data: []u8) .{ []u8, bool } {
+fn encryptReliableData(self: *ReliableDataOutputChannel, data: []u8) !struct { []u8, bool } {
     // We can assume the key state is present, as encryption is enabled
     self._rc4_state.?.transform(data, data);
 
@@ -265,7 +265,7 @@ fn encryptReliableData(self: *ReliableDataOutputChannel, data: []u8) .{ []u8, bo
     var needs_free = false;
     // Encrypted blocks that begin with zero must have another zero prefixed
     if (my_data[0] == 0) {
-        my_data = self._allocator.alloc(u8, data.len + 1);
+        my_data = try self._allocator.alloc(u8, data.len + 1);
         @memcpy(my_data[1..], data);
         my_data[0] = 0;
         needs_free = true;
