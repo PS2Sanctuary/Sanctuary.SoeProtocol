@@ -124,25 +124,25 @@ pub const ApplicationParams = struct {
     /// A pointer to the object implementing the `handle_app_data`, `on_session_opened`
     /// and `on_session_closed` methods
     handler_ptr: *anyopaque,
-    on_session_opened: *const fn (self: *anyopaque, session: *const SoeSessionHandler) void,
+    on_session_opened: *const fn (self: *anyopaque, session: *SoeSessionHandler) void,
     handle_app_data: *const fn (
         self: *anyopaque,
-        session: *const SoeSessionHandler,
+        session: *SoeSessionHandler,
         data: []const u8,
     ) void,
     on_session_closed: *const fn (
         self: *anyopaque,
-        session: *const SoeSessionHandler,
+        session: *SoeSessionHandler,
         disconnect_reason: DisconnectReason,
     ) void,
 
-    pub fn callOnSessionOpened(self: *const ApplicationParams, session: *const SoeSessionHandler) void {
+    pub fn callOnSessionOpened(self: *const ApplicationParams, session: *SoeSessionHandler) void {
         self.on_session_opened(self.handler_ptr, session);
     }
 
     pub fn callHandleAppData(
         self: *const ApplicationParams,
-        session: *const SoeSessionHandler,
+        session: *SoeSessionHandler,
         data: []const u8,
     ) void {
         self.handle_app_data(self.handler_ptr, session, data);
@@ -150,7 +150,7 @@ pub const ApplicationParams = struct {
 
     pub fn callOnSessionClosed(
         self: *const ApplicationParams,
-        session: *const SoeSessionHandler,
+        session: *SoeSessionHandler,
         reason: DisconnectReason,
     ) void {
         self.on_session_closed(self.handler_ptr, session, reason);

@@ -62,7 +62,7 @@ pub fn main() !void {
 const AppDataHandler = struct {
     count: i32 = 0,
 
-    pub fn onSessionOpened(self: *anyopaque, session: *const SoeSessionHandler) void {
+    pub fn onSessionOpened(self: *anyopaque, session: *SoeSessionHandler) void {
         _ = self;
         std.debug.print("Session Opened!\n", .{});
         session.sendHeartbeat() catch |err| {
@@ -72,7 +72,7 @@ const AppDataHandler = struct {
 
     pub fn onSessionClosed(
         self: *anyopaque,
-        session: *const SoeSessionHandler,
+        session: *SoeSessionHandler,
         reason: soe_protocol.DisconnectReason,
     ) void {
         _ = self;
@@ -85,10 +85,15 @@ const AppDataHandler = struct {
         std.debug.print("- Total received bytes: {d}\n", .{data_input_stats.total_received_bytes});
     }
 
-    pub fn receiveData(ptr: *anyopaque, session: *const SoeSessionHandler, data: []const u8) void {
+    pub fn receiveData(ptr: *anyopaque, session: *SoeSessionHandler, data: []const u8) void {
         const self: *AppDataHandler = @ptrCast(@alignCast(ptr));
-        _ = session;
+        //_ = session;
         std.debug.print("[{d}] Received data {s}\n", .{ self.count, data });
         self.count += 1;
+
+        const pong = "Pong!";
+        session.sendReliableData(@constCast(pong)) catch {
+            @panic("Failed to send reliable data");
+        };
     }
 };

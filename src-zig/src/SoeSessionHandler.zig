@@ -234,6 +234,10 @@ pub fn sendHeartbeat(self: *const SoeSessionHandler) !void {
     try self.sendContextualPacket(soe_protocol.SoeOpCode.heartbeat, &[0]u8{});
 }
 
+pub fn sendReliableData(self: *SoeSessionHandler, data: []u8) !void {
+    try self._data_output_channel.sendData(data);
+}
+
 pub fn getDataInputStats(self: *const SoeSessionHandler) ReliableDataInputChannel.InputStats {
     return self._data_input_channel.input_stats;
 }

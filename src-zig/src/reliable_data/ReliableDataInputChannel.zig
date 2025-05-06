@@ -16,7 +16,7 @@ pub const ReliableDataInputChannel = @This();
 const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 2;
 
 // === External private fields ===
-_session_handler: *const SoeSessionHandler,
+_session_handler: *SoeSessionHandler,
 _allocator: std.mem.Allocator,
 _session_params: *const soe_protocol.SessionParams,
 _app_params: *const ApplicationParams,
@@ -42,7 +42,7 @@ _last_ack_all_time: std.time.Instant,
 input_stats: InputStats = InputStats{},
 
 pub fn init(
-    session_handler: *const SoeSessionHandler,
+    session_handler: *SoeSessionHandler,
     allocator: std.mem.Allocator,
     session_params: *const soe_protocol.SessionParams,
     app_params: *const ApplicationParams,
