@@ -48,8 +48,8 @@ pub fn build(b: *std.Build) void {
 
     // Add our core components as a static library
     const lib = b.addStaticLibrary(.{
-        .name = "soe-protocol",
-        .root_source_file = b.path("src/lib.zig"),
+        .name = "sanctuary_soe_protocol",
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -68,7 +68,7 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const test_units = b.addTest(.{
-        .root_source_file = b.path("src/lib.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -88,8 +88,8 @@ pub fn build(b: *std.Build) void {
 
     // Create a new executable named `root` from `src/root.zig`
     const exe = b.addExecutable(.{
-        .name = "root",
-        .root_source_file = b.path("src/root.zig"),
+        .name = "sample_ping_pong",
+        .root_source_file = b.path("src/sample_ping_pong.zig"),
         .target = target,
         .optimize = optimize,
     });

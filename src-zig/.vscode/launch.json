@@ -23,7 +23,7 @@
             "type": "lldb", // Use with the 'CodeLLDB' extension
             "request": "launch",
             "name": "[Linux] Debug Root Binary",
-            "program": "${workspaceFolder}/zig-out/bin/root",
+            "program": "${workspaceFolder}/zig-out/bin/sample_ping_pong",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build" // See tasks.json
@@ -32,7 +32,7 @@
             "type": "cppvsdbg", // Use with the C/C++ extension
             "request": "launch",
             "name": "[Win] Debug Root Binary",
-            "program": "${workspaceFolder}/zig-out/bin/root",
+            "program": "${workspaceFolder}/zig-out/bin/sample_ping_pong",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build" // See tasks.json
