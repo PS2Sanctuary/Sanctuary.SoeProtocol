@@ -9,8 +9,8 @@ const zlib = @cImport({
 });
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+    var debugAllocator = std.heap.DebugAllocator(.{}){};
+    const allocator = debugAllocator.allocator();
 
     var app_data_handler = AppDataHandler{};
 
@@ -54,7 +54,7 @@ pub fn main() !void {
         }
     }
 
-    if (gpa.deinit() == .leak) {
+    if (debugAllocator.deinit() == .leak) {
         @panic("WARNING: Memory leaks detected");
     }
 }
