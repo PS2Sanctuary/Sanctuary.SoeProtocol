@@ -42,7 +42,7 @@ public partial class SoeProtocolHandler
         if (SessionParams.IsCompressionEnabled)
             writer.WriteBool(false); // Compression is not implemented at the moment
         writer.WriteBytes(packetData);
-        SoePacketUtils.AppendCrc(ref writer, SessionParams.CrcSeed, SessionParams.CrcLength);
+        SoePacketUtils.AppendCrc(ref writer, SessionParams.CrcState, SessionParams.CrcLength);
 
         _networkWriter.Send(writer.Consumed);
     }

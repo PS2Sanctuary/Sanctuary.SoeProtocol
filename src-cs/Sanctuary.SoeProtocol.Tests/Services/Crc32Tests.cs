@@ -33,6 +33,9 @@ public class Crc32Tests
     public void Hash_IsCorrect()
     {
         const uint hash = 3893349547;
-        Assert.Equal(hash, Crc32.Hash(Data, Seed));
+        Assert.Equal(hash, GetCrc().Hash(Data));
     }
+
+    private static Crc32 GetCrc()
+        => new(Seed);
 }

@@ -20,17 +20,17 @@ public class SoePacketUtilsTests
     [InlineData(4)]
     public void AppendCrc_Correct_ForAllValidLengths(byte crcLength)
     {
-        const uint CRC_SEED = 5;
+        Crc32 crc = new(5);
 
         byte[] buffer = new byte[4 + crcLength];
         BinaryPrimitiveWriter writer = new(buffer);
         writer.WriteUInt32BE(454653524);
 
-        uint expectedCrc = Crc32.Hash(buffer.AsSpan(0, 4), CRC_SEED);
+        uint expectedCrc = crc.Hash(buffer.AsSpan(0, 4));
         byte[] expectedBuffer = new byte[4];
 
         BinaryPrimitives.WriteUInt32BigEndian(expectedBuffer, expectedCrc);
-        SoePacketUtils.AppendCrc(ref writer, CRC_SEED, crcLength);
+        SoePacketUtils.AppendCrc(ref writer, crc, crcLength);
 
         for (int i = 0; i < crcLength; i++)
             Assert.Equal(expectedBuffer[4 - crcLength + i], buffer[4 + i]);
@@ -78,7 +78,7 @@ public class SoePacketUtilsTests
         writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
         new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
         writer.Seek(AcknowledgeAll.Size);
-        SoePacketUtils.AppendCrc(ref writer, sessionParams.CrcSeed, crcLength);
+        SoePacketUtils.AppendCrc(ref writer, sessionParams.CrcState, crcLength);
 
         SoePacketValidationResult result = SoePacketUtils.ValidatePacket(packet, sessionParams, out _);
         Assert.Equal(SoePacketValidationResult.Valid, result);
@@ -96,7 +96,7 @@ public class SoePacketUtilsTests
         writer.WriteUInt16BE((ushort)SoeOpCode.AcknowledgeAll);
         new AcknowledgeAll(10).Serialize(packet.AsSpan(sizeof(SoeOpCode)));
         writer.Seek(AcknowledgeAll.Size);
-        SoePacketUtils.AppendCrc(ref writer, 0, CRC_LENGTH);
+        SoePacketUtils.AppendCrc(ref writer, new Crc32(0), CRC_LENGTH);
 
         SoePacketValidationResult result = SoePacketUtils.ValidatePacket(packet, sessionParams, out _);
         Assert.Equal(SoePacketValidationResult.CrcMismatch, result);

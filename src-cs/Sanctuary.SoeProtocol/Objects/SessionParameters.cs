@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Sanctuary.SoeProtocol.Services;
+using System;
 
 namespace Sanctuary.SoeProtocol.Objects;
 
@@ -7,6 +8,8 @@ namespace Sanctuary.SoeProtocol.Objects;
 /// </summary>
 public sealed class SessionParameters
 {
+    private uint _crcSeed;
+
     /// <summary>
     /// Gets the application protocol being proxied by this session.
     /// </summary>
@@ -27,7 +30,21 @@ public sealed class SessionParameters
     /// <summary>
     /// Gets or sets the seed used to calculate packet CRC hashes.
     /// </summary>
-    public uint CrcSeed { get; set; }
+    public uint CrcSeed
+    {
+        get => _crcSeed;
+        set
+        {
+            _crcSeed = value;
+            CrcState = new Crc32(value);
+        }
+    }
+
+    /// <summary>
+    /// The <see cref="Crc32"/> state used to calculate CRC hashes for this session.
+    /// This property is auto-set when <see cref="CrcSeed"/> is set.
+    /// </summary>
+    public Crc32 CrcState { get; set; }
 
     /// <summary>
     /// Gets or sets the number of bytes used to store a packet CRC hash.

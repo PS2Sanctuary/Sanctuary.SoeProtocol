@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.X86;
 
 namespace Sanctuary.SoeProtocol.Services;
 
@@ -7,29 +8,56 @@ namespace Sanctuary.SoeProtocol.Services;
 /// Contains functions to calculate CRC-32 hashes.
 /// </summary>
 [SkipLocalsInit]
-public static class Crc32
+public readonly struct Crc32
 {
+    private readonly uint _seed;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Crc32"/> struct.
+    /// </summary>
+    /// <param name="seed">The seed used to calculate CRC hashes.</param>
+    public Crc32(uint seed)
+    {
+        _seed = ScheduleSeed(seed);
+    }
+
     /// <summary>
     /// Calculates a CRC-32 hash of the given data.
     /// </summary>
     /// <param name="data">The data to hash.</param>
-    /// <param name="seed">The CRC seed.</param>
     /// <returns>The CRC-32 hash.</returns>
     /// <remarks>
     /// This uses an adapted version of the "Slicing-by-16" CRC-32 algorithm - (c) Stephan Brumme and Bulat Ziganshin.
     /// See https://create.stephan-brumme.com/crc32/ for further details.
     /// </remarks>
-    public static uint Hash(ReadOnlySpan<byte> data, uint seed)
+    public uint Hash(ReadOnlySpan<byte> data)
     {
         unsafe
         {
             fixed (byte* dataPtr = data)
             {
                 return BitConverter.IsLittleEndian
-                    ? Crc32LittleEndian(dataPtr, data.Length, seed)
-                    : Crc32BigEndian(dataPtr, data.Length, seed);
+                    ? Crc32LittleEndian(dataPtr, data.Length, _seed)
+                    : Crc32BigEndian(dataPtr, data.Length, _seed);
             }
         }
+    }
+
+    private static uint ScheduleSeed(uint seed)
+    {
+        uint state = Crc32Lookup[~seed & 0xFF];
+        state ^= 0x00FFFFFF;
+        uint index = (seed >> 8) ^ state;
+        state = (state >> 8) & 0x00FFFFFF;
+        state ^= Crc32Lookup[index & 0xFF];
+        index = (seed >> 16) ^ state;
+        state = (state >> 8) & 0x00FFFFFF;
+        state ^= Crc32Lookup[index & 0xFF];
+        index = (seed >> 24) ^ state;
+        state = (state >> 8) & 0x00FFFFFF;
+        state ^= Crc32Lookup[index & 0xFF];
+
+        return state;
     }
 
     private static unsafe uint Crc32LittleEndian(byte* dataPtr, int count, uint seed)
@@ -37,17 +65,7 @@ public static class Crc32
         const int unroll = 4;
         const int bytesAtOnce = 16 * unroll;
 
-        uint crc = Crc32Lookup[~seed & 0xFF];
-        crc ^= 0x00FFFFFF;
-        uint index = (seed >> 8) ^ crc;
-        crc = (crc >> 8) & 0x00FFFFFF;
-        crc ^= Crc32Lookup[index & 0xFF];
-        index = (seed >> 16) ^ crc;
-        crc = (crc >> 8) & 0x00FFFFFF;
-        crc ^= Crc32Lookup[index & 0xFF];
-        index = (seed >> 24) ^ crc;
-        crc = (crc >> 8) & 0x00FFFFFF;
-        crc ^= Crc32Lookup[index & 0xFF];
+        uint crc = seed;
 
         fixed (uint* lookup_0 = Crc32Lookup)
         {
@@ -194,7 +212,7 @@ public static class Crc32
            (x << 24);
 
     private static readonly uint[] Crc32Lookup =
-    {
+    [
         // note: the first number of every second row corresponds to the half-byte look-up table !
         // slice 0
         0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
@@ -723,6 +741,6 @@ public static class Crc32
         0x65BC6073, 0xCBD4F1E2, 0xE21C4510, 0x4C74D481, 0xB18D2CF4, 0x1FE5BD65, 0x362D0997, 0x98459806,
         0x16AFFF3C, 0xB8C76EAD, 0x910FDA5F, 0x3F674BCE, 0xC29EB3BB, 0x6CF6222A, 0x453E96D8, 0xEB560749,
         0x839B5EED, 0x2DF3CF7C, 0x043B7B8E, 0xAA53EA1F, 0x57AA126A, 0xF9C283FB, 0xD00A3709, 0x7E62A698,
-        0xF088C1A2, 0x5EE05033, 0x7728E4C1, 0xD9407550, 0x24B98D25, 0x8AD11CB4, 0xA319A846, 0x0D7139D7,
-    };
+        0xF088C1A2, 0x5EE05033, 0x7728E4C1, 0xD9407550, 0x24B98D25, 0x8AD11CB4, 0xA319A846, 0x0D7139D7
+    ];
 }

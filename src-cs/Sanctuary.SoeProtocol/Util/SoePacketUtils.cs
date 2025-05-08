@@ -65,14 +65,14 @@ public static class SoePacketUtils
     /// The entirety of the writer's buffer is used to calculate the check.
     /// </summary>
     /// <param name="writer">The writer to append to.</param>
-    /// <param name="crcSeed">The CRC seed to use.</param>
+    /// <param name="crcState">The CRC state to use.</param>
     /// <param name="crcLength">The number of bytes to store the CRC check value in.</param>
-    public static void AppendCrc(ref BinaryPrimitiveWriter writer, uint crcSeed, byte crcLength)
+    public static void AppendCrc(ref BinaryPrimitiveWriter writer, Crc32 crcState, byte crcLength)
     {
         if (crcLength is 0)
             return;
 
-        uint crcValue = Crc32.Hash(writer.Consumed, crcSeed);
+        uint crcValue = crcState.Hash(writer.Consumed);
         switch (crcLength)
         {
             case 1:
@@ -120,7 +120,7 @@ public static class SoePacketUtils
         if (IsContextlessPacket(opCode) || sessionParams.CrcLength is 0)
             return SoePacketValidationResult.Valid;
 
-        uint actualCrc = Crc32.Hash(packetData[..^sessionParams.CrcLength], sessionParams.CrcSeed);
+        uint actualCrc = sessionParams.CrcState.Hash(packetData[..^sessionParams.CrcLength]);
         bool crcMatch = false;
 
         switch (sessionParams.CrcLength)
