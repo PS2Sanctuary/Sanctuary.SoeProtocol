@@ -1,6 +1,6 @@
 const binary_primitives = @import("binary_primitives.zig");
 const BinaryWriter = @import("BinaryWriter.zig");
-const crc32 = @import("crc32.zig");
+const Crc32 = @import("Crc32.zig");
 const SessionParams = @import("../soe_protocol.zig").SessionParams;
 const soe_packets = @import("../soe_packets.zig");
 const SoeOpCode = @import("../soe_protocol.zig").SoeOpCode;
@@ -47,7 +47,7 @@ pub fn appendCrc(writer: *BinaryWriter, crc_seed: u32, crc_length: u8) void {
         return;
     }
 
-    const crc_value = crc32.hash(writer.getConsumed(), crc_seed);
+    const crc_value = Crc32.hash(writer.getConsumed(), crc_seed);
     switch (crc_length) {
         1 => writer.writeU8(@truncate(crc_value)),
         2 => writer.writeU16BE(@truncate(crc_value)),
@@ -78,7 +78,7 @@ pub fn validatePacket(packet_data: []const u8, session_params: SessionParams) So
         return op_code;
     }
 
-    const actual_crc = crc32.hash(
+    const actual_crc = Crc32.hash(
         packet_data[0 .. packet_data.len - session_params.crc_length],
         session_params.crc_seed,
     );
@@ -155,7 +155,7 @@ test appendCrc {
         writer.writeU32BE(454653524);
 
         // Hash the value we wrote and get a buffer of it to compare against
-        const expected_crc = crc32.hash(buffer[0..4], crc_seed);
+        const expected_crc = Crc32.hash(buffer[0..4], crc_seed);
         var expected_buffer: [4]u8 = undefined;
         binary_primitives.writeU32BE(&expected_buffer, expected_crc);
 

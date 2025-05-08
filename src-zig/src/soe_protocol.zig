@@ -1,3 +1,4 @@
+pub const Crc32 = @import("Crc32.zig");
 pub const Rc4State = @import("reliable_data/Rc4State.zig");
 pub const SoeSessionHandler = @import("./SoeSessionHandler.zig");
 pub const std = @import("std");
