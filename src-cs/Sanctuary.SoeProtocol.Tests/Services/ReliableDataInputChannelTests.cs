@@ -27,6 +27,7 @@ public class ReliableDataInputChannelTests : IDisposable
 
         SoeProtocolHandler handler = new
         (
+            null!,
             SessionMode.Client,
             new SessionParameters
             {

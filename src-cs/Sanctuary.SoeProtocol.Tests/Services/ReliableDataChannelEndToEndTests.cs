@@ -214,6 +214,7 @@ public class ReliableDataChannelEndToEndTests
 
         SoeProtocolHandler handler = new
         (
+            null!,
             SessionMode.Client,
             new SessionParameters
             {

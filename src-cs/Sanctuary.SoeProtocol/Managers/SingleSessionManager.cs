@@ -88,7 +88,7 @@ public sealed class SingleSessionManager : IDisposable
             while (!ct.IsCancellationRequested)
             {
                 // Run a tick of the protocol handler. If this returns false, the protocol handler has terminated
-                if (!_protocolHandler.RunTick(out bool needsMoreTime, ct))
+                if (!_protocolHandler.RunTick(out bool needsMoreTime, internalCts.Token))
                     break;
 
                 if (receiveTask.IsCompleted)
@@ -96,7 +96,7 @@ public sealed class SingleSessionManager : IDisposable
 
                 // If the protocol handler didn't need to process again immediately, have a cooldown
                 if (!needsMoreTime)
-                    await timer.WaitForNextTickAsync(ct);
+                    await timer.WaitForNextTickAsync(internalCts.Token);
             }
         }
         catch (OperationCanceledException)
@@ -182,6 +182,7 @@ public sealed class SingleSessionManager : IDisposable
         _protocolHandler?.Dispose();
         _protocolHandler = new SoeProtocolHandler
         (
+            _remoteEndPoint.Serialize(),
             _mode,
             _sessionParams,
             _spanPool,

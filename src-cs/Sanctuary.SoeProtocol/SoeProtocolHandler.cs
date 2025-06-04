@@ -7,6 +7,7 @@ using Sanctuary.SoeProtocol.Util;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
 using System.Threading;
 using static Sanctuary.SoeProtocol.Util.SoePacketUtils;
 
@@ -27,6 +28,11 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     private bool _isDisposed;
     private bool _openSessionOnNextClientPacket;
     private long _lastReceivedPacketTick;
+
+    /// <summary>
+    /// Gets the address of the remote that this session is connected to.
+    /// </summary>
+    public SocketAddress Remote { get; }
 
     /// <summary>
     /// Gets the session parameters in use by the session.
@@ -56,6 +62,7 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     /// <summary>
     /// Initializes a new instance of the <see cref="SoeProtocolHandler"/> class.
     /// </summary>
+    /// <param name="remote">The address of the remote that this session is connected to.</param>
     /// <param name="mode">The mode that the handler should operate in.</param>
     /// <param name="sessionParameters">
     /// The session parameters to conform to. This object will be disposed with the handler.
@@ -65,6 +72,7 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     /// <param name="application">The proxied application.</param>
     public SoeProtocolHandler
     (
+        SocketAddress remote,
         SessionMode mode,
         SessionParameters sessionParameters,
         NativeSpanPool spanPool,
@@ -72,6 +80,7 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
         IApplicationProtocolHandler application
     )
     {
+        Remote = remote;
         Mode = mode;
         SessionParams = sessionParameters;
         ApplicationParams = application.SessionParams;
@@ -171,7 +180,7 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     /// <param name="reason">The termination reason.</param>
     /// <param name="notifyRemote">Whether to notify the remote party.</param>
     /// <param name="terminatedByRemote">Indicates whether this termination has come from the remote party.</param>
-    protected void TerminateSession(DisconnectReason reason, bool notifyRemote, bool terminatedByRemote = false)
+    public void TerminateSession(DisconnectReason reason, bool notifyRemote, bool terminatedByRemote = false)
     {
         if (State is SessionState.Terminated)
             return;
