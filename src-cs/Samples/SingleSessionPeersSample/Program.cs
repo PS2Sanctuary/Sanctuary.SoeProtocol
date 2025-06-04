@@ -25,7 +25,7 @@ public static class Program
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
         builder.Services.AddTransient<PingApplication>();
-        //builder.Services.AddHostedService<ClientWorker>();
+        builder.Services.AddHostedService<ClientWorker>();
         builder.Services.AddHostedService<ServerWorker>();
 
         builder.Build().Run();
