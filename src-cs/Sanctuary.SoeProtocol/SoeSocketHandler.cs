@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Sanctuary.SoeProtocol.Abstractions;
 using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Services;
@@ -19,8 +18,7 @@ namespace Sanctuary.SoeProtocol;
 public class SoeSocketHandler : IDisposable
 {
     private readonly ILogger<SoeSocketHandler> _logger;
-    private readonly SessionParameters _defaultSessionParams;
-    private readonly Func<IApplicationProtocolHandler> _createApplication;
+    private readonly SocketHandlerParams _parameters;
     private readonly Dictionary<SocketAddress, SoeProtocolHandler> _sessions = [];
     private readonly NativeSpanPool _pool;
     private readonly Socket _socket;
@@ -31,16 +29,15 @@ public class SoeSocketHandler : IDisposable
     public SoeSocketHandler
     (
         ILogger<SoeSocketHandler> logger,
-        SessionParameters defaultSessionParams,
-        Func<IApplicationProtocolHandler> createApplication
+        SocketHandlerParams parameters
     )
     {
         _logger = logger;
-        _defaultSessionParams = defaultSessionParams;
-        _createApplication = createApplication;
+        _parameters = parameters;
+        SessionParameters ssnParams = parameters.DefaultSessionParams;
 
-        int maxDataLen = (int)Math.Max(defaultSessionParams.UdpLength, defaultSessionParams.RemoteUdpLength);
-        _pool = new NativeSpanPool(maxDataLen, 5192); // TODO: This should be configurable. User should probably supply the pool
+        int maxDataLen = (int)Math.Max(ssnParams.UdpLength, ssnParams.RemoteUdpLength);
+        _pool = new NativeSpanPool(maxDataLen, parameters.PacketPoolSize);
 
         int maxSocketLen = maxDataLen * 64;
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
@@ -49,7 +46,7 @@ public class SoeSocketHandler : IDisposable
             ReceiveBufferSize = maxSocketLen,
             SendBufferSize = maxSocketLen
         };
-        _receiveBuffer = GC.AllocateArray<byte>((int)defaultSessionParams.UdpLength * 32);
+        _receiveBuffer = GC.AllocateArray<byte>((int)ssnParams.UdpLength * 32);
     }
 
     /// <summary>
@@ -179,10 +176,10 @@ public class SoeSocketHandler : IDisposable
         (
             address,
             mode,
-            _defaultSessionParams.Clone(),
+            _parameters.DefaultSessionParams.Clone(),
             _pool,
             new SocketNetworkWriter(address, _socket),
-            _createApplication()
+            _parameters.AppCreationCallback()
         );
         _sessions.Add(address, handler);
 

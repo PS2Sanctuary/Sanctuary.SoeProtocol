@@ -45,11 +45,14 @@ public class ServerWorker : BackgroundService
         SoeSocketHandler manager = new
         (
             _services.GetRequiredService<ILogger<SoeSocketHandler>>(),
-            new SessionParameters
+            new SocketHandlerParams()
             {
-                ApplicationProtocol = "Ping_1"
-            },
-            () => _services.GetRequiredService<PingApplication>()
+                DefaultSessionParams = new SessionParameters
+                {
+                    ApplicationProtocol = "Ping_1"
+                },
+                AppCreationCallback = () => _services.GetRequiredService<PingApplication>()
+            }
         );
         manager.Bind(new IPEndPoint(IPAddress.Loopback, Program.Port));
 

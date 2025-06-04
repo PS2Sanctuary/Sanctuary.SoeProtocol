@@ -49,11 +49,14 @@ public class ClientWorker : BackgroundService
         SoeSocketHandler manager = new
         (
             _services.GetRequiredService<ILogger<SoeSocketHandler>>(),
-            new SessionParameters
+            new SocketHandlerParams()
             {
-                ApplicationProtocol = "Ping_1"
-            },
-            () => _services.GetRequiredService<PingApplication>()
+                DefaultSessionParams = new SessionParameters
+                {
+                    ApplicationProtocol = "Ping_1"
+                },
+                AppCreationCallback = () => _services.GetRequiredService<PingApplication>()
+            }
         );
 
         // Give the server manager some time to spool up
