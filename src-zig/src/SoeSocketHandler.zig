@@ -112,8 +112,12 @@ fn processOneFromSocket(self: *SoeSocketHandler) !bool {
         const op_code = try soe_packet_utils.readSoeOpCode(self._recv_buffer);
         switch (op_code) {
             .session_request => conn = try self.createSessionHandler(result.sender, .server),
-            .remap_connection => return false,
-            _ => return false,
+            .remap_connection => {
+                const remap = soe_packets.RemapConnection.deserialize(self._recv_buffer, true);
+                self.remapSession(result.sender, remap);
+                return true;
+            },
+            _ => return true,
         }
     }
 
@@ -156,4 +160,31 @@ fn destroySession(self: *SoeSocketHandler, session: *SoeSessionHandler) void {
 
     _ = self._connections.remove(session.remote.any);
     session.deinit();
+}
+
+fn remapSession(self: *SoeSocketHandler, newAddress: std.net.Address, remap: soe_packets.RemapConnection) !void {
+    var handler: ?*SoeSessionHandler = null;
+    var iterator = self._connections.valueIterator();
+    while (iterator.next()) |entry| {
+        const conn = entry.*;
+
+        if (conn.session_id == remap.session_id and conn._session_params.crc_seed == remap.crc_seed) {
+            handler = conn;
+            break;
+        }
+    }
+
+    // If we couldn't find a matching handler then just blindly return. No need to notify the sender
+    if (handler == null) {
+        return;
+    }
+
+    // We do NOT want to handle IP address remaps - this is probably someone trying to hijack a session.
+    if (newAddress.in != handler.?.remote.in) {
+        return;
+    }
+
+    self._connections.remove(handler.?.remote.any);
+    handler.?.remote = newAddress;
+    try self._connections.put(newAddress.any, handler);
 }

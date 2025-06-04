@@ -32,7 +32,7 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     /// <summary>
     /// Gets the address of the remote that this session is connected to.
     /// </summary>
-    public SocketAddress Remote { get; }
+    public SocketAddress Remote { get; set; }
 
     /// <summary>
     /// Gets the session parameters in use by the session.

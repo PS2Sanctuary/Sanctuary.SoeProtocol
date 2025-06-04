@@ -158,10 +158,11 @@ public class SoeSocketHandler : IDisposable
                     session = CreateSession(remoteAddress, SessionMode.Server);
                     break;
                 case SoeOpCode.RemapConnection:
-                    // TODO: handle remaps
-                    return false;
+                    RemapConnection remap = RemapConnection.Deserialize(_receiveBuffer, true);
+                    RemapSession(remoteAddress, remap);
+                    return true;
                 default:
-                    return false;
+                    return true;
             }
         }
 
@@ -206,6 +207,37 @@ public class SoeSocketHandler : IDisposable
         session.TerminateSession();
         _sessions.Remove(session.Remote);
         session.Dispose();
+    }
+
+    private void RemapSession(SocketAddress address, RemapConnection remapRequest)
+    {
+        IPEndPoint dummy = new(IPAddress.Any, 0);
+        SoeProtocolHandler? handler = null;
+
+        foreach (SoeProtocolHandler element in _sessions.Values)
+        {
+            if (element.SessionId == remapRequest.SessionId && element.SessionParams.CrcSeed == remapRequest.CrcSeed)
+            {
+                handler = element;
+                break;
+            }
+        }
+
+        // If we couldn't find a matching handler then just blindly return. No need to notify the sender
+        if (handler is null)
+            return;
+
+        IPEndPoint newRemote = (IPEndPoint)dummy.Create(address);
+        IPEndPoint oldRemote = (IPEndPoint)dummy.Create(handler.Remote);
+
+        // We do NOT want to handle IP address remaps - this is probably someone trying to hijack a session.
+        if (!newRemote.Address.Equals(oldRemote.Address))
+            return;
+
+        // At this point only the port has changed - probably due to NAT. We're happy to remap this
+        _sessions.Remove(handler.Remote);
+        handler.Remote = address;
+        _sessions.Add(address, handler);
     }
 
     /// <inheritdoc />
