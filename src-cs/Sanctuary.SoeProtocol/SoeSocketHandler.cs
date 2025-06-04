@@ -208,6 +208,9 @@ public class SoeSocketHandler : IDisposable
 
     private void RemapSession(SocketAddress address, RemapConnection remapRequest)
     {
+        if (!_parameters.AllowPortRemaps)
+            return;
+
         IPEndPoint dummy = new(IPAddress.Any, 0);
         SoeProtocolHandler? handler = null;
 

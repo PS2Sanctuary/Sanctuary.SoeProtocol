@@ -23,4 +23,9 @@ public class SocketHandlerParams
     /// at any one time). This value should scale with the number of expected connections.
     /// </summary>
     public int PacketPoolSize { get; init; } = 5192;
+
+    /// <summary>
+    /// Whether sessions are allowed to remap their ports.
+    /// </summary>
+    public bool AllowPortRemaps { get; set; }
 }
