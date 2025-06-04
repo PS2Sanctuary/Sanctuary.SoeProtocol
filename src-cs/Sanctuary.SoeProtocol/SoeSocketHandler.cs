@@ -152,8 +152,17 @@ public class SoeSocketHandler : IDisposable
 
         if (!_sessions.TryGetValue(remoteAddress, out SoeProtocolHandler? session))
         {
-            // TODO: Check for remap request
-            session = CreateSession(remoteAddress, SessionMode.Server);
+            switch (SoePacketUtils.ReadSoeOpCode(_receiveBuffer))
+            {
+                case SoeOpCode.SessionRequest:
+                    session = CreateSession(remoteAddress, SessionMode.Server);
+                    break;
+                case SoeOpCode.RemapConnection:
+                    // TODO: handle remaps
+                    return false;
+                default:
+                    return false;
+            }
         }
 
         NativeSpan span = _pool.Rent();
@@ -183,10 +192,6 @@ public class SoeSocketHandler : IDisposable
 
     private void DestroySession(SoeProtocolHandler session)
     {
-        // TODO: Don't have a better place to note this. Currently, client sessions are sending an ack after they've
-        // terminated, which is causing a new server session to be created and terminated due to corrupt packet.
-        // We must stop this
-
         if (session.TerminationReason is not DisconnectReason.None)
         {
             _logger.LogDebug

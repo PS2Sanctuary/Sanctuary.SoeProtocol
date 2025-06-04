@@ -1,6 +1,7 @@
 const binary_primitives = @import("./utils/binary_primitives.zig");
 const pooling = @import("./pooling.zig");
 const soe_packets = @import("./soe_packets.zig");
+const soe_packet_utils = @import("./utils/soe_packet_utils.zig");
 const soe_protocol = @import("./soe_protocol.zig");
 const SoeSessionHandler = @import("./SoeSessionHandler.zig");
 const std = @import("std");
@@ -60,7 +61,9 @@ pub fn bind(self: *SoeSocketHandler, endpoint: std.net.Address) !void {
 }
 
 pub fn connect(self: *SoeSocketHandler, remote: std.net.Address) !*SoeSessionHandler {
-    return try self.createSessionHandler(remote, .client);
+    var handler = try self.createSessionHandler(remote, .client);
+    try handler.sendSessionRequest();
+    return handler;
 }
 
 /// Runs a tick of operations for the `SoeSocketHandler`.
@@ -106,8 +109,12 @@ fn processOneFromSocket(self: *SoeSocketHandler) !bool {
     var conn: ?*SoeSessionHandler = self._connections.get(result.sender.any);
 
     if (conn == null) {
-        // TODO: Check for remap request
-        conn = try self.createSessionHandler(result.sender, .server);
+        const op_code = try soe_packet_utils.readSoeOpCode(self._recv_buffer);
+        switch (op_code) {
+            .session_request => conn = try self.createSessionHandler(result.sender, .server),
+            .remap_connection => return false,
+            _ => return false,
+        }
     }
 
     conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
@@ -138,7 +145,6 @@ fn createSessionHandler(
     );
 
     try self._connections.put(remote.any, handler);
-    try handler.sendSessionRequest();
 
     return handler;
 }
