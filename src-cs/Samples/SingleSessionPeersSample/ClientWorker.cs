@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Sanctuary.SoeProtocol;
 using Sanctuary.SoeProtocol.Managers;
 using Sanctuary.SoeProtocol.Objects;
 using System;
@@ -29,20 +30,37 @@ public class ClientWorker : BackgroundService
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        SingleSessionManager manager = new
+        // SingleSessionManager manager = new
+        // (
+        //     _services.GetRequiredService<ILogger<SingleSessionManager>>(),
+        //     new SessionParameters
+        //     {
+        //         ApplicationProtocol = "Ping_1"
+        //     },
+        //     _services.GetRequiredService<PingApplication>(),
+        //     new IPEndPoint(IPAddress.Loopback, Program.Port),
+        //     SessionMode.Client
+        // );
+        //
+        // // Give the server manager some time to spool up
+        // await Task.Delay(500, ct);
+        // await manager.RunAsync(ct);
+
+        SoeSocketHandler manager = new
         (
-            _services.GetRequiredService<ILogger<SingleSessionManager>>(),
+            _services.GetRequiredService<ILogger<SoeSocketHandler>>(),
             new SessionParameters
             {
                 ApplicationProtocol = "Ping_1"
             },
-            _services.GetRequiredService<PingApplication>(),
-            new IPEndPoint(IPAddress.Loopback, Program.Port),
-            SessionMode.Client
+            () => _services.GetRequiredService<PingApplication>()
         );
 
         // Give the server manager some time to spool up
         await Task.Delay(500, ct);
+        manager.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        manager.Connect(new IPEndPoint(IPAddress.Loopback, Program.Port));
+
         await manager.RunAsync(ct);
     }
 }

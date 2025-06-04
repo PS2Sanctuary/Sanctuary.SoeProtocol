@@ -26,6 +26,8 @@ public class SoeSocketHandler : IDisposable
     private readonly Socket _socket;
     private readonly byte[] _receiveBuffer;
 
+    private bool _isDisposed;
+
     public SoeSocketHandler
     (
         ILogger<SoeSocketHandler> logger,
@@ -95,6 +97,8 @@ public class SoeSocketHandler : IDisposable
     /// <returns><c>True</c> if another tick must be run as soon as possible.</returns>
     public bool RunTick(CancellationToken ct)
     {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
         bool runNextTick = ProcessOneFromSocket();
 
         List<SoeProtocolHandler> toRemove = new(16);
@@ -170,16 +174,29 @@ public class SoeSocketHandler : IDisposable
             new SocketNetworkWriter(address, _socket),
             _createApplication()
         );
-
         _sessions.Add(address, handler);
+
+        handler.Initialize();
 
         return handler;
     }
 
     private void DestroySession(SoeProtocolHandler session)
     {
+        // TODO: Don't have a better place to note this. Currently, client sessions are sending an ack after they've
+        // terminated, which is causing a new server session to be created and terminated due to corrupt packet.
+        // We must stop this
+
         if (session.TerminationReason is not DisconnectReason.None)
-            _logger.LogDebug("Destroying pre-terminated session, which had reason {Reason}", session.TerminationReason);
+        {
+            _logger.LogDebug
+            (
+                "Destroying pre-terminated {Mode} session ({Id}), which had reason {Reason}",
+                session.Mode,
+                session.SessionId,
+                session.TerminationReason
+            );
+        }
 
         session.TerminateSession();
         _sessions.Remove(session.Remote);
@@ -195,7 +212,7 @@ public class SoeSocketHandler : IDisposable
 
     protected virtual void Dispose(bool disposeManaged)
     {
-        if (!disposeManaged)
+        if (!disposeManaged || _isDisposed)
             return;
 
         _socket.Dispose();
@@ -203,5 +220,7 @@ public class SoeSocketHandler : IDisposable
         foreach (SoeProtocolHandler session in _sessions.Values)
             session.Dispose();
         _sessions.Clear();
+
+        _isDisposed = true;
     }
 }

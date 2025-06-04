@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Sanctuary.SoeProtocol;
 using Sanctuary.SoeProtocol.Managers;
 using Sanctuary.SoeProtocol.Objects;
 using System;
@@ -29,17 +30,28 @@ public class ServerWorker : BackgroundService
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        SingleSessionManager manager = new
+        // SingleSessionManager manager = new
+        // (
+        //     _services.GetRequiredService<ILogger<SingleSessionManager>>(),
+        //     new SessionParameters
+        //     {
+        //         ApplicationProtocol = "Ping_1"
+        //     },
+        //     _services.GetRequiredService<PingApplication>(),
+        //     new IPEndPoint(IPAddress.Loopback, Program.Port),
+        //     SessionMode.Server
+        // );
+
+        SoeSocketHandler manager = new
         (
-            _services.GetRequiredService<ILogger<SingleSessionManager>>(),
+            _services.GetRequiredService<ILogger<SoeSocketHandler>>(),
             new SessionParameters
             {
                 ApplicationProtocol = "Ping_1"
             },
-            _services.GetRequiredService<PingApplication>(),
-            new IPEndPoint(IPAddress.Loopback, Program.Port),
-            SessionMode.Server
+            () => _services.GetRequiredService<PingApplication>()
         );
+        manager.Bind(new IPEndPoint(IPAddress.Loopback, Program.Port));
 
         await manager.RunAsync(ct);
     }
