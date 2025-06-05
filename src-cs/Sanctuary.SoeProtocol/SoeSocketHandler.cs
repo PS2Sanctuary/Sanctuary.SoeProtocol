@@ -26,6 +26,7 @@ public class SoeSocketHandler : IDisposable
 
     private bool _isDisposed;
     private CancellationTokenSource? _internalCts;
+    private (SocketAddress, Memory<byte>)? _alreadyReceived;
 
     public SoeSocketHandler
     (
@@ -82,10 +83,14 @@ public class SoeSocketHandler : IDisposable
         while (!_internalCts.IsCancellationRequested)
         {
             bool runNextTick = RunTick(_internalCts.Token);
+            if (runNextTick)
+                continue;
 
-            // No need to cancel, it's a 1ms timer, and we don't want to handle OperationCanceledException
-            if (!runNextTick)
-                await timer.WaitForNextTickAsync(CancellationToken.None);
+            _socket.ReceiveTimeout = 1;
+            SocketAddress address = new(AddressFamily.InterNetwork);
+            int recvAmount = await _socket.ReceiveFromAsync(_receiveBuffer, SocketFlags.None, address, ct);
+            if (recvAmount > 0)
+                _alreadyReceived = (address, _receiveBuffer.AsMemory(0, recvAmount));
         }
 
         _internalCts.Dispose();
@@ -143,13 +148,25 @@ public class SoeSocketHandler : IDisposable
 
     private bool ProcessOneFromSocket()
     {
-        if (_socket.Available is 0)
-            return false;
-
         SocketAddress remoteAddress = new(AddressFamily.InterNetwork);
-        int receivedLen = _socket.ReceiveFrom(_receiveBuffer, SocketFlags.None, remoteAddress);
-        if (receivedLen is 0)
-            return false;
+        Span<byte> received;
+
+        if (_alreadyReceived is not null)
+        {
+            remoteAddress = _alreadyReceived.Value.Item1;
+            received = _alreadyReceived.Value.Item2.Span;
+            _alreadyReceived = null;
+        }
+        else
+        {
+            if (_socket.Available is 0)
+                return false;
+
+            int receivedLen = _socket.ReceiveFrom(_receiveBuffer, SocketFlags.None, remoteAddress);
+            if (receivedLen is 0)
+                return false;
+            received = _receiveBuffer.AsSpan(0, receivedLen);
+        }
 
         if (!_sessions.TryGetValue(remoteAddress, out SoeProtocolHandler? session))
         {
@@ -168,7 +185,7 @@ public class SoeSocketHandler : IDisposable
         }
 
         NativeSpan span = _pool.Rent();
-        span.CopyDataInto(_receiveBuffer.AsSpan(0, receivedLen));
+        span.CopyDataInto(received);
         session.EnqueuePacket(span);
 
         return true;
