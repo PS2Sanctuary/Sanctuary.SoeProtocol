@@ -26,7 +26,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// </summary>
     public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(2);
 
-    private readonly ISoeConnection _handler;
+    private readonly ISoeSession _handler;
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
@@ -62,7 +62,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <param name="dataHandler">The handler for processed data.</param>
     public ReliableDataInputChannel
     (
-        ISoeConnection handler,
+        ISoeSession handler,
         SessionParameters sessionParams,
         ApplicationParameters appParams,
         NativeSpanPool spanPool,

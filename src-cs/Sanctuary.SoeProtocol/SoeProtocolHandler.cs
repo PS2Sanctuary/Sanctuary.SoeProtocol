@@ -16,7 +16,7 @@ namespace Sanctuary.SoeProtocol;
 /// <summary>
 /// Represents a generic handler for the SOE protocol.
 /// </summary>
-public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisposable
+public partial class SoeProtocolHandler : ISessionHandler, ISoeSession, IDisposable
 {
     private readonly NativeSpanPool _spanPool;
     private readonly INetworkWriter _networkWriter;
@@ -50,7 +50,7 @@ public partial class SoeProtocolHandler : ISessionHandler, ISoeConnection, IDisp
     /// <inheritdoc />
     public SessionState State { get; private set; }
 
-    /// <inheritdoc cref="ISoeConnection.SessionId" />
+    /// <inheritdoc cref="ISoeSession.SessionId" />
     public uint SessionId { get; private set; }
 
     /// <inheritdoc />

@@ -2,7 +2,10 @@
 
 namespace Sanctuary.SoeProtocol.Abstractions;
 
-public interface ISoeConnection
+/// <summary>
+/// Represents an SOE session.
+/// </summary>
+public interface ISoeSession
 {
     /// <summary>
     /// The ID of the session. This will return <c>0</c> if a session has not yet been negotiated.
