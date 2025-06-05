@@ -1,6 +1,9 @@
 ﻿// ReSharper disable once CheckNamespace
 namespace System.Buffers.Binary;
 
+/// <summary>
+/// Contains extension methods for the <see cref="BinaryPrimitives"/> class.
+/// </summary>
 public static class BinaryPrimitivesExtensions
 {
     /// <summary>

@@ -27,6 +27,11 @@ public class SoeSocketHandler : IDisposable
     private bool _isDisposed;
     private CancellationTokenSource? _internalCts;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SoeSocketHandler"/> class.
+    /// </summary>
+    /// <param name="logger">The logging interface to use.</param>
+    /// <param name="parameters">The control parameters for this instance.</param>
     public SoeSocketHandler
     (
         ILogger<SoeSocketHandler> logger,

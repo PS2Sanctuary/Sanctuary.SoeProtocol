@@ -1,6 +1,10 @@
 ﻿// ReSharper disable once CheckNamespace
 namespace BinaryPrimitiveHelpers;
 
+/// <summary>
+/// Contains extension methods for the <see cref="BinaryPrimitiveReader"/> and <see cref="BinaryPrimitiveWriter"/>
+/// structs.
+/// </summary>
 public static class BinaryPrimitiveHelperExtensions
 {
     /// <summary>
