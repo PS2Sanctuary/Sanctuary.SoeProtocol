@@ -28,4 +28,10 @@ public class SocketHandlerParams
     /// Whether sessions are allowed to remap their ports.
     /// </summary>
     public bool AllowPortRemaps { get; set; }
+
+    /// <summary>
+    /// Instructs the socket handler to stop when the active session is terminated. Useful when running in client mode.
+    /// This flag only affects the RunAsync method.
+    /// </summary>
+    public bool StopOnLastSessionTerminated { get; set; }
 }

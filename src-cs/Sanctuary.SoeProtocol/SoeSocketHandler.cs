@@ -25,6 +25,7 @@ public class SoeSocketHandler : IDisposable
     private readonly byte[] _receiveBuffer;
 
     private bool _isDisposed;
+    private CancellationTokenSource? _internalCts;
 
     public SoeSocketHandler
     (
@@ -76,15 +77,18 @@ public class SoeSocketHandler : IDisposable
     {
         await Task.Yield();
         using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
+        _internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        while (!ct.IsCancellationRequested)
+        while (!_internalCts.IsCancellationRequested)
         {
-            bool runNextTick = RunTick(ct);
+            bool runNextTick = RunTick(_internalCts.Token);
 
             // No need to cancel, it's a 1ms timer, and we don't want to handle OperationCanceledException
             if (!runNextTick)
                 await timer.WaitForNextTickAsync(CancellationToken.None);
         }
+
+        _internalCts.Dispose();
     }
 
     /// <summary>
@@ -204,6 +208,9 @@ public class SoeSocketHandler : IDisposable
         session.TerminateSession();
         _sessions.Remove(session.Remote);
         session.Dispose();
+
+        if (_sessions.Count is 0 && _parameters.StopOnLastSessionTerminated)
+            _internalCts?.Cancel();
     }
 
     private void RemapSession(SocketAddress address, RemapConnection remapRequest)
