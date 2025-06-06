@@ -83,19 +83,25 @@ public class SoeSocketHandler : IDisposable
     {
         await Task.Yield();
 
-        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
         _internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
         using Task receiveTask = RunSocketReceiveLoopAsync(_internalCts.Token);
 
-        while (!_internalCts.IsCancellationRequested)
+        try
         {
-            if (receiveTask.IsCompleted)
-                break;
+            while (!_internalCts.IsCancellationRequested)
+            {
+                if (receiveTask.IsCompleted)
+                    break;
 
-            bool runNextTick = RunTick(false, _internalCts.Token);
-            // No cancellation token as 1ms is not long to wait, and we don't have to handle OperationCanceledException
-            if (!runNextTick)
-                await timer.WaitForNextTickAsync(CancellationToken.None);
+                bool runNextTick = RunTick(false, _internalCts.Token);
+                if (!runNextTick)
+                    await timer.WaitForNextTickAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // This is fine
         }
 
         _internalCts.Cancel();
