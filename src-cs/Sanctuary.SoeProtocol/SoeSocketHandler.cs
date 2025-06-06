@@ -26,7 +26,6 @@ public class SoeSocketHandler : IDisposable
 
     private bool _isDisposed;
     private CancellationTokenSource? _internalCts;
-    private (SocketAddress, Memory<byte>)? _alreadyReceived;
 
     public SoeSocketHandler
     (
@@ -72,40 +71,54 @@ public class SoeSocketHandler : IDisposable
 
     /// <summary>
     /// Asynchronously runs the <see cref="SoeSocketHandler"/>. This method will not return until cancelled.
+    /// Do not use this method in tandem with <see cref="RunTick"/>.
     /// </summary>
-    /// <param name="ct"></param>
+    /// <param name="ct">A <see cref="CancellationToken"/> that can be used to cancel this operation.</param>
     public async Task RunAsync(CancellationToken ct)
     {
         await Task.Yield();
+
         using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(1));
         _internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using Task receiveTask = RunSocketReceiveLoopAsync(_internalCts.Token);
 
         while (!_internalCts.IsCancellationRequested)
         {
-            bool runNextTick = RunTick(_internalCts.Token);
-            if (runNextTick)
-                continue;
+            if (receiveTask.IsCompleted)
+                break;
 
-            _socket.ReceiveTimeout = 1;
-            SocketAddress address = new(AddressFamily.InterNetwork);
-            int recvAmount = await _socket.ReceiveFromAsync(_receiveBuffer, SocketFlags.None, address, ct);
-            if (recvAmount > 0)
-                _alreadyReceived = (address, _receiveBuffer.AsMemory(0, recvAmount));
+            bool runNextTick = RunTick(false, _internalCts.Token);
+            // No cancellation token as 1ms is not long to wait, and we don't have to handle OperationCanceledException
+            if (!runNextTick)
+                await timer.WaitForNextTickAsync(CancellationToken.None);
         }
+
+        _internalCts.Cancel();
+        await receiveTask;
 
         _internalCts.Dispose();
     }
 
     /// <summary>
-    /// Runs a tick of operations.
+    /// Runs a tick of operations. Do not use this method in tandem with <see cref="RunAsync"/>.
     /// </summary>
+    /// <param name="readFromSocket">
+    /// Whether the socket should be read during this tick. Set to <c>false</c> if using an external socket read loop.
+    /// </param>
     /// <param name="ct">A <see cref="CancellationToken"/> that can be used to cancel this operation.</param>
     /// <returns><c>True</c> if another tick must be run as soon as possible.</returns>
-    public bool RunTick(CancellationToken ct)
+    public bool RunTick(bool readFromSocket, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
+        bool runNextTick = false;
 
-        bool runNextTick = ProcessOneFromSocket();
+        if (readFromSocket && _socket.Available > 0)
+        {
+            SocketAddress remoteAddress = new(AddressFamily.InterNetwork);
+            int receivedLen = _socket.ReceiveFrom(_receiveBuffer, SocketFlags.None, remoteAddress);
+            if (receivedLen > 0)
+                runNextTick = ProcessOneFromSocket(remoteAddress, _receiveBuffer.AsSpan(0, receivedLen));
+        }
 
         List<SoeProtocolHandler> toRemove = new(16);
         foreach (SoeProtocolHandler session in _sessions.Values)
@@ -146,28 +159,8 @@ public class SoeSocketHandler : IDisposable
         return runNextTick;
     }
 
-    private bool ProcessOneFromSocket()
+    private bool ProcessOneFromSocket(SocketAddress remoteAddress, Span<byte> receivedData)
     {
-        SocketAddress remoteAddress = new(AddressFamily.InterNetwork);
-        Span<byte> received;
-
-        if (_alreadyReceived is not null)
-        {
-            remoteAddress = _alreadyReceived.Value.Item1;
-            received = _alreadyReceived.Value.Item2.Span;
-            _alreadyReceived = null;
-        }
-        else
-        {
-            if (_socket.Available is 0)
-                return false;
-
-            int receivedLen = _socket.ReceiveFrom(_receiveBuffer, SocketFlags.None, remoteAddress);
-            if (receivedLen is 0)
-                return false;
-            received = _receiveBuffer.AsSpan(0, receivedLen);
-        }
-
         if (!_sessions.TryGetValue(remoteAddress, out SoeProtocolHandler? session))
         {
             switch (SoePacketUtils.ReadSoeOpCode(_receiveBuffer))
@@ -185,10 +178,34 @@ public class SoeSocketHandler : IDisposable
         }
 
         NativeSpan span = _pool.Rent();
-        span.CopyDataInto(received);
-        session.EnqueuePacket(span);
+        span.CopyDataInto(receivedData);
+        if (!session.EnqueuePacket(span))
+            _pool.Return(span);
 
         return true;
+    }
+
+    private async Task RunSocketReceiveLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Yield();
+            _socket.Blocking = false;
+            SocketAddress remoteAddress = new(AddressFamily.InterNetwork);
+
+            while (!ct.IsCancellationRequested)
+            {
+                int receivedLen = await _socket.ReceiveFromAsync(_receiveBuffer, SocketFlags.None, remoteAddress, ct);
+                if (receivedLen <= 0)
+                    continue;
+
+                ProcessOneFromSocket(remoteAddress, _receiveBuffer.AsSpan(0, receivedLen));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // This is fine
+        }
     }
 
     private SoeProtocolHandler CreateSession(SocketAddress address, SessionMode mode)
