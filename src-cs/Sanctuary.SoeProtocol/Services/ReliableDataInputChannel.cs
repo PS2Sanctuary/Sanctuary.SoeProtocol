@@ -277,7 +277,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             return;
 
         // Process the buffer, free it, and reset fields
-        ProcessData(_currentBuffer);
+        ProcessData(_currentBuffer.AsSpan(0, _runningDataLength));
         ArrayPool<byte>.Shared.Return(_currentBuffer);
         _currentBuffer = null;
         _runningDataLength = 0;
@@ -295,12 +295,12 @@ public sealed class ReliableDataInputChannel : IDisposable
         {
             if (stashedItem.IsFragment)
             {
-                ProcessData(pooledData.UsedSpan);
+                WriteImmediateFragmentToBuffer(pooledData.UsedSpan);
+                TryProcessCurrentBuffer();
             }
             else
             {
-                WriteImmediateFragmentToBuffer(pooledData.UsedSpan);
-                TryProcessCurrentBuffer();
+                ProcessData(pooledData.UsedSpan);
             }
 
             // Release our stash reference
