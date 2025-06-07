@@ -299,6 +299,10 @@ public class SoeSocketHandler : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Disposes of managed and unmanaged resources.
+    /// </summary>
+    /// <param name="disposeManaged">Whether to dispose of managed resources.</param>
     protected virtual void Dispose(bool disposeManaged)
     {
         if (!disposeManaged || _isDisposed)
