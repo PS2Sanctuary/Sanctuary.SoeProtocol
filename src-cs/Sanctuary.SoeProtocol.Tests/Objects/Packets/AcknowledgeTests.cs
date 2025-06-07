@@ -9,7 +9,7 @@ public class AcknowledgeTests
     {
         Acknowledge ack = new(2);
 
-        byte[] buffer = new byte[Acknowledge.Size];
+        byte[] buffer = new byte[Acknowledge.SIZE];
         ack.Serialize(buffer);
 
         Acknowledge deserialized = Acknowledge.Deserialize(buffer);

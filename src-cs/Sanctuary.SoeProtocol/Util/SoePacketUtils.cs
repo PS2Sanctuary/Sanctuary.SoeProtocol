@@ -176,8 +176,8 @@ public static class SoePacketUtils
             SoeOpCode.NetStatusResponse => GetContextualPacketPadding(isCompressionEnabled, crcLength),
             SoeOpCode.ReliableData or SoeOpCode.ReliableDataFragment => GetContextualPacketPadding(isCompressionEnabled, crcLength)
                 + sizeof(ushort) + 1, // Sequence + first byte of data,
-            SoeOpCode.Acknowledge => GetContextualPacketPadding(isCompressionEnabled, crcLength) + Acknowledge.Size,
-            SoeOpCode.AcknowledgeAll => GetContextualPacketPadding(isCompressionEnabled, crcLength) + AcknowledgeAll.Size,
+            SoeOpCode.Acknowledge => GetContextualPacketPadding(isCompressionEnabled, crcLength) + Acknowledge.SIZE,
+            SoeOpCode.AcknowledgeAll => GetContextualPacketPadding(isCompressionEnabled, crcLength) + AcknowledgeAll.SIZE,
             SoeOpCode.UnknownSender => UnknownSender.Size,
             SoeOpCode.RemapConnection => RemapConnection.Size,
             _ => throw new ArgumentOutOfRangeException(nameof(opCode), opCode, "Invalid OP code")

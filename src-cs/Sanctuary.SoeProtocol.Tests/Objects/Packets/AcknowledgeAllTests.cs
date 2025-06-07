@@ -9,7 +9,7 @@ public class AcknowledgeAllTests
     {
         AcknowledgeAll ackAll = new(2);
 
-        byte[] buffer = new byte[AcknowledgeAll.Size];
+        byte[] buffer = new byte[AcknowledgeAll.SIZE];
         ackAll.Serialize(buffer);
 
         AcknowledgeAll deserialized = AcknowledgeAll.Deserialize(buffer);

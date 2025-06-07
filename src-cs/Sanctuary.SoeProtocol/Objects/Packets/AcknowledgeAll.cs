@@ -13,7 +13,7 @@ public readonly record struct AcknowledgeAll(ushort Sequence)
     /// Gets the buffer size required to serialize an
     /// <see cref="AcknowledgeAll"/> packet.
     /// </summary>
-    public const int Size = sizeof(ushort); // Sequence
+    public const int SIZE = sizeof(ushort); // Sequence
 
     /// <summary>
     /// Deserializes an <see cref="AcknowledgeAll"/> packet from a buffer.
