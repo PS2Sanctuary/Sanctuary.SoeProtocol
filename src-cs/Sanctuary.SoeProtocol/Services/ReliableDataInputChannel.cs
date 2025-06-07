@@ -20,11 +20,6 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// </summary>
     public delegate void DataHandler(ReadOnlySpan<byte> data);
 
-    /// <summary>
-    /// Gets the maximum length of time that data may go un-acknowledged.
-    /// </summary>
-    public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(2);
-
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
@@ -109,7 +104,7 @@ public sealed class ReliableDataInputChannel : IDisposable
         // Ack if:
         // - at least MAX_ACK_DELAY_NS have passed since the last ack time and
         // - our seq to ack is greater than the last ack seq + half of the ack window
-        bool needAck = Stopwatch.GetElapsedTime(_lastAckAllTime) > MAX_ACK_DELAY
+        bool needAck = Stopwatch.GetElapsedTime(_lastAckAllTime) > _sessionParams.MaximumAcknowledgeDelay
             || toAck >= _lastAckAllSequence + _sessionParams.DataAckWindow / 2;
 
         if (needAck)
@@ -243,7 +238,7 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         // We're receiving data we've already fully processed, so inform the remote about this.
         // However, because data is usually received in clumps, ensure we don't send acks too quickly
-        if (Stopwatch.GetElapsedTime(_lastAckAllTime) < MAX_ACK_DELAY) // TODO: Could this cause issues because we miss acking the most recent sequence?
+        if (Stopwatch.GetElapsedTime(_lastAckAllTime) < _sessionParams.MaximumAcknowledgeDelay) // TODO: Could this cause issues because we miss acking the most recent sequence?
             SendAckAll(new AcknowledgeAll((ushort)(_windowStartSequence - 1)));
         InputStats.DuplicateCount++;
 

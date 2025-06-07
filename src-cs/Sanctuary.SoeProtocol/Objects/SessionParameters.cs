@@ -19,7 +19,7 @@ public sealed class SessionParameters
     /// Gets the maximum length of a UDP packet that this party
     /// can send or receive.
     /// </summary>
-    public uint UdpLength { get; init; }
+    public uint UdpLength { get; init; } = SoeConstants.DefaultUdpLength;
 
     /// <summary>
     /// Gets or sets the maximum length of a UDP packet that the other
@@ -50,7 +50,7 @@ public sealed class SessionParameters
     /// Gets or sets the number of bytes used to store a packet CRC hash.
     /// Must be between 0 and 4, inclusive.
     /// </summary>
-    public byte CrcLength { get; set; }
+    public byte CrcLength { get; set; } = SoeConstants.CrcLength;
 
     /// <summary>
     /// Gets or sets a value indicating whether compression is enabled
@@ -59,42 +59,37 @@ public sealed class SessionParameters
     public bool IsCompressionEnabled { get; set; }
 
     /// <summary>
-    /// Gets or sets the maximum number of raw packets that may queued
-    /// for either processing or sending.
+    /// Gets or sets the maximum number of raw packets that may be queued for either processing or sending.
     /// </summary>
-    public int MaxQueuedRawPackets { get; init; }
+    public int MaxQueuedRawPackets { get; init; } = 512;
 
     /// <summary>
-    /// Gets or sets the maximum number of data fragments that may be
-    /// queued for either stitching or dispatch.
+    /// Gets or sets the maximum number of data fragments that may be queued for either stitching or dispatch.
     /// </summary>
-    public short MaxQueuedIncomingReliableDataPackets { get; init; }
+    public short MaxQueuedIncomingReliableDataPackets { get; init; } = 256;
 
     /// <summary>
-    /// Gets or sets the maximum number of reliable data fragments that may
-    /// be queued for output.
+    /// Gets or sets the maximum number of reliable data fragments that may be queued for output.
     /// </summary>
-    public short MaxQueuedOutgoingReliableDataPackets { get; init; }
+    public short MaxQueuedOutgoingReliableDataPackets { get; init; } = 196;
 
     /// <summary>
     /// Gets or sets the data acknowledgement window
     /// </summary>
-    public short DataAckWindow { get; set; }
+    public short DataAckWindow { get; set; } = 32;
 
     /// <summary>
-    /// Gets the timespan after which to send a heartbeat, if no contextual
-    /// packets have been received within the interval. Set to <see cref="TimeSpan.Zero"/>
-    /// to disable heart-beating.
+    /// Gets the timespan after which to send a heartbeat, if no contextual packets have been received within the
+    /// interval. Set to <see cref="TimeSpan.Zero"/> to disable heart-beating.
     /// </summary>
-    public TimeSpan HeartbeatAfter { get; init; }
+    public TimeSpan HeartbeatAfter { get; init; } = SoeConstants.DefaultSessionHeartbeatAfter;
 
     /// <summary>
-    /// Gets the default timespan after which to consider a session inactive, if no
-    /// contextual packets have been received within the interval. Set to
-    /// <see cref="TimeSpan.Zero"/> to prevent a session from being terminated
+    /// Gets the default timespan after which to consider a session inactive, if no contextual packets have been
+    /// received within the interval. Set to <see cref="TimeSpan.Zero"/> to prevent a session from being terminated
     /// due to inactivity.
     /// </summary>
-    public TimeSpan InactivityTimeout { get; init; }
+    public TimeSpan InactivityTimeout { get; init; } = SoeConstants.DefaultSessionInactivityTimeout;
 
     /// <summary>
     /// Gets or sets a value indicating whether all data packets should be acknowledged.
@@ -102,19 +97,9 @@ public sealed class SessionParameters
     public bool AcknowledgeAllData { get; set; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SessionParameters"/> class.
+    /// Gets the maximum amount of time that may elapse before acknowledging incoming reliable data sequences.
     /// </summary>
-    public SessionParameters()
-    {
-        CrcLength = SoeConstants.CrcLength;
-        UdpLength = SoeConstants.DefaultUdpLength;
-        MaxQueuedRawPackets = 512;
-        MaxQueuedIncomingReliableDataPackets = 256;
-        MaxQueuedOutgoingReliableDataPackets = 196;
-        DataAckWindow = 32;
-        HeartbeatAfter = SoeConstants.DefaultSessionHeartbeatAfter;
-        InactivityTimeout = SoeConstants.DefaultSessionInactivityTimeout;
-    }
+    public TimeSpan MaximumAcknowledgeDelay { get; set; } = TimeSpan.FromMilliseconds(2);
 
     /// <summary>
     /// Creates a shallow copy of this <see cref="SessionParameters"/> instance.
