@@ -293,10 +293,10 @@ fn consumeStashedDataFragments(self: *ReliableDataInputChannel) !void {
     // Iterate through the stash until we reach an empty slot
     while (stashed_item.data) |pooled_data| {
         if (stashed_item.is_fragment) {
-            self.processData(pooled_data.getSlice());
-        } else {
             try self.writeImmediateFragmentToBuffer(pooled_data.getSlice());
             self.tryProcessCurrentBuffer();
+        } else {
+            self.processData(pooled_data.getSlice());
         }
 
         // Release our stash reference
