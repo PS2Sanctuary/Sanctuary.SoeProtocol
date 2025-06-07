@@ -12,9 +12,6 @@ const utils = @import("utils.zig");
 /// Contains logic to handle reliable data packets and extract the proxied application data.
 pub const ReliableDataInputChannel = @This();
 
-/// Gets the maximum length of time that data may go un-acknowledged.
-const MAX_ACK_DELAY_NS = std.time.ns_per_ms * 2;
-
 // === External private fields ===
 _session_handler: *SoeSessionHandler,
 _allocator: std.mem.Allocator,
@@ -110,7 +107,7 @@ pub fn runTick(self: *ReliableDataInputChannel) !void {
     // ack if:
     // - at least MAX_ACK_DELAY_NS have passed since the last ack time and
     // - our seq to ack is greater than the last ack seq + half of the ack window
-    const need_ack = now.since(self._last_ack_all_time) > MAX_ACK_DELAY_NS or
+    const need_ack = now.since(self._last_ack_all_time) > self._session_params.max_acknowledge_delay_ns or
         to_ack >= self._last_ack_all_seq + @divExact(self._session_params.data_ack_window, 2);
 
     if (need_ack) {
@@ -244,10 +241,15 @@ fn isValidReliableData(
         return true;
     }
 
-    // We've already seen this packet. Ack all and mark as duplicate
+    // We're receiving data we've already fully processed, so inform the remote about this.
+    // However, because data is usually received in clumps, ensure we don't send acks too quickly
+    const now = try std.time.Instant.now();
+    if (now.since(self._last_ack_all_time) > self._session_params.max_acknowledge_delay_ns) {
+        const reliable_ack_seq: u64 = @bitCast(self._window_start_sequence - 1);
+        self._buffered_ack_all = soe_packets.AcknowledgeAll{ .sequence = @truncate(reliable_ack_seq) };
+    }
+
     self.input_stats.duplicate_count += 1;
-    const reliable_ack_seq: u64 = @bitCast(self._window_start_sequence - 1);
-    self._buffered_ack_all = soe_packets.AcknowledgeAll{ .sequence = @truncate(reliable_ack_seq) };
     return false;
 }
 

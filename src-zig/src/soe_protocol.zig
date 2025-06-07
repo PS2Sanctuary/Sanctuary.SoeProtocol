@@ -114,6 +114,8 @@ pub const SessionParams = struct {
     /// able to bundle multiple small data into a multi-data packet. This is specified in
     /// nanoseconds. Set to `0` to immediately release outgoing data.
     max_outgoing_data_queue_time_ns: i32 = std.time.ns_per_ms * 50,
+    /// Gets the maximum amount of time that may elapse before acknowledging incoming reliable data sequences.
+    max_acknowledge_delay_ns: i32 = std.time.ns_per_ms * 2,
 };
 
 /// Parameters used by an application to control the underlying SOE session.

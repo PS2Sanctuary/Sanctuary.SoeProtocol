@@ -238,7 +238,7 @@ public sealed class ReliableDataInputChannel : IDisposable
 
         // We're receiving data we've already fully processed, so inform the remote about this.
         // However, because data is usually received in clumps, ensure we don't send acks too quickly
-        if (Stopwatch.GetElapsedTime(_lastAckAllTime) < _sessionParams.MaximumAcknowledgeDelay) // TODO: Could this cause issues because we miss acking the most recent sequence?
+        if (Stopwatch.GetElapsedTime(_lastAckAllTime) < _sessionParams.MaximumAcknowledgeDelay)
             SendAckAll(new AcknowledgeAll((ushort)(_windowStartSequence - 1)));
         InputStats.DuplicateCount++;
 
