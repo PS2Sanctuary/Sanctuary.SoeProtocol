@@ -1,5 +1,4 @@
-﻿using Sanctuary.SoeProtocol.Abstractions;
-using Sanctuary.SoeProtocol.Objects;
+﻿using Sanctuary.SoeProtocol.Objects;
 using Sanctuary.SoeProtocol.Objects.Packets;
 using Sanctuary.SoeProtocol.Util;
 using System;
@@ -26,26 +25,26 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// </summary>
     public static readonly TimeSpan MAX_ACK_DELAY = TimeSpan.FromMilliseconds(2);
 
-    private readonly ISoeSession _handler;
+    private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
     private readonly NativeSpanPool _spanPool;
     private readonly DataHandler _dataHandler;
-
-    private readonly SlidingWindowArray<StashedData> _dataBacklog;
-    private readonly byte[] _ackAllBuffer;
+    private readonly StashedData[] _stash;
 
     private Rc4KeyState? _cipherState;
+    /// The next reliable data sequence that we expect to receive.
     private long _windowStartSequence;
-
-    // Fragment stitching variables
-    private int _expectedDataLength;
-    private int _runningDataLength;
+    private AcknowledgeAll? _bufferedAckAll;
+    /// Stores fragments that compose the current piece of reliable data.
     private byte[]? _currentBuffer;
-
-    // Ack variables
-    private long _lastAcknowledgedSequence;
-    private long _lastAckAllAt;
+    /// The current length of the data that has been received into the <see cref="_currentBuffer"/>.
+    private int _runningDataLength;
+    /// The expected length of the data that should be received into the <see cref="_currentBuffer"/>.
+    private int _expectedDataLength;
+    /// The last reliable data sequence that we acknowledged.
+    private long _lastAckAllSequence;
+    private long _lastAckAllTime;
 
     /// <summary>
     /// Gets the input statistics.
@@ -62,7 +61,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     /// <param name="dataHandler">The handler for processed data.</param>
     public ReliableDataInputChannel
     (
-        ISoeSession handler,
+        SoeProtocolHandler handler,
         SessionParameters sessionParams,
         ApplicationParameters appParams,
         NativeSpanPool spanPool,
@@ -75,26 +74,47 @@ public sealed class ReliableDataInputChannel : IDisposable
         _spanPool = spanPool;
         _dataHandler = dataHandler;
 
-        _dataBacklog = new SlidingWindowArray<StashedData>(_sessionParams.MaxQueuedIncomingReliableDataPackets);
-        _ackAllBuffer = GC.AllocateArray<byte>(AcknowledgeAll.Size, true);
-
         _cipherState = _applicationParams.EncryptionKeyState?.Copy();
-        _windowStartSequence = 0;
 
-        _lastAcknowledgedSequence = -1;
-        _lastAckAllAt = Stopwatch.GetTimestamp();
+        // Pre-fill the stash
+        _stash = new StashedData[_sessionParams.MaxQueuedIncomingReliableDataPackets];
+        for (int i = 0; i < _stash.Length; i++)
+            _stash[i] = new StashedData();
 
-        for (int i = 0; i < _dataBacklog.Length; i++)
-            _dataBacklog[i] = new StashedData();
+        _lastAckAllSequence = -1;
+        _lastAckAllTime = Stopwatch.GetTimestamp();
 
         InputStats = new DataInputStats();
     }
 
     /// <summary>
-    /// Runs a tick of the <see cref="ReliableDataInputChannel"/> operations.
+    /// Runs a tick of the <see cref="ReliableDataInputChannel"/> operations. This includes acknowledging processed
+    /// data packets.
     /// </summary>
     public void RunTick()
-        => SendAckIfRequired();
+    {
+        if (_bufferedAckAll is not null)
+        {
+            SendAckAll(_bufferedAckAll.Value);
+            _bufferedAckAll = null;
+        }
+
+        long toAck = _windowStartSequence - 1;
+
+        // No need to perform an ack all if we're acking everything individually, or we've already acked up to the
+        // current window start sequence
+        if (_sessionParams.AcknowledgeAllData || toAck <= _lastAckAllSequence)
+            return;
+
+        // Ack if:
+        // - at least MAX_ACK_DELAY_NS have passed since the last ack time and
+        // - our seq to ack is greater than the last ack seq + half of the ack window
+        bool needAck = Stopwatch.GetElapsedTime(_lastAckAllTime) > MAX_ACK_DELAY
+            || toAck >= _lastAckAllSequence + _sessionParams.DataAckWindow / 2;
+
+        if (needAck)
+            SendAckAll(new AcknowledgeAll((ushort)toAck));
+    }
 
     /// <summary>
     /// Handles a <see cref="SoeOpCode.ReliableData"/> packet.
@@ -106,8 +126,10 @@ public sealed class ReliableDataInputChannel : IDisposable
             return;
 
         ProcessData(data);
+        // We've now processed another packet, so we can increment the window
+        _windowStartSequence += 1;
+
         ConsumeStashedDataFragments();
-        SendAckIfRequired();
     }
 
     /// <summary>
@@ -119,15 +141,26 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (!PreprocessData(ref data, true))
             return;
 
-        // At this point we know this fragment can be written directly to the buffer
-        // as it is next in the sequence.
+        // At this point we know this fragment can be written directly to the buffer as it is next in the sequence.
         WriteImmediateFragmentToBuffer(data);
+        // We've now processed another packet, so we can increment the window
+        _windowStartSequence += 1;
 
         // Attempt to process the current buffer now, as the stashed fragments may belong to a new buffer
         // ConsumeStashedDataFragments will attempt to process the current buffer as it releases stashes
         TryProcessCurrentBuffer();
         ConsumeStashedDataFragments();
-        SendAckIfRequired();
+    }
+
+    private void SendAckAll(AcknowledgeAll ackAll)
+    {
+        Span<byte> buffer = stackalloc byte[AcknowledgeAll.SIZE];
+        ackAll.Serialize(buffer);
+        _handler.SendContextualPacket(SoeOpCode.AcknowledgeAll, buffer);
+        InputStats.AcknowledgeCount++;
+
+        _lastAckAllSequence = ackAll.Sequence;
+        _lastAckAllTime = Stopwatch.GetTimestamp();
     }
 
     /// <summary>
@@ -141,72 +174,45 @@ public sealed class ReliableDataInputChannel : IDisposable
         InputStats.TotalReceived++;
 
         if (!IsValidReliableData(data, out long sequence, out ushort packetSequence))
-        {
-            InputStats.DuplicateCount++;
             return false;
+
+        bool ahead = sequence != _windowStartSequence;
+
+        // Ack this data if we are in ack-all mode, or it is ahead of our expectations
+        if (_sessionParams.AcknowledgeAllData || ahead)
+        {
+            Span<byte> buffer = stackalloc byte[Acknowledge.SIZE];
+            new Acknowledge(packetSequence).Serialize(buffer);
+            _handler.SendContextualPacket(SoeOpCode.Acknowledge, buffer);
         }
 
         // Remove the sequence bytes
         data = data[sizeof(ushort)..];
 
-        if (sequence == _windowStartSequence)
+        // We can process this immediately.
+        if (!ahead)
             return true;
 
-        // We've received this data ahead of schedule, so ack it individually
-        SendAck(packetSequence);
+        // We've received this data out-of-order, so stash it
         InputStats.OutOfOrderCount++;
+        long stashSpot = sequence % _sessionParams.MaxQueuedIncomingReliableDataPackets;
 
-        StashedData? stash = TryGetStash(sequence);
-        if (stash is null)
-            return false;
-
-        NativeSpan span = _spanPool.Rent();
-        span.CopyDataInto(data);
-        stash.Init(sequence, isFragment, span);
-
-        return false;
-    }
-
-    // Helper method
-    private StashedData? TryGetStash(long sequence)
-    {
-        StashedData stash = _dataBacklog[sequence - _windowStartSequence];
-
-        // We may have already received this sequence. Confirm not active
-        if (!stash.IsActive)
-            return stash;
-
-        // Sanity check. Theoretically we should never exceed the window
-        if (stash.Sequence != sequence)
+        // Grab our stash item. We may have already stashed this packet ahead of time, so check for that
+        StashedData stashItem = _stash[stashSpot];
+        if (stashItem.Span is not null)
         {
-            throw new InvalidOperationException
-            (
-                $"Invalid state: Attempting to replace active stash {stash.Sequence} with {sequence}"
-            );
+            InputStats.DuplicateCount++;
+            return false;
         }
 
-        // We've already got actively stashed data with this sequence. No need to replace
-        return null;
-    }
+        NativeSpan dataSpan = _spanPool.Rent();
+        dataSpan.CopyDataInto(data);
 
-    private void SendAckIfRequired()
-    {
-        long toAcknowledge = _windowStartSequence - 1;
-        if (_lastAcknowledgedSequence >= toAcknowledge)
-            return;
-
-        // Send ack if:
-        // we've not sent an ack for a little while AND we actually need to acknowledge a sequence
-        // OR we've exceeded the ack window (we're receiving a lot of data)
-        // OR we're acknowledging all data
-        bool needAck = (Stopwatch.GetElapsedTime(_lastAckAllAt) > MAX_ACK_DELAY
-                && toAcknowledge > _lastAcknowledgedSequence)
-            || toAcknowledge >= _lastAcknowledgedSequence + _sessionParams.DataAckWindow / 2
-            || _sessionParams.AcknowledgeAllData;
-        if (!needAck)
-            return;
-
-        SendAckAll((ushort)toAcknowledge);
+        // Update our stash item
+        stashItem.IsFragment = isFragment;
+        stashItem.Span = dataSpan;
+        _stash[stashSpot] = stashItem;
+        return false;
     }
 
     /// <summary>
@@ -220,87 +226,53 @@ public sealed class ReliableDataInputChannel : IDisposable
     private bool IsValidReliableData(ReadOnlySpan<byte> data, out long sequence, out ushort packetSequence)
     {
         packetSequence = BinaryPrimitives.ReadUInt16BigEndian(data);
-        sequence = GetTrueIncomingSequence(packetSequence);
+        sequence = DataUtils.GetTrueIncomingSequence
+        (
+            packetSequence,
+            _windowStartSequence,
+            _sessionParams.MaxQueuedIncomingReliableDataPackets
+        );
 
-        bool isValid = sequence >= _windowStartSequence
-            && sequence < _windowStartSequence + _sessionParams.MaxQueuedIncomingReliableDataPackets;
-        if (isValid)
+        // If this is too far ahead of our window, just drop it
+        if (sequence > _windowStartSequence + _sessionParams.MaxQueuedIncomingReliableDataPackets)
+            return false;
+
+        // Great, we're inside the window
+        if (sequence >= _windowStartSequence)
             return true;
 
         // We're receiving data we've already fully processed, so inform the remote about this.
         // However, because data is usually received in clumps, ensure we don't send acks too quickly
-        if (Stopwatch.GetElapsedTime(_lastAckAllAt) < MAX_ACK_DELAY)
-            SendAckAll((ushort)(_windowStartSequence - 1));
+        if (Stopwatch.GetElapsedTime(_lastAckAllTime) < MAX_ACK_DELAY) // TODO: Could this cause issues because we miss acking the most recent sequence?
+            SendAckAll(new AcknowledgeAll((ushort)(_windowStartSequence - 1)));
+        InputStats.DuplicateCount++;
 
         return false;
     }
 
+    /// <summary>
+    /// Writes a fragment to the <see cref="_currentBuffer"/>. If this is not allocated, the fragment in the
+    /// <paramref name="data"/> will be assumed to be a master fragment (i.e. has the length of the full data packet)
+    /// and a new <see cref="_currentBuffer"/> will be allocated to this len.
+    /// </summary>
+    /// <param name="data"></param>
     [MemberNotNull(nameof(_currentBuffer))]
     private void WriteImmediateFragmentToBuffer(ReadOnlySpan<byte> data)
     {
-        if (_currentBuffer is null)
-        {
-            BeginNewBuffer(data);
-        }
-        else
+        if (_currentBuffer is not null)
         {
             data.CopyTo(_currentBuffer.AsSpan(_runningDataLength));
             _runningDataLength += data.Length;
         }
-    }
-
-    /// <summary>
-    /// Sets a new storage buffer up. Expects a master fragment
-    /// to be used as the <paramref name="data"/>
-    /// </summary>
-    /// <param name="data">The post-sequence data to create the new buffer with.</param>
-    [MemberNotNull(nameof(_currentBuffer))]
-    private void BeginNewBuffer(ReadOnlySpan<byte> data)
-    {
-        _expectedDataLength = (int)BinaryPrimitives.ReadUInt32BigEndian(data);
-        _currentBuffer = ArrayPool<byte>.Shared.Rent(_expectedDataLength);
-
-        data = data[sizeof(uint)..];
-        data.CopyTo(_currentBuffer);
-        _runningDataLength = data.Length;
-    }
-
-    private void ConsumeStashedDataFragments(bool slideWindowFirst = true)
-    {
-        if (slideWindowFirst)
-            IncrementWindow();
-
-        // Copy over any stashed fragments that can be written
-        // directly to the buffer; i.e. they equal the current
-        // window start sequence and we have space left
-        while (_dataBacklog.Current.IsActive && _dataBacklog.Current.Sequence <= _windowStartSequence)
+        else
         {
-            StashedData curr = _dataBacklog.Current;
-
-            // We should never reach a state where we have skipped past stashed fragments.
-            // We perform this check (in tandem with the <= comparison above) for sanity.
-            if (curr.Sequence < _windowStartSequence)
-            {
-                throw new Exception
-                (
-                    "Invalid state: stashed fragment did not match window start sequence " +
-                    $"({curr.Sequence}/{_windowStartSequence})"
-                );
-            }
-
-            if (!_dataBacklog.Current.IsFragment)
-            {
-                ProcessData(curr.Span.UsedSpan);
-            }
-            else
-            {
-                WriteImmediateFragmentToBuffer(curr.Span.UsedSpan);
-                TryProcessCurrentBuffer();
-            }
-
-            curr.Clear(_spanPool);
-
-            IncrementWindow();
+            // Otherwise, create a new buffer by assuming this is a master fragment and reading
+            // the length
+            _expectedDataLength = (int)BinaryPrimitives.ReadUInt32BigEndian(data);
+            _currentBuffer = ArrayPool<byte>.Shared.Rent(_expectedDataLength);
+            data = data[sizeof(uint)..];
+            data.CopyTo(_currentBuffer);
+            _runningDataLength = data.Length;
         }
     }
 
@@ -309,11 +281,42 @@ public sealed class ReliableDataInputChannel : IDisposable
         if (_currentBuffer is null || _runningDataLength < _expectedDataLength)
             return;
 
-        ProcessData(_currentBuffer.AsSpan(0, _runningDataLength));
+        // Process the buffer, free it, and reset fields
+        ProcessData(_currentBuffer);
         ArrayPool<byte>.Shared.Return(_currentBuffer);
         _currentBuffer = null;
-        _runningDataLength = -1;
+        _runningDataLength = 0;
         _expectedDataLength = 0;
+    }
+
+    private void ConsumeStashedDataFragments()
+    {
+        // Grab the stash index of our current window start sequence
+        long stashSpot = _windowStartSequence % _sessionParams.MaxQueuedIncomingReliableDataPackets;
+        StashedData stashedItem = _stash[stashSpot];
+
+        // Iterate through the stash until we reach an empty slot
+        while (stashedItem.Span is { } pooledData)
+        {
+            if (stashedItem.IsFragment)
+            {
+                ProcessData(pooledData.UsedSpan);
+            }
+            else
+            {
+                WriteImmediateFragmentToBuffer(pooledData.UsedSpan);
+                TryProcessCurrentBuffer();
+            }
+
+            // Release our stash reference
+            _spanPool.Return(pooledData);
+            stashedItem.Span = null;
+
+            // Increment the window
+            _windowStartSequence++;
+            stashSpot = _windowStartSequence % _sessionParams.MaxQueuedIncomingReliableDataPackets;
+            stashedItem = _stash[stashSpot];
+        }
     }
 
     private void ProcessData(Span<byte> data)
@@ -324,9 +327,7 @@ public sealed class ReliableDataInputChannel : IDisposable
             while (offset < data.Length)
             {
                 int length = (int)DataUtils.ReadVariableLength(data, ref offset);
-
-                Span<byte> dataSlice = data.Slice(offset, length);
-                DecryptAndCallDataHandler(dataSlice);
+                DecryptAndCallDataHandler(data.Slice(offset, length));
                 offset += length;
             }
         }
@@ -353,48 +354,16 @@ public sealed class ReliableDataInputChannel : IDisposable
         _dataHandler(data);
     }
 
-    private void SendAckAll(ushort sequence)
-    {
-        AcknowledgeAll ack = new(sequence);
-        ack.Serialize(_ackAllBuffer);
-        _handler.SendContextualPacket(SoeOpCode.AcknowledgeAll, _ackAllBuffer);
-        InputStats.AcknowledgeCount++;
-
-        _lastAcknowledgedSequence = sequence;
-        _lastAckAllAt = Stopwatch.GetTimestamp();
-    }
-
-    private void SendAck(ushort sequence)
-    {
-        Acknowledge ack = new(sequence);
-        Span<byte> buffer = stackalloc byte[Acknowledge.Size];
-        ack.Serialize(buffer);
-        _handler.SendContextualPacket(SoeOpCode.Acknowledge, buffer);
-        InputStats.AcknowledgeCount++;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void IncrementWindow()
-    {
-        _windowStartSequence++;
-        _dataBacklog.Slide();
-    }
-
-    private long GetTrueIncomingSequence(ushort packetSequence)
-        => DataUtils.GetTrueIncomingSequence
-        (
-            packetSequence,
-            _windowStartSequence,
-            _sessionParams.MaxQueuedIncomingReliableDataPackets
-        );
-
     /// <inheritdoc />
     public void Dispose()
     {
-        for (int i = 0; i < _dataBacklog.Length; i++)
+        foreach (StashedData element in _stash)
         {
-            if (_dataBacklog[i].IsActive)
-                _dataBacklog[i].Clear(_spanPool);
+            if (element.Span is { } active)
+            {
+                _spanPool.Return(active);
+                element.Span = null;
+            }
         }
 
         if (_currentBuffer is not null)
@@ -407,31 +376,7 @@ public sealed class ReliableDataInputChannel : IDisposable
     [SkipLocalsInit]
     private class StashedData
     {
-        [MemberNotNullWhen(true, nameof(Span))]
-        public bool IsActive { get; private set; }
-        public NativeSpan? Span { get; private set; }
-        public long Sequence { get; private set; }
-        public bool IsFragment { get; private set; }
-
-        public void Init(long sequence, bool isFragment, NativeSpan span)
-        {
-            if (IsActive)
-                throw new InvalidOperationException("Already active");
-
-            Sequence = sequence;
-            IsFragment = isFragment;
-            Span = span;
-            IsActive = true;
-        }
-
-        public void Clear(NativeSpanPool spanPool)
-        {
-            if (!IsActive)
-                throw new InvalidOperationException("Not active");
-
-            IsActive = false;
-            spanPool.Return(Span);
-            Span = null;
-        }
+        public NativeSpan? Span;
+        public bool IsFragment;
     }
 }
