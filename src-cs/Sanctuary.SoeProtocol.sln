@@ -8,6 +8,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{3701
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SingleSessionPeersSample", "Samples\SingleSessionPeersSample\SingleSessionPeersSample.csproj", "{BB4C28A1-74FD-428A-ADA6-D54FE9F692A4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleServer", "Samples\SimpleServer\SimpleServer.csproj", "{E57E801A-C6B1-49EA-825A-D6BCB4B5A566}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,8 +28,13 @@ Global
 		{BB4C28A1-74FD-428A-ADA6-D54FE9F692A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BB4C28A1-74FD-428A-ADA6-D54FE9F692A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BB4C28A1-74FD-428A-ADA6-D54FE9F692A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E57E801A-C6B1-49EA-825A-D6BCB4B5A566}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E57E801A-C6B1-49EA-825A-D6BCB4B5A566}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E57E801A-C6B1-49EA-825A-D6BCB4B5A566}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E57E801A-C6B1-49EA-825A-D6BCB4B5A566}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{BB4C28A1-74FD-428A-ADA6-D54FE9F692A4} = {3701A5DD-598A-4642-8AF3-14B6D39DCA11}
+		{E57E801A-C6B1-49EA-825A-D6BCB4B5A566} = {3701A5DD-598A-4642-8AF3-14B6D39DCA11}
 	EndGlobalSection
 EndGlobal
