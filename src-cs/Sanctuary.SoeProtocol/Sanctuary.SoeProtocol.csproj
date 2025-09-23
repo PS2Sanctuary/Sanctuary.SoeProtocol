@@ -12,18 +12,18 @@
     </PropertyGroup>
     
     <ItemGroup>
-      <PackageReference Include="carlst99.BinaryPrimitiveHelpers" Version="1.0.0" />
-      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.7" />
-      <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="3.0.1" />
+        <PackageReference Include="carlst99.BinaryPrimitiveHelpers" Version="1.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
+        <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="3.0.1" />
     </ItemGroup>
     
     <ItemGroup>
-      <Compile Update="SoeProtocolHandler.Contextless.cs">
-        <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
-      </Compile>
-      <Compile Update="SoeProtocolHandler.Contextual.cs">
-        <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
-      </Compile>
+        <Compile Update="SoeProtocolHandler.Contextless.cs">
+            <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
+        </Compile>
+        <Compile Update="SoeProtocolHandler.Contextual.cs">
+            <DependentUpon>SoeProtocolHandler.cs</DependentUpon>
+        </Compile>
     </ItemGroup>
     
 </Project>
