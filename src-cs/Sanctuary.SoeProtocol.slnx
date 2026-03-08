@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Samples/">
+    <Project Path="Samples/SimpleServer/SimpleServer.csproj" />
+    <Project Path="Samples/SingleSessionPeersSample/SingleSessionPeersSample.csproj" />
+  </Folder>
+  <Project Path="Sanctuary.SoeProtocol.Tests/Sanctuary.SoeProtocol.Tests.csproj" />
+  <Project Path="Sanctuary.SoeProtocol/Sanctuary.SoeProtocol.csproj" />
+</Solution>
