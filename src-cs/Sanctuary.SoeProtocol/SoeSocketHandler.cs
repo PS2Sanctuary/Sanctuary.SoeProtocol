@@ -24,6 +24,9 @@ public class SoeSocketHandler : IDisposable
     private readonly Socket _socket;
     private readonly byte[] _receiveBuffer;
 
+    // This is initialized here in order to prevent allocating a new list object every tick.
+    private readonly List<SoeProtocolHandler> _removeList = new(16);
+
     private bool _isDisposed;
     private CancellationTokenSource? _internalCts;
 
@@ -131,12 +134,11 @@ public class SoeSocketHandler : IDisposable
                 runNextTick = ProcessOneFromSocket(remoteAddress, _receiveBuffer.AsSpan(0, receivedLen));
         }
 
-        List<SoeProtocolHandler> toRemove = new(16);
         foreach (SoeProtocolHandler session in _sessions.Values)
         {
             if (session.TerminationReason is not DisconnectReason.None || session.State is SessionState.Terminated)
             {
-                toRemove.Add(session);
+                _removeList.Add(session);
                 continue;
             }
 
@@ -144,7 +146,7 @@ public class SoeSocketHandler : IDisposable
             try
             {
                 if (!session.RunTick(out needsMoreTime, ct))
-                    toRemove.Add(session);
+                    _removeList.Add(session);
             }
             catch (Exception ex)
             {
@@ -155,7 +157,7 @@ public class SoeSocketHandler : IDisposable
                 runNextTick = true;
         }
 
-        foreach (SoeProtocolHandler session in toRemove)
+        foreach (SoeProtocolHandler session in _removeList)
         {
             try
             {
@@ -166,6 +168,7 @@ public class SoeSocketHandler : IDisposable
                 _logger.LogError(ex, "Failed to destroy a session");
             }
         }
+        _removeList.Clear();
 
         return runNextTick;
     }
