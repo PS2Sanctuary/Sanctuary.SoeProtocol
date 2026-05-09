@@ -79,7 +79,7 @@ pub fn runTick(self: *SoeSocketHandler) !bool {
             _ = self._connections.remove(conn.remote.any);
         } else {
             conn.runTick() catch |err| {
-                std.debug.print("Failed to run tick of session handler with error {any}", .{err});
+                std.log.err("Failed to run tick of session handler with error {any}", .{err});
                 self.destroySession(conn);
             };
         }
@@ -122,7 +122,7 @@ fn processOneFromSocket(self: *SoeSocketHandler) !bool {
     }
 
     conn.?.handlePacket(self._recv_buffer[0..result.received_len]) catch |err| {
-        std.debug.print("Failed to run tick of session handler with error {any}", .{err});
+        std.log.err("Failed to run tick of session handler with error {any}", .{err});
         self.destroySession(conn.?);
     };
 
