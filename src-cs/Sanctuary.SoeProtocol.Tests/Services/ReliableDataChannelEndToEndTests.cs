@@ -159,7 +159,7 @@ public class ReliableDataChannelEndToEndTests
 
                 ushort sequence = BinaryPrimitives.ReadUInt16BigEndian(lastPacket.AsSpan(sizeof(SoeOpCode)));
                 _ouputHelper.WriteLine($"Acknowledging sequence {sequence}");
-                outputChannel.NotifyOfAcknowledgeAll(new AcknowledgeAll { Sequence = sequence });
+                outputChannel.NotifyOfAcknowledgeAll(new AcknowledgeAll(sequence));
             }
             while (networkInterface.SentData.Count > lastCount);
         }

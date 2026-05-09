@@ -6,14 +6,27 @@ namespace Sanctuary.SoeProtocol.Objects.Packets;
 /// <summary>
 /// Represents a packet used to acknowledge a data sequence.
 /// </summary>
-/// <param name="Sequence">The sequence number.</param>
-public readonly record struct Acknowledge(ushort Sequence)
+public readonly struct Acknowledge
 {
     /// <summary>
     /// Gets the buffer size required to serialize an
     /// <see cref="Acknowledge"/> packet.
     /// </summary>
     public const int SIZE = sizeof(ushort); // Sequence
+
+    /// <summary>
+    /// The sequence number.
+    /// </summary>
+    public readonly ushort Sequence;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Acknowledge"/> struct.
+    /// </summary>
+    /// <param name="sequence">The sequence number.</param>
+    public Acknowledge(ushort sequence)
+    {
+        Sequence = sequence;
+    }
 
     /// <summary>
     /// Deserializes an <see cref="Acknowledge"/> packet from a buffer.
