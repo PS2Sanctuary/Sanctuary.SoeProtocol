@@ -209,7 +209,11 @@ pub fn terminateSession(
     // Naive flush of the output channel
     // TODO: we should implement a proper flush method, and only run it
     // in cases where we can reasonably determine this is a 'safe' termination
-    try self._data_output_channel.runTick();
+    self._data_output_channel.runTick() catch |err| {
+        // This isn't ideal, but this could be a legitimate failure due to network issues.
+        // An error here shouldn't prevent us from terminating the session.
+        std.log.err("Failed to flush the data output channel: {}", .{err});
+    };
 
     if (notify_remote and self.state == SessionState.running) {
         const disconnect = soe_packets.Disconnect{ .session_id = self.session_id, .reason = reason };
@@ -219,7 +223,7 @@ pub fn terminateSession(
             // It's not good that we errored, but it could be a termination because of network issues
             // In any case, we need to finalise the termination rather than failing here. Remote
             // notification is only a nicety; it should timeout eventually
-            std.debug.print("Failed to send disconnect packet: {}", err);
+            std.log.err("Failed to send disconnect packet: {}", .{err});
         };
     }
 
