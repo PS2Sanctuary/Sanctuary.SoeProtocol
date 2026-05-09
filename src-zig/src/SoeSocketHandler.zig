@@ -117,7 +117,7 @@ fn processOneFromSocket(self: *SoeSocketHandler) !bool {
                 self.remapSession(result.sender, remap);
                 return true;
             },
-            _ => return true,
+            else => return true,
         }
     }
 
@@ -180,11 +180,11 @@ fn remapSession(self: *SoeSocketHandler, newAddress: std.net.Address, remap: soe
     }
 
     // We do NOT want to handle IP address remaps - this is probably someone trying to hijack a session.
-    if (newAddress.in != handler.?.remote.in) {
+    if (!newAddress.eql(handler.?.remote)) {
         return;
     }
 
-    self._connections.remove(handler.?.remote.any);
+    _ = self._connections.remove(handler.?.remote.any);
     handler.?.remote = newAddress;
     self._connections.put(newAddress.any, handler.?) catch self.destroySession(handler.?);
 }
