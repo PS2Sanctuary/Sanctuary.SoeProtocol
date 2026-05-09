@@ -78,7 +78,7 @@ pub fn validatePacket(packet_data: []const u8, session_params: SessionParams) So
         return op_code;
     }
 
-    const actual_crc = session_params.crc.hash(
+    const actual_crc = session_params.crc_state.hash(
         packet_data[0 .. packet_data.len - session_params.crc_length],
     );
 
@@ -203,7 +203,7 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         // Update the crc_length of our session
         session_params.crc_length = @truncate(crc_length);
         // Set our initial crc seed
-        session_params.crc = Crc32.init(10);
+        session_params.crc_state = Crc32.init(10);
 
         // Allocate space for a new acknowledgement packet
         const packet_data = try std.testing.allocator.alloc(
@@ -220,7 +220,7 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         ack.serialize(writer.getRemaining());
         writer.advance(soe_packets.Acknowledge.SIZE);
 
-        appendCrc(&writer, session_params.crc, @truncate(crc_length));
+        appendCrc(&writer, session_params.crc_state, @truncate(crc_length));
 
         try std.testing.expectEqual(
             SoeOpCode.acknowledge,
@@ -228,7 +228,7 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         );
 
         // Update the CRC seed, and test we now invalidate the packet
-        session_params.crc = Crc32.init(20);
+        session_params.crc_state = Crc32.init(20);
         try std.testing.expectError(
             SoePacketValidationError.CrcMismatch,
             validatePacket(packet_data, session_params),

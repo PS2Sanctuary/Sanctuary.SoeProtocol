@@ -91,7 +91,7 @@ pub const SessionParams = struct {
     /// The seed used to calculate packet CRC hashes.
     crc_seed: u32 = 0,
     /// A Crc32 instance that has been initialized with the crc_seed, used to calculate packet CRC hashes.
-    crc: Crc32 = undefined,
+    crc_state: Crc32 = undefined,
     /// The numer of bytes used to store a packet CRC hash. Must be between 0 and 4, inclusive.
     crc_length: u8 = CRC_LENGTH,
     /// Whether compression is enabled for the session. This may not be changed after the session is initialized.
@@ -122,7 +122,7 @@ pub const SessionParams = struct {
     pub fn configureCrc(self: *SessionParams, crc_length: u8, crc_seed: u32) void {
         self.crc_length = crc_length;
         self.crc_seed = crc_seed;
-        self.crc = Crc32.init(crc_seed);
+        self.crc_state = Crc32.init(crc_seed);
     }
 };
 

@@ -180,7 +180,7 @@ pub fn sendPresizedContextualPacket(self: *const SoeSessionHandler, op_code: soe
     writer.offset = packet_data.len - self._session_params.crc_length;
     soe_packet_utils.appendCrc(
         &writer,
-        self._session_params.crc,
+        self._session_params.crc_state,
         self._session_params.crc_length,
     );
 
