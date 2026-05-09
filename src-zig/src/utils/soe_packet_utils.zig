@@ -42,12 +42,12 @@ pub fn isContextlessPacket(op_code: SoeOpCode) bool {
 
 /// Appends a CRC check value to the given `writer`. The entirety of the `writer`'s
 /// buffer is used to calculate the check value.
-pub fn appendCrc(writer: *BinaryWriter, crc_seed: u32, crc_length: u8) void {
+pub fn appendCrc(writer: *BinaryWriter, crc: Crc32, crc_length: u8) void {
     if (crc_length == 0) {
         return;
     }
 
-    const crc_value = Crc32.hash(writer.getConsumed(), crc_seed);
+    const crc_value = crc.hash(writer.getConsumed());
     switch (crc_length) {
         1 => writer.writeU8(@truncate(crc_value)),
         2 => writer.writeU16BE(@truncate(crc_value)),
@@ -78,9 +78,8 @@ pub fn validatePacket(packet_data: []const u8, session_params: SessionParams) So
         return op_code;
     }
 
-    const actual_crc = Crc32.hash(
+    const actual_crc = session_params.crc.hash(
         packet_data[0 .. packet_data.len - session_params.crc_length],
-        session_params.crc_seed,
     );
 
     const crc_match: bool = switch (session_params.crc_length) {
@@ -143,7 +142,7 @@ test isContextlessPacket {
 }
 
 test appendCrc {
-    const crc_seed = 5;
+    const crc = Crc32.init(5);
 
     for (0..5) |crc_length| {
         // Create a new buffer to store our data + crc value
@@ -155,12 +154,12 @@ test appendCrc {
         writer.writeU32BE(454653524);
 
         // Hash the value we wrote and get a buffer of it to compare against
-        const expected_crc = Crc32.hash(buffer[0..4], crc_seed);
+        const expected_crc = crc.hash(buffer[0..4]);
         var expected_buffer: [4]u8 = undefined;
         binary_primitives.writeU32BE(&expected_buffer, expected_crc);
 
         // Now run the method under test, to append a CRC value to the writer
-        appendCrc(&writer, crc_seed, @truncate(crc_length));
+        appendCrc(&writer, crc, @truncate(crc_length));
 
         // Confirm that the value part of the buffer, plus the expected CRC value
         // (taken from the end as per big-endian) match
@@ -204,7 +203,7 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         // Update the crc_length of our session
         session_params.crc_length = @truncate(crc_length);
         // Set our initial crc seed
-        session_params.crc_seed = 10;
+        session_params.crc = Crc32.init(10);
 
         // Allocate space for a new acknowledgement packet
         const packet_data = try std.testing.allocator.alloc(
@@ -221,7 +220,7 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         ack.serialize(writer.getRemaining());
         writer.advance(soe_packets.Acknowledge.SIZE);
 
-        appendCrc(&writer, session_params.crc_seed, @truncate(crc_length));
+        appendCrc(&writer, session_params.crc, @truncate(crc_length));
 
         try std.testing.expectEqual(
             SoeOpCode.acknowledge,
@@ -229,7 +228,7 @@ test "validatePacket_validatesContextualPacketForAllCrcLengths" {
         );
 
         // Update the CRC seed, and test we now invalidate the packet
-        session_params.crc_seed = 20;
+        session_params.crc = Crc32.init(20);
         try std.testing.expectError(
             SoePacketValidationError.CrcMismatch,
             validatePacket(packet_data, session_params),

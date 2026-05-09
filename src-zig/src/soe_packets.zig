@@ -80,12 +80,8 @@ pub const RemapConnection = struct {
     // The CRC seed being used in the session.
     crc_seed: u32,
 
-    pub fn deserialize(buffer: []const u8, has_op_code: bool) RemapConnection {
+    pub fn deserialize(buffer: []const u8) RemapConnection {
         var reader = BinaryReader.init(buffer);
-
-        if (has_op_code) {
-            reader.advance(@sizeOf(SoeOpCode));
-        }
 
         return RemapConnection{
             .session_id = reader.readU32BE(),

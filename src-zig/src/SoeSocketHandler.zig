@@ -113,7 +113,7 @@ fn processOneFromSocket(self: *SoeSocketHandler) !bool {
         switch (op_code) {
             .session_request => conn = try self.createSessionHandler(result.sender, .server),
             .remap_connection => {
-                const remap = soe_packets.RemapConnection.deserialize(self._recv_buffer, true);
+                const remap = soe_packets.RemapConnection.deserialize(self._recv_buffer[@sizeOf(soe_protocol.SoeOpCode)..]);
                 self.remapSession(result.sender, remap);
                 return true;
             },

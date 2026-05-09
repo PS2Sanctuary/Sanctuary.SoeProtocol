@@ -180,7 +180,7 @@ pub fn sendPresizedContextualPacket(self: *const SoeSessionHandler, op_code: soe
     writer.offset = packet_data.len - self._session_params.crc_length;
     soe_packet_utils.appendCrc(
         &writer,
-        self._session_params.crc_seed,
+        self._session_params.crc,
         self._session_params.crc_length,
     );
 
@@ -313,8 +313,7 @@ fn handleSessionRequest(self: *SoeSessionHandler, packet: []u8) !void {
         return;
     }
 
-    self._session_params.crc_length = soe_protocol.CRC_LENGTH;
-    self._session_params.crc_seed = @truncate(_random.next());
+    self._session_params.configureCrc(soe_protocol.CRC_LENGTH, @truncate(_random.next()));
 
     try self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
 
@@ -343,9 +342,8 @@ fn handleSessionResponse(self: *SoeSessionHandler, packet: []u8) !void {
     // Error on deserialization bubbles up and will cause a corrupt_packet termination
     const sresp = try soe_packets.SessionResponse.deserialize(packet, false);
     self._session_params.remote_udp_length = sresp.udp_length;
-    self._session_params.crc_length = sresp.crc_length;
-    self._session_params.crc_seed = sresp.crc_seed;
     self._session_params.is_compression_enabled = sresp.is_compression_enabled;
+    self._session_params.configureCrc(sresp.crc_length, sresp.crc_seed);
     self.session_id = sresp.session_id;
     try self._data_output_channel.setMaxDataLength(self.calculateMaxDataLength());
 

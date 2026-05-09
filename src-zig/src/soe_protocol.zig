@@ -1,4 +1,4 @@
-pub const Crc32 = @import("Crc32.zig");
+pub const Crc32 = @import("utils/Crc32.zig");
 pub const Rc4State = @import("reliable_data/Rc4State.zig");
 pub const SoeSessionHandler = @import("./SoeSessionHandler.zig");
 pub const std = @import("std");
@@ -90,6 +90,8 @@ pub const SessionParams = struct {
     remote_udp_length: u32 = 0,
     /// The seed used to calculate packet CRC hashes.
     crc_seed: u32 = 0,
+    /// A Crc32 instance that has been initialized with the crc_seed, used to calculate packet CRC hashes.
+    crc: Crc32 = undefined,
     /// The numer of bytes used to store a packet CRC hash. Must be between 0 and 4, inclusive.
     crc_length: u8 = CRC_LENGTH,
     /// Whether compression is enabled for the session. This may not be changed after the session is initialized.
@@ -116,6 +118,12 @@ pub const SessionParams = struct {
     max_outgoing_data_queue_time_ns: i32 = std.time.ns_per_ms * 50,
     /// Gets the maximum amount of time that may elapse before acknowledging incoming reliable data sequences.
     max_acknowledge_delay_ns: i32 = std.time.ns_per_ms * 2,
+
+    pub fn configureCrc(self: *SessionParams, crc_length: u8, crc_seed: u32) void {
+        self.crc_length = crc_length;
+        self.crc_seed = crc_seed;
+        self.crc = Crc32.init(crc_seed);
+    }
 };
 
 /// Parameters used by an application to control the underlying SOE session.
