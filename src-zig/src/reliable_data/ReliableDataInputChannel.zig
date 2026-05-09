@@ -243,7 +243,7 @@ fn isValidReliableData(
 
     // We're receiving data we've already fully processed, so inform the remote about this.
     // However, because data is usually received in clumps, ensure we don't send acks too quickly
-    const now = try std.time.Instant.now();
+    const now = std.time.Instant.now() catch @import("std").debug.panic("no clock impl!", .{});
     if (now.since(self._last_ack_all_time) > self._session_params.max_acknowledge_delay_ns) {
         const reliable_ack_seq: u64 = @bitCast(self._window_start_sequence - 1);
         self._buffered_ack_all = soe_packets.AcknowledgeAll{ .sequence = @truncate(reliable_ack_seq) };

@@ -162,7 +162,7 @@ fn destroySession(self: *SoeSocketHandler, session: *SoeSessionHandler) void {
     session.deinit();
 }
 
-fn remapSession(self: *SoeSocketHandler, newAddress: std.net.Address, remap: soe_packets.RemapConnection) !void {
+fn remapSession(self: *SoeSocketHandler, newAddress: std.net.Address, remap: soe_packets.RemapConnection) void {
     var handler: ?*SoeSessionHandler = null;
     var iterator = self._connections.valueIterator();
     while (iterator.next()) |entry| {
@@ -186,5 +186,5 @@ fn remapSession(self: *SoeSocketHandler, newAddress: std.net.Address, remap: soe
 
     self._connections.remove(handler.?.remote.any);
     handler.?.remote = newAddress;
-    try self._connections.put(newAddress.any, handler);
+    self._connections.put(newAddress.any, handler.?) catch self.destroySession(handler.?);
 }
