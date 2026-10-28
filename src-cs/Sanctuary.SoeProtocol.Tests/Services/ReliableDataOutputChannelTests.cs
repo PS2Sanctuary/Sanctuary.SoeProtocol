@@ -18,6 +18,7 @@ public class ReliableDataOutputChannelTests : IDisposable
     private const int MAX_DATA_LENGTH = (int)SoeConstants.DefaultUdpLength - sizeof(SoeOpCode) - sizeof(ushort) - SoeConstants.CrcLength;
 
     private static readonly NativeSpanPool SpanPool = new(512, 8);
+    private static readonly TimeSpan RetransmissionTimeout = TimeSpan.FromMilliseconds(20);
 
     private readonly ITestOutputHelper _outputHelper;
     private readonly MockNetworkInterface _netInterface;
@@ -40,7 +41,8 @@ public class ReliableDataOutputChannelTests : IDisposable
                 RemoteUdpLength = SoeConstants.DefaultUdpLength,
                 IsCompressionEnabled = false,
                 CrcLength = SoeConstants.CrcLength,
-                MaxQueuedOutgoingReliableDataPackets = FRAGMENT_WINDOW_SIZE
+                MaxQueuedOutgoingReliableDataPackets = FRAGMENT_WINDOW_SIZE,
+                RetransmissionTimeout = RetransmissionTimeout
             },
             SpanPool,
             _netInterface,
@@ -64,7 +66,7 @@ public class ReliableDataOutputChannelTests : IDisposable
         AssertReceivedPacketsEqualBuffer(_netInterface, packet, true);
 
         // Don't acknowledge
-        await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        await Task.Delay(RetransmissionTimeout + TimeSpan.FromMilliseconds(100));
         _channel.RunTick(CancellationToken.None);
         AssertReceivedPacketsEqualBuffer(_netInterface, packet, true);
     }
@@ -90,7 +92,7 @@ public class ReliableDataOutputChannelTests : IDisposable
         _channel.NotifyOfAcknowledge(new Acknowledge(3));
         _outputHelper.WriteLine("Notified of acknowledge");
 
-        await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        await Task.Delay(RetransmissionTimeout + TimeSpan.FromMilliseconds(100));
         _outputHelper.WriteLine("Delay complete");
 
         _channel.RunTick(CancellationToken.None);
@@ -115,7 +117,7 @@ public class ReliableDataOutputChannelTests : IDisposable
         AssertReceivedPacketsEqualBuffer(_netInterface, packet, true);
         _channel.NotifyOfAcknowledgeAll(new AcknowledgeAll(1));
 
-        await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        await Task.Delay(RetransmissionTimeout + TimeSpan.FromMilliseconds(100));
         _channel.RunTick(CancellationToken.None);
 
         const int expectedConsumed = MAX_DATA_LENGTH - 4 + MAX_DATA_LENGTH;
@@ -144,7 +146,7 @@ public class ReliableDataOutputChannelTests : IDisposable
         );
 
         _channel.NotifyOfAcknowledgeAll(new AcknowledgeAll(FRAGMENT_WINDOW_SIZE - 2));
-        await Task.Delay(ReliableDataOutputChannel.ACK_WAIT_MILLISECONDS + 100);
+        await Task.Delay(RetransmissionTimeout + TimeSpan.FromMilliseconds(100));
         _channel.RunTick(CancellationToken.None);
 
         const int expectedConsumed = MAX_DATA_LENGTH - 4

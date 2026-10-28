@@ -102,6 +102,11 @@ public sealed class SessionParameters
     public TimeSpan MaximumAcknowledgeDelay { get; set; } = TimeSpan.FromMilliseconds(2);
 
     /// <summary>
+    /// The maximum amount of time to wait for an acknowledgement before retransmitting reliable data.
+    /// </summary>
+    public TimeSpan RetransmissionTimeout { get; set; } = TimeSpan.FromMilliseconds(50); // TODO: High ping could mess this up. Needs to be dynamic
+
+    /// <summary>
     /// Creates a shallow copy of this <see cref="SessionParameters"/> instance.
     /// </summary>
     /// <returns>The copied instance.</returns>

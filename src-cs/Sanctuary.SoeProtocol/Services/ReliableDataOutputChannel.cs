@@ -18,11 +18,6 @@ namespace Sanctuary.SoeProtocol.Services;
 /// </summary>
 public sealed class ReliableDataOutputChannel : IDisposable
 {
-    /// <summary>
-    /// Gets the maximum amount of time to wait for an acknowledgement
-    /// </summary>
-    public const int ACK_WAIT_MILLISECONDS = 500; // TODO: High ping could mess this up. Needs to be dynamic
-
     private readonly SoeProtocolHandler _handler;
     private readonly SessionParameters _sessionParams;
     private readonly ApplicationParameters _applicationParams;
@@ -129,7 +124,7 @@ public sealed class ReliableDataOutputChannel : IDisposable
         long resendingUpTo = 0;
         stashIndex = GetSequenceIndexInDispatchBuffer(_windowStartSequence);
         long earliestSent = _dispatchStash[stashIndex].SentAt;
-        if (earliestSent > -1 && Stopwatch.GetElapsedTime(earliestSent).Milliseconds >= ACK_WAIT_MILLISECONDS)
+        if (earliestSent > -1 && Stopwatch.GetElapsedTime(earliestSent) >= _sessionParams.RetransmissionTimeout)
         {
             _currentSequence = _windowStartSequence;
             resendingUpTo = _currentSequence;
