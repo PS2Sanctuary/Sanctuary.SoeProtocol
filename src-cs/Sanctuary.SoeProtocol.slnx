@@ -2,6 +2,7 @@
   <Folder Name="/Samples/">
     <Project Path="Samples/SimpleServer/SimpleServer.csproj" />
     <Project Path="Samples/SingleSessionPeersSample/SingleSessionPeersSample.csproj" />
+    <Project Path="Samples/ThroughputBenchmark/ThroughputBenchmark.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
