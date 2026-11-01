@@ -1,9 +1,12 @@
 # Sanctuary.SoeProtocol
 
-This repository contains reversed engineered documentation and a simple implementation of version
-three of the 'SOE Protocol'. The SOE Protocol was developed by Sony Online Entertainment as a UDP
-transport layer for the networking traffic of various games, newer examples of which include Free
-Realms, H1Z1, Landmark and PlanetSide 2.
+Reversed engineered documentation, and implementations in C# and Zig, of version three of the 'SOE Protocol'.
+
+The SOE Protocol was developed by Sony Online Entertainment as a UDP transport layer for the networking traffic of various games,
+newer examples of which include Free Realms, H1Z1, Landmark and PlanetSide 2.
+
+The higher-level networking protocols of each game run on top of the SOE layer, e.g. PlanetSide 2's login, gateway and zone protocols.
+It can be configured to suit various network environments, e.g. high-latency client-to-server or mass-bandwidth internal communication.
 
 > [!WARNING]
 > The content of this repository is reverse engineered. As such, it may be
