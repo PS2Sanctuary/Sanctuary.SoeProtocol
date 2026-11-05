@@ -129,17 +129,7 @@ public readonly struct Crc32
         const int unroll = 4;
         const int bytesAtOnce = 16 * unroll;
 
-        uint crc = Crc32Lookup[~seed & 0xFF];
-        crc ^= 0x00FFFFFF;
-        uint index = (seed >> 8) ^ crc;
-        crc = (crc >> 8) & 0x00FFFFFF;
-        crc ^= Crc32Lookup[index & 0xFF];
-        index = (seed >> 16) ^ crc;
-        crc = (crc >> 8) & 0x00FFFFFF;
-        crc ^= Crc32Lookup[index & 0xFF];
-        index = (seed >> 24) ^ crc;
-        crc = (crc >> 8) & 0x00FFFFFF;
-        crc ^= Crc32Lookup[index & 0xFF];
+        uint crc = seed;
 
         fixed (uint* lookup_0 = Crc32Lookup)
         {
