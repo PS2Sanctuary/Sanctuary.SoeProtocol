@@ -82,13 +82,7 @@ public readonly struct Crc32
             return Crc32LittleEndianSse42(data, seed);
 
         if (ArmCrc32.Arm64.IsSupported)
-        {
-            unsafe
-            {
-                fixed (byte* dataPtr = data)
-                    return Crc32LittleEndianArm64(dataPtr, data.Length, seed);
-            }
-        }
+            return Crc32LittleEndianArm64(data, seed);
 
         return Crc32LittleEndianSlicingBy16(data, seed);
     }
@@ -207,39 +201,42 @@ public readonly struct Crc32
         }
     }
 
-    private static unsafe uint Crc32LittleEndianArm64(byte* dataPtr, int count, uint seed)
+    private static unsafe uint Crc32LittleEndianArm64(ReadOnlySpan<byte> data, uint seed)
     {
-        uint crc = seed;
-        byte* ptr = dataPtr;
-        int remaining = count;
-
-        while (remaining >= 8)
+        fixed (byte* dataPtr = data)
         {
-            crc = ArmCrc32.Arm64.ComputeCrc32(crc, *(ulong*)ptr);
-            ptr += 8;
-            remaining -= 8;
-        }
+            uint crc = seed;
+            byte* ptr = dataPtr;
+            int remaining = data.Length;
 
-        if (remaining >= 4)
-        {
-            crc = ArmCrc32.ComputeCrc32(crc, *(uint*)ptr);
-            ptr += 4;
-            remaining -= 4;
-        }
+            while (remaining >= 8)
+            {
+                crc = ArmCrc32.Arm64.ComputeCrc32(crc, *(ulong*)ptr);
+                ptr += 8;
+                remaining -= 8;
+            }
 
-        if (remaining >= 2)
-        {
-            crc = ArmCrc32.ComputeCrc32(crc, *(ushort*)ptr);
-            ptr += 2;
-            remaining -= 2;
-        }
+            if (remaining >= 4)
+            {
+                crc = ArmCrc32.ComputeCrc32(crc, *(uint*)ptr);
+                ptr += 4;
+                remaining -= 4;
+            }
 
-        if (remaining >= 1)
-        {
-            crc = ArmCrc32.ComputeCrc32(crc, *ptr);
-        }
+            if (remaining >= 2)
+            {
+                crc = ArmCrc32.ComputeCrc32(crc, *(ushort*)ptr);
+                ptr += 2;
+                remaining -= 2;
+            }
 
-        return ~crc;
+            if (remaining >= 1)
+            {
+                crc = ArmCrc32.ComputeCrc32(crc, *ptr);
+            }
+
+            return ~crc;
+        }
     }
 
     private static unsafe uint Crc32LittleEndianSlicingBy16(ReadOnlySpan<byte> data, uint seed)
@@ -255,6 +252,7 @@ public readonly struct Crc32
         int blockProcessCount = count / bytesAtOnce * bytesAtOnce;
         ReadOnlySpan<uint> block = MemoryMarshal.Cast<byte, uint>(data[..blockProcessCount]);
 
+        // Using pointers is more efficient here, as it elides bounds checks on the lookups
         fixed (uint* lookup_0 = Crc32Lookup)
         {
             uint* lookup_1 = lookup_0 + 0x100;
@@ -324,6 +322,7 @@ public readonly struct Crc32
         int blockProcessCount = count / bytesAtOnce * bytesAtOnce;
         ReadOnlySpan<uint> block = MemoryMarshal.Cast<byte, uint>(data[..blockProcessCount]);
 
+        // Using pointers is more efficient here, as it elides bounds checks on the lookups
         fixed (uint* lookup_0 = Crc32Lookup)
         {
             uint* lookup_1 = lookup_0 + 0x100;
