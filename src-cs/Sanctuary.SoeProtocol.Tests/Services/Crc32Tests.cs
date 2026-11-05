@@ -5,7 +5,6 @@ namespace Sanctuary.SoeProtocol.Tests.Services;
 
 public class Crc32Tests
 {
-
     /// <summary>
     /// This test ensures that the CRC32 implementation produces the same result as an official
     /// SOE protocol implementation.
@@ -43,6 +42,7 @@ public class Crc32Tests
 
         // Test that our hash of the data matches the server
         Assert.Equal(hash, new Crc32(seed).Hash(Data));
+        Assert.Equal(hash, new Crc32(seed).HashSoftware(Data));
     }
 
     /// <summary>
@@ -64,8 +64,8 @@ public class Crc32Tests
             {
                 ReadOnlySpan<byte> slice = buffer.AsSpan(0, len);
                 uint expected = ComputeReferenceCrc32(testSeed, slice);
-                uint actual = crc.Hash(slice);
-                Assert.Equal(expected, actual);
+                Assert.Equal(expected, crc.Hash(slice));
+                Assert.Equal(expected, crc.HashSoftware(slice));
             }
         }
     }

@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+using ArmCrc32 = System.Runtime.Intrinsics.Arm.Crc32;
 
 namespace Sanctuary.SoeProtocol.Services;
 
@@ -9,6 +12,14 @@ namespace Sanctuary.SoeProtocol.Services;
 [SkipLocalsInit]
 public readonly struct Crc32
 {
+    private const int MIN_SSE42_BLOCKSIZE = 16;
+
+    private static readonly Vector128<ulong> K1K2 = Vector128.Create(0x0154442bd4UL, 0x01c6e41596UL);
+    private static readonly Vector128<ulong> K3K4 = Vector128.Create(0x01751997d0UL, 0x00ccaa009eUL);
+    private static readonly Vector128<ulong> K5K0 = Vector128.Create(0x0163cd6124UL, 0x0000000000UL);
+    private static readonly Vector128<ulong> Poly = Vector128.Create(0x01db710641UL, 0x01f7011641UL);
+    private static readonly Vector128<uint> Mask = Vector128.Create(0xFFFFFFFFU, 0, 0xFFFFFFFFU, 0);
+
     private readonly uint _seed;
 
     /// <summary>
@@ -21,7 +32,26 @@ public readonly struct Crc32
     }
 
     /// <summary>
-    /// Calculates a CRC-32 hash of the given data.
+    /// Calculates a CRC-32 hash of the given data. Only supports little-endian architectures.
+    /// </summary>
+    /// <param name="data">The data to hash.</param>
+    /// <returns>The CRC-32 hash.</returns>
+    /// <remarks>
+    /// Uses hardware-accelerated carry-less multiplication (SSE4.2/PCLMULQDQ or ARM64 CRC32) when available,
+    /// falling back to an adapted version of the "Slicing-by-16" CRC-32 algorithm.
+    /// </remarks>
+    public uint Hash(ReadOnlySpan<byte> data)
+    {
+        unsafe
+        {
+            fixed (byte* dataPtr = data)
+                return Crc32LittleEndian(dataPtr, data.Length, _seed);
+        }
+    }
+
+    /// <summary>
+    /// Calculates a CRC-32 hash of the given data, without the use of hardware acceleration.
+    /// Supports big-endian architectures.
     /// </summary>
     /// <param name="data">The data to hash.</param>
     /// <returns>The CRC-32 hash.</returns>
@@ -29,15 +59,15 @@ public readonly struct Crc32
     /// This uses an adapted version of the "Slicing-by-16" CRC-32 algorithm - (c) Stephan Brumme and Bulat Ziganshin.
     /// See https://create.stephan-brumme.com/crc32/ for further details.
     /// </remarks>
-    public uint Hash(ReadOnlySpan<byte> data)
+    public uint HashSoftware(ReadOnlySpan<byte> data)
     {
         unsafe
         {
             fixed (byte* dataPtr = data)
             {
                 return BitConverter.IsLittleEndian
-                    ? Crc32LittleEndian(dataPtr, data.Length, _seed)
-                    : Crc32BigEndian(dataPtr, data.Length, _seed);
+                    ? Crc32LittleEndianSlicingBy16(dataPtr, data.Length, _seed)
+                    : Crc32BigEndianSlicingBy16(dataPtr, data.Length, _seed);
             }
         }
     }
@@ -60,6 +90,163 @@ public readonly struct Crc32
     }
 
     private static unsafe uint Crc32LittleEndian(byte* dataPtr, int count, uint seed)
+    {
+        if (Pclmulqdq.IsSupported && Sse41.IsSupported && Sse2.IsSupported && count >= MIN_SSE42_BLOCKSIZE)
+            return Crc32LittleEndianSse42(dataPtr, count, seed);
+
+        if (ArmCrc32.Arm64.IsSupported)
+            return Crc32LittleEndianArm64(dataPtr, count, seed);
+
+        return Crc32LittleEndianSlicingBy16(dataPtr, count, seed);
+    }
+
+    private static unsafe uint Crc32LittleEndianSse42(byte* dataPtr, int count, uint seed)
+    {
+        byte* buf = dataPtr;
+        int len = count;
+
+        Vector128<ulong> x0;
+        Vector128<ulong> x1;
+
+        if (len >= 64)
+        {
+            x1 = Sse2.LoadVector128((ulong*)(buf + 0x00));
+            Vector128<ulong> x2 = Sse2.LoadVector128((ulong*)(buf + 0x10));
+            Vector128<ulong> x3 = Sse2.LoadVector128((ulong*)(buf + 0x20));
+            Vector128<ulong> x4 = Sse2.LoadVector128((ulong*)(buf + 0x30));
+
+            x1 ^= Sse2.ConvertScalarToVector128UInt32(seed).AsUInt64();
+            x0 = K1K2;
+
+            buf += 64;
+            len -= 64;
+
+            while (len >= 64)
+            {
+                Vector128<ulong> x5 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x00);
+                Vector128<ulong> x6 = Pclmulqdq.CarrylessMultiply(x2, x0, 0x00);
+                Vector128<ulong> x7 = Pclmulqdq.CarrylessMultiply(x3, x0, 0x00);
+                Vector128<ulong> x8 = Pclmulqdq.CarrylessMultiply(x4, x0, 0x00);
+
+                x1 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x11);
+                x2 = Pclmulqdq.CarrylessMultiply(x2, x0, 0x11);
+                x3 = Pclmulqdq.CarrylessMultiply(x3, x0, 0x11);
+                x4 = Pclmulqdq.CarrylessMultiply(x4, x0, 0x11);
+
+                Vector128<ulong> y5 = Sse2.LoadVector128((ulong*)(buf + 0x00));
+                Vector128<ulong> y6 = Sse2.LoadVector128((ulong*)(buf + 0x10));
+                Vector128<ulong> y7 = Sse2.LoadVector128((ulong*)(buf + 0x20));
+                Vector128<ulong> y8 = Sse2.LoadVector128((ulong*)(buf + 0x30));
+
+                x1 = x1 ^ x5 ^ y5;
+                x2 = x2 ^ x6 ^ y6;
+                x3 = x3 ^ x7 ^ y7;
+                x4 = x4 ^ x8 ^ y8;
+
+                buf += 64;
+                len -= 64;
+            }
+
+            // Fold into 128-bits
+            x0 = K3K4;
+            Vector128<ulong> f5 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x00);
+            x1 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x11);
+            x1 = x1 ^ x2 ^ f5;
+
+            f5 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x00);
+            x1 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x11);
+            x1 = x1 ^ x3 ^ f5;
+
+            f5 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x00);
+            x1 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x11);
+            x1 = x1 ^ x4 ^ f5;
+        }
+        else
+        {
+            x1 = Sse2.LoadVector128((ulong*)buf);
+            x1 ^= Sse2.ConvertScalarToVector128UInt32(seed).AsUInt64();
+            x0 = K3K4;
+
+            buf += 16;
+            len -= 16;
+        }
+
+        // Single fold blocks of 16, if any
+        while (len >= 16)
+        {
+            Vector128<ulong> x2 = Sse2.LoadVector128((ulong*)buf);
+            Vector128<ulong> f5 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x00);
+            x1 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x11);
+            x1 = x1 ^ x2 ^ f5;
+
+            buf += 16;
+            len -= 16;
+        }
+
+        // Fold 128-bits to 64-bits
+        Vector128<ulong> fold64 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x10);
+        Vector128<ulong> mask = Mask.AsUInt64();
+        x1 = Sse2.ShiftRightLogical128BitLane(x1, 8) ^ fold64;
+
+        x0 = K5K0;
+        Vector128<ulong> x2_fold = Sse2.ShiftRightLogical128BitLane(x1, 4);
+        x1 = Sse2.And(x1, mask);
+        x1 = Pclmulqdq.CarrylessMultiply(x1, x0, 0x00) ^ x2_fold;
+
+        // Barrett reduce to 32-bits
+        x0 = Poly;
+        Vector128<ulong> red2 = Sse2.And(x1, mask);
+        red2 = Pclmulqdq.CarrylessMultiply(red2, x0, 0x10);
+        red2 = Sse2.And(red2, mask);
+        red2 = Pclmulqdq.CarrylessMultiply(red2, x0, 0x00);
+        x1 ^= red2;
+
+        uint crc = Sse41.Extract(x1.AsUInt32(), 1);
+
+        // Divide and multiply the data length by block size (relying on implicit int conversion) to round the length
+        // down to the nearest block
+        int processed = count / MIN_SSE42_BLOCKSIZE * MIN_SSE42_BLOCKSIZE;
+        return processed == count
+            ? ~crc
+            : Crc32Standard(dataPtr, processed, count, crc);
+    }
+
+    private static unsafe uint Crc32LittleEndianArm64(byte* dataPtr, int count, uint seed)
+    {
+        uint crc = seed;
+        byte* ptr = dataPtr;
+        int remaining = count;
+
+        while (remaining >= 8)
+        {
+            crc = ArmCrc32.Arm64.ComputeCrc32(crc, *(ulong*)ptr);
+            ptr += 8;
+            remaining -= 8;
+        }
+
+        if (remaining >= 4)
+        {
+            crc = ArmCrc32.ComputeCrc32(crc, *(uint*)ptr);
+            ptr += 4;
+            remaining -= 4;
+        }
+
+        if (remaining >= 2)
+        {
+            crc = ArmCrc32.ComputeCrc32(crc, *(ushort*)ptr);
+            ptr += 2;
+            remaining -= 2;
+        }
+
+        if (remaining >= 1)
+        {
+            crc = ArmCrc32.ComputeCrc32(crc, *ptr);
+        }
+
+        return ~crc;
+    }
+
+    private static unsafe uint Crc32LittleEndianSlicingBy16(byte* dataPtr, int count, uint seed)
     {
         const int unroll = 4;
         const int bytesAtOnce = 16 * unroll;
@@ -115,16 +302,17 @@ public readonly struct Crc32
                           lookup_15[one & 0xFF];
                 }
             }
-
-            // remaining 1 to 63 bytes (standard algorithm)
-            for (int i = (count / bytesAtOnce) * bytesAtOnce; i < count;)
-                crc = (crc >> 8) ^ lookup_0[(crc & 0xFF) ^ dataPtr[i++]];
         }
 
-        return ~crc;
+        // Divide and multiply the data length by block size (relying on implicit int conversion) to round the length
+        // down to the nearest block
+        int processed = count / bytesAtOnce * bytesAtOnce;
+        return processed == count
+            ? ~crc
+            : Crc32Standard(dataPtr, processed, count, crc);
     }
 
-    private static unsafe uint Crc32BigEndian(byte* dataPtr, int count, uint seed)
+    private static unsafe uint Crc32BigEndianSlicingBy16(byte* dataPtr, int count, uint seed)
     {
         const int unroll = 4;
         const int bytesAtOnce = 16 * unroll;
@@ -180,11 +368,21 @@ public readonly struct Crc32
                           lookup_15[(one >> 24) & 0xFF];
                 }
             }
-
-            // remaining 1 to 63 bytes (standard algorithm)
-            for (int i = (count / bytesAtOnce) * bytesAtOnce; i < count;)
-                crc = (crc >> 8) ^ lookup_0[(crc & 0xFF) ^ dataPtr[i++]];
         }
+
+        // Divide and multiply the data length by block size (relying on implicit int conversion) to round the length
+        // down to the nearest block
+        int processed = count / bytesAtOnce * bytesAtOnce;
+        return processed == count
+            ? ~crc
+            : Crc32Standard(dataPtr, processed, count, crc);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static unsafe uint Crc32Standard(byte* dataPtr, int offset, int count, uint crc)
+    {
+        for (int i = offset; i < count; i++)
+            crc = (crc >> 8) ^ Crc32Lookup[(crc & 0xFF) ^ dataPtr[i]];
 
         return ~crc;
     }
