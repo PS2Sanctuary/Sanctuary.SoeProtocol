@@ -95,11 +95,10 @@ public readonly struct Crc32
             int len = data.Length;
 
             Vector128<ulong> x0;
-            Vector128<ulong> x1;
+            Vector128<ulong> x1 = Sse2.LoadVector128((ulong*)buf);
 
             if (len >= 64)
             {
-                x1 = Sse2.LoadVector128((ulong*)(buf + 0x00));
                 Vector128<ulong> x2 = Sse2.LoadVector128((ulong*)(buf + 0x10));
                 Vector128<ulong> x3 = Sse2.LoadVector128((ulong*)(buf + 0x20));
                 Vector128<ulong> x4 = Sse2.LoadVector128((ulong*)(buf + 0x30));
@@ -152,7 +151,6 @@ public readonly struct Crc32
             }
             else
             {
-                x1 = Sse2.LoadVector128((ulong*)buf);
                 x1 ^= Sse2.ConvertScalarToVector128UInt32(seed).AsUInt64();
                 x0 = K3K4;
 
