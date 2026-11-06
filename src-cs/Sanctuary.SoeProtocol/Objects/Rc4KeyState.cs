@@ -25,12 +25,12 @@ public sealed class Rc4KeyState
     /// <summary>
     /// Gets or sets the first RC4 transform index.
     /// </summary>
-    public int Index1;
+    public byte Index1;
 
     /// <summary>
     /// Gets or sets the second RC4 transform index.
     /// </summary>
-    public int Index2;
+    public byte Index2;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Rc4KeyState"/> class.

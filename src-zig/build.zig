@@ -81,7 +81,7 @@ pub fn build(b: *std.Build) void {
 
     // Create an executable artifact, and a build step to execute it ('zig build test')
     const run_lib_unit_tests = b.addRunArtifact(test_units);
-    const test_step = b.step("test", "Run unit tests");
+    const test_step = b.step("test", "Run unit tests (best used with --summary all)");
     test_step.dependOn(&run_lib_unit_tests.step);
 
     // ===== zig build run =====

@@ -1,6 +1,7 @@
 ﻿using Sanctuary.SoeProtocol.Objects;
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Sanctuary.SoeProtocol.Services;
 
@@ -21,18 +22,48 @@ public static class Rc4Cipher
         if (outputBuffer.Length < inputBuffer.Length)
             throw new ArgumentException("The output buffer must be at least as long as the input buffer.", nameof(outputBuffer));
 
-        Span<byte> myKeyState = keyState.MutableKeyState;
+        if (inputBuffer.IsEmpty)
+            return;
 
-        unchecked
+        // Pin references to elide all bounds checks and span allocations in the loop
+        ref byte stateRef = ref MemoryMarshal.GetReference(keyState.MutableKeyState);
+        ref byte inputRef = ref MemoryMarshal.GetReference(inputBuffer);
+        ref byte outputRef = ref MemoryMarshal.GetReference(outputBuffer);
+
+        // Keep indices in registers for the duration of the loop
+        byte i = keyState.Index1;
+        byte j = keyState.Index2;
+
+        int length = inputBuffer.Length;
+
+        for (int n = 0; n < length; n++)
         {
-            for (int i = 0; i < inputBuffer.Length; i++)
-            {
-                IncrementKeyState(ref keyState);
+            // This is a simplified version of the below
 
-                int xorIndex = (myKeyState[keyState.Index1] + myKeyState[keyState.Index2]) % Rc4KeyState.LENGTH;
-                outputBuffer[i] = (byte)(inputBuffer[i] ^ myKeyState[xorIndex]);
-            }
+            // keyState.Index1 = (byte)(keyState.Index1 + 1);
+            // keyState.Index2 = (byte)(keyState.Index2 + myKeyState[keyState.Index1]);
+            // myKeyState.Swap(keyState.Index1, keyState.Index2);
+            // 
+            // int xorIndex = (myKeyState[keyState.Index1] + myKeyState[keyState.Index2]) % Rc4KeyState.LENGTH;
+            // outputBuffer[i] = (byte)(inputBuffer[i] ^ myKeyState[xorIndex]);
+
+            i = (byte)(i + 1);
+            byte si = Unsafe.Add(ref stateRef, i);
+            j = (byte)(j + si);
+            byte sj = Unsafe.Add(ref stateRef, j);
+
+            Unsafe.Add(ref stateRef, i) = sj;
+            Unsafe.Add(ref stateRef, j) = si;
+
+            byte xorIndex = (byte)(si + sj);
+            byte xorValue = Unsafe.Add(ref stateRef, xorIndex);
+
+            Unsafe.Add(ref outputRef, n) = (byte)(Unsafe.Add(ref inputRef, n) ^ xorValue);
         }
+
+        // Persist the final index state back to object
+        keyState.Index1 = i;
+        keyState.Index2 = j;
     }
 
     /// <summary>
@@ -42,8 +73,26 @@ public static class Rc4Cipher
     /// <param name="keyState">The key state to advance.</param>
     public static void Advance(int amount, ref Rc4KeyState keyState)
     {
-        for (int i = 0; i < amount; i++)
-            IncrementKeyState(ref keyState);
+        if (amount <= 0)
+            return;
+
+        ref byte stateRef = ref MemoryMarshal.GetReference(keyState.MutableKeyState);
+        byte i = keyState.Index1;
+        byte j = keyState.Index2;
+
+        for (int n = 0; n < amount; n++)
+        {
+            i = (byte)(i + 1);
+            byte si = Unsafe.Add(ref stateRef, i);
+            j = (byte)(j + si);
+            byte sj = Unsafe.Add(ref stateRef, j);
+
+            Unsafe.Add(ref stateRef, i) = sj;
+            Unsafe.Add(ref stateRef, j) = si;
+        }
+
+        keyState.Index1 = i;
+        keyState.Index2 = j;
     }
 
     /// <summary>
@@ -83,24 +132,13 @@ public static class Rc4Cipher
 
             for (int i = 0; i < Rc4KeyState.LENGTH; i++)
             {
-                swapIndex2 = (byte)((swapIndex2 + keyState[i] + keyDataBuffer[swapIndex1]) % Rc4KeyState.LENGTH);
+                swapIndex2 = (byte)(swapIndex2 + keyState[i] + keyDataBuffer[swapIndex1]);
                 keyState.Swap(i, swapIndex2);
 
-                swapIndex1 = (byte)((swapIndex1 + 1) % keyDataBuffer.Length);
+                // Using a conditional is faster than the integer division of a modulo against the buffer length
+                if (++swapIndex1 == keyDataBuffer.Length)
+                    swapIndex1 = 0;
             }
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void IncrementKeyState(ref Rc4KeyState keyState)
-    {
-        Span<byte> myKeyState = keyState.MutableKeyState;
-
-        unchecked
-        {
-            keyState.Index1 = (keyState.Index1 + 1) % Rc4KeyState.LENGTH;
-            keyState.Index2 = (keyState.Index2 + myKeyState[keyState.Index1]) % Rc4KeyState.LENGTH;
-            myKeyState.Swap(keyState.Index1, keyState.Index2);
         }
     }
 }

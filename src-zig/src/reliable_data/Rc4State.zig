@@ -7,9 +7,9 @@ const Rc4State = @This();
 const RC4_STATE_LENGTH = 256;
 
 /// Private field: The first swap index.
-_index_1: usize = 0,
+_index_1: u8 = 0,
 /// Private field: The second swap index.
-_index_2: usize = 0,
+_index_2: u8 = 0,
 /// Private field: Stores the data used to mutate the input stream.
 _data: [RC4_STATE_LENGTH]u8,
 
@@ -43,11 +43,25 @@ pub fn copy(self: *const Rc4State) Rc4State {
 
 /// Transforms (encrypts or decrypts) an input buffer into the output.
 pub fn transform(self: *Rc4State, input: []const u8, output: []u8) void {
-    for (0..input.len) |i| {
-        self.increment();
-        const xor_index: usize = (@as(usize, self._data[self._index_1]) + self._data[self._index_2]) % RC4_STATE_LENGTH;
-        output[i] = input[i] ^ self._data[xor_index];
+    // Keep indices in registers for the duration of the loop
+    var i: u8 = self._index_1;
+    var j: u8 = self._index_1;
+
+    for (0..input.len) |n| {
+        i = i +% 1;
+        j = j +% self._data[i];
+
+        const swap = self._data[i];
+        self._data[i] = self._data[j];
+        self._data[j] = swap;
+
+        const xor_index: u8 = self._data[i] +% self._data[j];
+        output[n] = input[n] ^ self._data[xor_index];
     }
+
+    // Persist the final index state back to object
+    self._index_1 = i;
+    self._index_2 = j;
 }
 
 /// 'Schedules' the key into the state data buffer.
@@ -57,29 +71,22 @@ fn schedule(self: *Rc4State, key: []const u8) void {
     //     self.data[i] = i;
     // }
 
-    var swap_index_1: usize = 0;
-    var swap_index_2: usize = 0;
+    var swap_index_1: u8 = 0;
+    var swap_index_2: u8 = 0;
     var swap: u8 = 0;
 
     for (0..RC4_STATE_LENGTH) |i| {
-        swap_index_2 = (swap_index_2 + self._data[i] + key[swap_index_1]) % RC4_STATE_LENGTH;
+        swap_index_2 = swap_index_2 +% self._data[i] +% key[swap_index_1];
 
         swap = self._data[i];
         self._data[i] = self._data[swap_index_2];
         self._data[swap_index_2] = swap;
 
-        swap_index_1 = (swap_index_1 + 1) % key.len;
+        swap_index_1 += 1;
+        // Using a conditional is faster than the integer division of a modulo against the buffer length
+        if (swap_index_1 == key.len)
+            swap_index_1 = 0;
     }
-}
-
-/// Increments the state; progressing the stream.
-fn increment(self: *Rc4State) void {
-    self._index_1 = (self._index_1 + 1) % RC4_STATE_LENGTH;
-    self._index_2 = (self._index_2 + self._data[self._index_1]) % RC4_STATE_LENGTH;
-
-    const swap = self._data[self._index_1];
-    self._data[self._index_1] = self._data[self._index_2];
-    self._data[self._index_2] = swap;
 }
 
 test "Test RC4 Encryption Vectors" {
