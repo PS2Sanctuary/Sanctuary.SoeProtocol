@@ -63,9 +63,6 @@ public sealed class NativeSpanPool
     {
         ArgumentNullException.ThrowIfNull(span);
 
-        if (span.FullSpan.Length != _memorySize)
-            throw new InvalidOperationException($"The {nameof(NativeSpan)} was not rented from this pool");
-
         if (_pool.Count >= _poolSize)
             return;
 

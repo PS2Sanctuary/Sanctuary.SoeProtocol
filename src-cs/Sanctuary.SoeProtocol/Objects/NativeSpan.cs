@@ -1,11 +1,10 @@
 ﻿using System;
-using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace Sanctuary.SoeProtocol.Objects;
 
 /// <summary>
-/// Represents a wrapper around native memory.
+/// Represents a wrapper around an array of bytes.
 /// </summary>
 [SkipLocalsInit]
 public sealed class NativeSpan
@@ -60,12 +59,4 @@ public sealed class NativeSpan
         data.CopyTo(FullSpan);
         UsedLength = data.Length;
     }
-
-    /// <summary>
-    /// Creates an <see cref="UnmanagedMemoryStream"/> over the
-    /// <see cref="UsedSpan"/>
-    /// </summary>
-    /// <returns>An <see cref="UnmanagedMemoryStream"/> instance.</returns>
-    public MemoryStream ToStream()
-        => new(_array, StartOffset, UsedLength, true);
 }
