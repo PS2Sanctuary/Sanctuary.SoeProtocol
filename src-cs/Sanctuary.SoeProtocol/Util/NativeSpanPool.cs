@@ -11,7 +11,7 @@ public sealed class NativeSpanPool
 {
     private readonly int _memorySize;
     private readonly int _poolSize;
-    private readonly ConcurrentStack<NativeSpan> _pool;
+    private readonly ConcurrentBag<NativeSpan> _pool;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NativeSpanPool"/> class.
@@ -26,7 +26,7 @@ public sealed class NativeSpanPool
     {
         _memorySize = memorySize;
         _poolSize = poolSize;
-        _pool = new ConcurrentStack<NativeSpan>();
+        _pool = new ConcurrentBag<NativeSpan>();
     }
 
     /// <summary>
@@ -39,7 +39,7 @@ public sealed class NativeSpanPool
     /// <returns>The rented object.</returns>
     public NativeSpan Rent()
     {
-        NativeSpan retrieved = _pool.TryPop(out NativeSpan? span)
+        NativeSpan retrieved = _pool.TryTake(out NativeSpan? span)
             ? span
             : new NativeSpan(_memorySize);
 
@@ -68,6 +68,6 @@ public sealed class NativeSpanPool
 
         span.StartOffset = 0;
         span.UsedLength = 0;
-        _pool.Push(span);
+        _pool.Add(span);
     }
 }
